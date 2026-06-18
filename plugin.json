@@ -90,8 +90,9 @@
         "title": "Clubhouse",
         "icon": "🛋️",
         "placements": [
-          "content"
-        ]
+          "sidebar-left"
+        ],
+        "defaultPlacement": "sidebar-left"
       }
     ],
     "commands": [
@@ -122,16 +123,6 @@
         },
         "kind": "view",
         "view": "studio"
-      },
-      {
-        "id": "acp-clubhouse",
-        "title": "Clubhouse",
-        "path": {
-          "ko": "유틸리티",
-          "en": "Utility"
-        },
-        "kind": "view",
-        "view": "clubhouse"
       }
     ]
   }
