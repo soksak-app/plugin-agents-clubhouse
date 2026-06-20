@@ -154,8 +154,8 @@
           "ko": "Studio"
         },
         "path": {
-          "ko": "유틸리티",
-          "en": "Utility"
+          "ko": "에이전트",
+          "en": "Agents"
         },
         "kind": "view",
         "view": "studio"
