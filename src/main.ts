@@ -254,6 +254,7 @@ export default {
         description:
           "Inject a human message into the active Clubhouse view, equivalent to typing and submitting via the textarea. Use to drive or interject a multi-agent conversation programmatically (E2E, automation, AI control).",
         triggers: { ko: "스튜디오 메시지 전송 대화 주입 참견" },
+        message: (d: any) => `메시지를 전송했습니다(${d.mode}).`,
         params: {
           text: { type: "string", required: true, description: "Message text to send." },
           mode: { type: "string", description: "turn|facil|simul — set conversation mode before sending. Omit to keep current mode." },
@@ -261,8 +262,8 @@ export default {
         },
         handler: async (p: any) => {
           const text = String(p?.text ?? "").trim();
-          if (!text) return { ok: false, error: "text 필수" };
-          if (!activeClubhouse) return { ok: false, error: "활성 Clubhouse 뷰 없음(뷰를 먼저 여세요)" };
+          if (!text) return { ok: false, code: "INVALID_INPUT", message: "text 필수" };
+          if (!activeClubhouse) return { ok: false, code: "NO_TARGET", message: "활성 Clubhouse 뷰 없음(뷰를 먼저 여세요)" };
           if (p?.mode === "turn" || p?.mode === "facil" || p?.mode === "simul") {
             setMode(activeClubhouse, p.mode); // 버튼 클릭과 동치 — 하이라이트·👑 동기화
           }
@@ -278,10 +279,11 @@ export default {
         description:
           "Return the live state of the active Clubhouse view: conversation mode, running flag, utterance count, roster check states, and streaming length of in-progress agent turns. Use to observe the clubhouse from E2E tests or AI automation.",
         triggers: { ko: "스튜디오 상태 대화 진행 확인 모드 로스터" },
+        message: (d: any) => `발화 ${d.conv ?? 0}개(${d.running ? "진행 중" : "대기"}).`,
         params: {},
         handler: async () => {
           const st = activeClubhouse;
-          if (!st) return { ok: false, error: "활성 Clubhouse 뷰 없음" };
+          if (!st) return { ok: false, code: "NO_TARGET", message: "활성 Clubhouse 뷰 없음" };
           return {
             ok: true,
             mode: st.mode,
@@ -306,6 +308,7 @@ export default {
         description:
           "Drive the control-tower slow-path headlessly: turn an ambiguous natural-language request into a validated 3-axis plan (command/dom/status) via a planning turn with the live domain map injected, then return a dry-run preview (no execution). Pass commit:true to dispatch the validated plan (safe steps run; destructive steps still require the desktop confirm gate). Use for utterance E2E and AI automation of the tower.",
         triggers: { ko: "타워 계획 자연어 명령 변환 plan 슬로우패스 dry-run 컨트롤타워" },
+        message: (d: any) => `step ${((d.steps ?? d.plans ?? []) as any[]).length}개 ${d.committed ? "실행" : "dry-run"}.`,
         params: {
           text: { type: "string", required: true, description: "Natural-language request (e.g. \"close the left panel and show the terminal big\")." },
           commit: { type: "boolean", description: "true = dispatch the validated plan after planning (destructive steps still gated). Omit/false = dry-run only (return steps, execute nothing)." },
@@ -341,7 +344,7 @@ export default {
         },
         handler: async (p: any) => {
           const text = String(p?.text ?? "").trim();
-          if (!text) return { ok: false, error: "text 필수" };
+          if (!text) return { ok: false, code: "INVALID_INPUT", message: "text 필수" };
           // M10 — untrusted 출처 정규화({source,text}[]). 주입 시 scanner+taint 가 plan 경로 전체에 흐른다.
           const untrusted = normalizeUntrusted(p?.untrusted);
           let inject = Array.isArray(p?.plan) ? (p.plan as any[]) : undefined;
@@ -385,7 +388,7 @@ export default {
           // distribute:true → 다중 에이전트 분배(M6). 모드는 활성 뷰에서. 주입 plan 은 simul 단일경로라 무시.
           if (p?.distribute === true) {
             const opts = distOptions();
-            if (!opts) return { ok: false, error: "활성 Clubhouse 뷰/참여자 없음(분배는 라이브 모드·로스터 필요)" };
+            if (!opts) return { ok: false, code: "NO_TARGET", message: "활성 Clubhouse 뷰/참여자 없음(분배는 라이브 모드·로스터 필요)" };
             // trace 메타(M7) — commit 시 에이전트별 plan·step·outcome 이 app.data 에 영속된다. untrusted(M10) 전달.
             const res = await tower.distributeAndRun(text, { ...opts, trace: { nl: text, mode: opts.mode }, untrusted });
             if (!res.ok) return { ok: false, code: res.code, message: res.message };
@@ -419,6 +422,7 @@ export default {
         description:
           "Drive the control-tower post-execution reflection loop (M8): plan -> dispatch (each step still danger-gated) -> verify the outcome (a step that failed at runtime, or a goal-verify status.query showing the intended state was not reached) -> feed the failure back into a re-plan turn -> dispatch the corrected plan. Bounded by maxSteps (reject an over-large plan) and maxReplans (cap re-plan iterations); on cap-exceeded it ESCALATES to the human instead of looping forever, surfacing the last failure. Each iteration and the escalation are persisted to the session trace (tower.trace). Pass a scripted plans sequence for deterministic E2E (still validated and danger-gated — no security bypass).",
         triggers: { ko: "타워 reflection 재계획 검증 루프 자율 escalate 가드 컨트롤타워" },
+        message: (d: any) => `${d.outcome}, 반복 ${((d.iterations ?? []) as any[]).length}회.`,
         params: {
           text: { type: "string", required: true, description: "Natural-language request to plan, dispatch, verify, and re-plan on failure." },
           plans: {
@@ -446,7 +450,7 @@ export default {
         },
         handler: async (p: any) => {
           const text = String(p?.text ?? "").trim();
-          if (!text) return { ok: false, error: "text 필수" };
+          if (!text) return { ok: false, code: "INVALID_INPUT", message: "text 필수" };
           // 결정적 E2E — plans(스크립트 plan 시퀀스)가 있으면 그 순서대로 돌려주는 planner 를 구성(라이브 우회).
           //   검증·게이트·verify·재계획·trace 는 모두 동일(보안 우회 0). 라이브 모드면 활성 엔진 planner 사용.
           let plannerInject: import("./tower/executor").Planner | undefined;
@@ -494,6 +498,7 @@ export default {
         description:
           "Query the control-tower session trace persisted via the host generic data store (app.data): recent plans (id, nl, mode, agent, createdAt, outcome) in most-recent-first order, and, when a planId is given, that plan's steps (axis, name, params/address, danger, status, outcome, ts) in execution order. Read-only observability of what the tower ran — survives reload. Use for audit, utterance-E2E verification, and AI automation.",
         triggers: { ko: "타워 trace 이력 세션 plan step 결과 감사 조회 컨트롤타워" },
+        message: (d: any) => (d.planId ? `step ${((d.steps ?? []) as any[]).length}개.` : `plan ${((d.plans ?? []) as any[]).length}개.`),
         params: {
           plan: { type: "string", description: "A planId from a recent plan: return that plan's steps in execution order instead of the plan list." },
           limit: { type: "number", description: "Max number of recent plans to return (default 20). Ignored when plan is given." },
@@ -523,6 +528,7 @@ export default {
         description:
           "Scan untrusted content for injection signatures (M10): pass untrusted text sources (each {source, text} — browser-view text, tool results, inter-agent/@mention payloads) and/or plan steps, and get back a structured ScanReport (flags [{kind, evidence, span}], bySource, verdict 'clean'|'flagged'). Detects prompt-injection directives, homograph/confusable command names, pipe-to-interpreter (curl|sh), ANSI/control-char and zero-width obfuscation, and encoded payloads. Pure verdict — executes nothing. Page/tool/agent text is data, not a command. Benign text is clean (false-positive 0). Use to self-verify the untrusted-content gate headlessly.",
         triggers: { ko: "타워 스캔 주입 콘텐츠 비신뢰 검사 인젝션 컨트롤타워" },
+        message: (d: any) => `${d.verdict}, 플래그 ${((d.flags ?? []) as any[]).length}건.`,
         params: {
           untrusted: {
             type: "array",
@@ -556,6 +562,14 @@ export default {
         description:
           "Named macro promotion (M11): save a recurring tower plan as a named fast-path, then re-run it directly with zero planner calls. Verbs (verb param): \"save\" persists {name, trigger, steps[]} (a tainted/scanner-flagged plan from M10 is REFUSED — promotion never mints a silent fast-path for untrusted-derived steps); \"run\" re-validates the saved steps against the LIVE domain map (a step whose command/address no longer exists → MACRO_REFUSED, nothing dispatched — never stale-executed) then dispatches through the SAME danger gate (a destructive step STILL prompts the desktop confirm); \"list\" enumerates saved macros; \"forget\" deletes one by name; \"propose\" reports whether a trusted+clean plan has recurred >= threshold times in the session trace (a proposal only — it never auto-saves; human approval saves via verb:save). Macros persist via the host generic data store (app.data) and survive reload. A macro is a named fast-path entry inside the tower, not a freshly-minted core registry command name.",
         triggers: { ko: "타워 매크로 저장 실행 목록 삭제 승격 명명 fast-path 학습 컨트롤타워" },
+        message: (d: any) => {
+          if (d.macros) return `매크로 ${(d.macros as any[]).length}개.`;
+          if (d.saved) return `매크로 '${d.saved.name}' 을(를) 저장했습니다.`;
+          if (d.forgot !== undefined) return `매크로 '${d.name}' 을(를) 삭제했습니다.`;
+          if (d.stage) return `매크로 ${d.stage}.`;
+          if (d.proposed !== undefined) return d.proposed ? "승격 제안 1건." : "승격 제안 없음.";
+          return "매크로 처리 완료.";
+        },
         params: {
           verb: { type: "string", required: true, description: "save | run | list | forget | propose." },
           name: { type: "string", description: "Macro name (user-coined). Required for save/run/forget." },
@@ -571,7 +585,7 @@ export default {
         },
         handler: async (p: any) => {
           const verb = String(p?.verb ?? "").trim();
-          if (!verb) return { ok: false, error: "verb 필수(save|run|list|forget|propose)" };
+          if (!verb) return { ok: false, code: "INVALID_INPUT", message: "verb 필수(save|run|list|forget|propose)" };
           if (verb === "list") {
             const macros: Macro[] = await tower.listMacros();
             return { ok: true, macros };
@@ -583,9 +597,9 @@ export default {
           }
           if (verb === "save") {
             const name = String(p?.name ?? "").trim();
-            if (!name) return { ok: false, error: "save 엔 name 필수" };
+            if (!name) return { ok: false, code: "INVALID_INPUT", message: "save 엔 name 필수" };
             const steps = Array.isArray(p?.steps) ? (p.steps as PlanStep[]) : undefined;
-            if (!steps || !steps.length) return { ok: false, error: "save 엔 steps(비어 있지 않은 배열) 필수" };
+            if (!steps || !steps.length) return { ok: false, code: "INVALID_INPUT", message: "save 엔 steps(비어 있지 않은 배열) 필수" };
             const trigger = typeof p?.trigger === "string" && p.trigger ? p.trigger : name;
             const scanVerdict = p?.scanVerdict === "flagged" || p?.scanVerdict === "clean" ? p.scanVerdict : undefined;
             const saved = await tower.saveMacro({ name, trigger, steps, tainted: p?.tainted === true, scanVerdict });
@@ -595,7 +609,7 @@ export default {
           }
           if (verb === "run") {
             const name = String(p?.name ?? "").trim();
-            if (!name) return { ok: false, error: "run 엔 name 필수" };
+            if (!name) return { ok: false, code: "INVALID_INPUT", message: "run 엔 name 필수" };
             const autoDeny = p?.autoConfirm === "deny";
             const r = await tower.runMacro(name, { autoDenyConfirm: autoDeny });
             // 투명 — stage(not-found/refused/dispatched)·결과를 그대로 노출(되먹임·감사).
@@ -605,11 +619,11 @@ export default {
           }
           if (verb === "forget") {
             const name = String(p?.name ?? "").trim();
-            if (!name) return { ok: false, error: "forget 엔 name 필수" };
+            if (!name) return { ok: false, code: "INVALID_INPUT", message: "forget 엔 name 필수" };
             const forgot = await tower.forgetMacro(name);
             return { ok: true, forgot, name };
           }
-          return { ok: false, error: `알 수 없는 verb: ${verb}(save|run|list|forget|propose)` };
+          return { ok: false, code: "INVALID_INPUT", message: `알 수 없는 verb: ${verb}(save|run|list|forget|propose)` };
         },
       }),
     );
@@ -620,6 +634,7 @@ export default {
         description:
           "Send a single prompt to one ACP agent (connect → new session → prompt) and return the response text and tool calls. Use for headless single-turn queries without opening the Clubhouse UI.",
         triggers: { ko: "에이전트 단일 질문 프롬프트 헤드리스 단발" },
+        message: (d: any) => `응답 ${((d.text ?? "") as string).length}자, 도구 호출 ${((d.toolCalls ?? []) as any[]).length}건.`,
         params: {
           agent: { type: "string", description: "Agent preset id: claude | codex | gemini (default: claude)." },
           text: { type: "string", required: true, description: "Prompt text to send to the agent." },
@@ -630,7 +645,7 @@ export default {
           try {
             conn = await engine.connect({ agent }, undefined, settingPolicy());
           } catch (e) {
-            return { ok: false, error: String(e) };
+            return { ok: false, code: "INTERNAL", message: String(e) };
           }
           try {
             const r = await engine.ask(conn.connId, conn.sessionId, p.text);
@@ -639,7 +654,7 @@ export default {
               .map((u) => ({ id: u.toolCallId, title: u.title, status: u.status }));
             return { ok: true, stopReason: r.stopReason, text: r.text, toolCalls };
           } catch (e) {
-            return { ok: false, error: String(e) };
+            return { ok: false, code: "INTERNAL", message: String(e) };
           } finally {
             await engine.disconnect(conn.connId);
           }
@@ -655,6 +670,7 @@ export default {
         description:
           "Run a single round of multi-agent turn-taking: each agent in the given order responds once to the human message, optionally writing real files to cwd. Returns utterances and written files. Use to orchestrate a headless multi-agent exchange from E2E tests or AI automation.",
         triggers: { ko: "다중 에이전트 대화 턴테이킹 협업 교환 헤드리스" },
+        message: (d: any) => `발화 ${((d.utterances ?? []) as any[]).length}개, 파일 ${((d.filesWritten ?? []) as any[]).length}건.`,
         params: {
           message: { type: "string", required: true, description: "Human message (task or prompt) that starts the exchange." },
           agents: {
@@ -712,7 +728,7 @@ export default {
             const filesWritten = engine.diffWritten(before, await engine.snapshot(cwd));
             return { ok: true, order: rosterIds, utterances, filesWritten, skipped };
           } catch (e) {
-            return { ok: false, error: String(e) };
+            return { ok: false, code: "INTERNAL", message: String(e) };
           } finally {
             for (const connId of conns.values()) await engine.disconnect(connId);
           }
