@@ -3519,7 +3519,7 @@ ${priorContext}` : systemPrompt;
       try {
         r = await core("prompt", { connId, sessionId, text: prompt });
       } catch (e) {
-        r = { ok: false, error: String(e) };
+        r = { ok: false, code: "INTERNAL", message: String(e) };
       }
       off.dispose();
       st.actives.delete(cur);
@@ -3534,7 +3534,7 @@ ${priorContext}` : systemPrompt;
         return work;
       }
       if (!r.ok) {
-        fail(`\uD504\uB86C\uD504\uD2B8 \uC2E4\uD328: ${String(r.error ?? "")}`);
+        fail(`\uD504\uB86C\uD504\uD2B8 \uC2E4\uD328: ${String(r.message ?? r.error ?? "")}`);
         return "";
       }
       row.remove();

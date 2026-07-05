@@ -1119,7 +1119,7 @@ export default {
       try {
         r = await core("prompt", { connId, sessionId, text: prompt });
       } catch (e) {
-        r = { ok: false, error: String(e) };
+        r = { ok: false, code: "INTERNAL", message: String(e) };
       }
       off.dispose(); // app.bus.on 은 Disposable{dispose} 반환 — 함수 호출(off()) 은 throw → 구독 누수·누적
       st.actives.delete(cur);
@@ -1135,7 +1135,7 @@ export default {
         return work;
       }
       if (!r.ok) {
-        fail(`프롬프트 실패: ${String(r.error ?? "")}`); // 오류 → 노출 + 자동 드롭
+        fail(`프롬프트 실패: ${String(r.message ?? r.error ?? "")}`); // 오류 → 노출 + 자동 드롭
         return "";
       }
       row.remove(); // 빈 ok = 의도된 침묵(또는 참견 직격, 한 글자도 안 나옴) — 흔적 없이(침묵도 참여)
