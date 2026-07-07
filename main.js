@@ -295,7 +295,7 @@ function tp(key, lang, vars) {
 
 // src/tower/plan.ts
 var DESTRUCTIVE = /* @__PURE__ */ new Set([
-  "content.close",
+  "sheet.close",
   "data.import",
   "data.restore",
   "panel.close",
@@ -305,7 +305,7 @@ var DESTRUCTIVE = /* @__PURE__ */ new Set([
   "plugin.remove",
   "plugin.update",
   "project.close",
-  "secret.delete",
+  "secret.remove",
   "view.close",
   "editor.close",
   // view.close 위임(코어 desc "same as view.close") — 닫기이므로 게이트.
@@ -321,7 +321,7 @@ var INJECT = /* @__PURE__ */ new Set([
   "net.udp.request",
   "net.udp.send",
   "plugin.dev.load",
-  "plugin.dev.new",
+  "plugin.dev.create",
   "plugin.enable",
   "schedule.set",
   "secret.set",
@@ -474,9 +474,9 @@ var EXAMPLE_COMMANDS = [
       const term = panels.find(
         (p) => (p.views ?? []).some((vw) => vw.plugin === "soksak-plugin-terminal")
       );
-      if (term) return { group: term.id };
+      if (term) return { panel: term.id };
       const active = panels.find((p) => p.active) ?? panels[0];
-      return active ? { group: active.id } : null;
+      return active ? { panel: active.id } : null;
     }
   },
   {
@@ -2799,6 +2799,10 @@ ${priorContext}` : systemPrompt;
           mode: { type: "string", description: "turn|facil|simul \u2014 set conversation mode before sending. Omit to keep current mode." },
           cut: { type: "boolean", description: "true = immediately interrupt the current agent turn without the ask/wait dialog (deterministic for E2E)." }
         },
+        // 다음 수 제시(1개, 강제 아님) — 발화가 스트리밍을 시작했는지는 state 로 확인할 수 있다(exec→read 결).
+        hint: () => [
+          { cmd: "plugin.soksak-plugin-agents-clubhouse.state", why: "\uC804\uC1A1\uD55C \uBA54\uC2DC\uC9C0\uC758 \uC9C4\uD589 \uC0C1\uD0DC\uB97C \uD655\uC778\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4" }
+        ],
         handler: async (p) => {
           const text = String(p?.text ?? "").trim();
           if (!text) return { ok: false, code: "INVALID_INPUT", message: "text \uD544\uC218" };
@@ -2807,7 +2811,7 @@ ${priorContext}` : systemPrompt;
             setMode(activeClubhouse, p.mode);
           }
           onHuman(activeClubhouse, text, p?.cut === true);
-          return { ok: true, sent: text, mode: activeClubhouse.mode, running: activeClubhouse.running };
+          return { ok: true, sent: text, mode: activeClubhouse.mode, running: activeClubhouse.running, viewId: activeClubhouse.viewId };
         }
       })
     );
@@ -2830,7 +2834,9 @@ ${priorContext}` : systemPrompt;
             pending: st.pendingHuman.length,
             roster: st.roster.map((r) => ({ id: r.id, checked: r.checked })),
             // streamed = 지금까지 받은 message 청크 누적 길이(thought 제외) — >0 이면 '출력 시작'.
-            actives: [...st.actives].map((c) => ({ id: c.agentId, streamed: c.liveRaw.length }))
+            actives: [...st.actives].map((c) => ({ id: c.agentId, streamed: c.liveRaw.length })),
+            // 이 상태가 어느 뷰의 것인지 자기서술(sessions view.id, mount ctx 제공).
+            viewId: st.viewId
           };
         }
       })
@@ -2840,6 +2846,8 @@ ${priorContext}` : systemPrompt;
         description: "Drive the control-tower slow-path headlessly: turn an ambiguous natural-language request into a validated 3-axis plan (command/dom/status) via a planning turn with the live domain map injected, then return a dry-run preview (no execution). Pass commit:true to dispatch the validated plan (safe steps run; destructive steps still require the desktop confirm gate). Use for utterance E2E and AI automation of the tower.",
         triggers: { ko: "\uD0C0\uC6CC \uACC4\uD68D \uC790\uC5F0\uC5B4 \uBA85\uB839 \uBCC0\uD658 plan \uC2AC\uB85C\uC6B0\uD328\uC2A4 dry-run \uCEE8\uD2B8\uB864\uD0C0\uC6CC" },
         message: (d) => `step ${(d.steps ?? d.plans ?? []).length}\uAC1C ${d.committed ? "\uC2E4\uD589" : "dry-run"}.`,
+        // 다음 수 제시(1개, 강제 아님) — dry-run(기본)은 이 명령 자신의 사이클대로 commit:true 가 다음 수다.
+        hint: (d) => d?.dryRun === true ? [{ cmd: "plugin.soksak-plugin-agents-clubhouse.tower.plan", why: "commit:true \uB97C \uB354\uD574 \uAC19\uC740 plan \uC744 \uC2E4\uD589\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4" }] : [],
         params: {
           text: { type: "string", required: true, description: 'Natural-language request (e.g. "close the left panel and show the terminal big").' },
           commit: { type: "boolean", description: "true = dispatch the validated plan after planning (destructive steps still gated). Omit/false = dry-run only (return steps, execute nothing)." },
@@ -3040,6 +3048,20 @@ ${priorContext}` : systemPrompt;
           if (d.proposed !== void 0) return d.proposed ? "\uC2B9\uACA9 \uC81C\uC548 1\uAC74." : "\uC2B9\uACA9 \uC81C\uC548 \uC5C6\uC74C.";
           return "\uB9E4\uD06C\uB85C \uCC98\uB9AC \uC644\uB8CC.";
         },
+        // 다음 수 제시(1개, 강제 아님) — 이 명령 자신이 밝힌 사이클(save→run, propose→save)만 짚는다.
+        hint: (d) => {
+          if (d?.saved?.name) {
+            return [
+              { cmd: "plugin.soksak-plugin-agents-clubhouse.tower.macro", why: `verb:run, name:"${d.saved.name}" \uC73C\uB85C \uBC29\uAE08 \uC800\uC7A5\uD55C \uB9E4\uD06C\uB85C\uB97C \uC2E4\uD589\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4` }
+            ];
+          }
+          if (d?.proposed === true) {
+            return [
+              { cmd: "plugin.soksak-plugin-agents-clubhouse.tower.macro", why: "verb:save \uB85C \uC774 \uC81C\uC548\uC744 \uBA85\uBA85 \uB9E4\uD06C\uB85C\uB85C \uC2B9\uC778\xB7\uC800\uC7A5\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4" }
+            ];
+          }
+          return [];
+        },
         params: {
           verb: { type: "string", required: true, description: "save | run | list | forget | propose." },
           name: { type: "string", description: "Macro name (user-coined). Required for save/run/forget." },
@@ -3191,14 +3213,14 @@ ${priorContext}` : systemPrompt;
     const states = /* @__PURE__ */ new WeakMap();
     ctx.subscriptions.push(
       app.ui.registerView("clubhouse", {
-        mount(container) {
+        mount(container, viewCtx) {
           teardown(container);
           container.style.position = "relative";
           const style = document.createElement("style");
           style.textContent = CSS2;
           const root = document.createElement("div");
           root.className = "st";
-          buildClubhouse(container, root);
+          buildClubhouse(container, root, typeof viewCtx?.viewId === "string" ? viewCtx.viewId : null);
           container.replaceChildren(style, root);
         },
         unmount(container) {
@@ -3218,7 +3240,7 @@ ${priorContext}` : systemPrompt;
       states.delete(container);
       container.replaceChildren();
     }
-    function buildClubhouse(container, root) {
+    function buildClubhouse(container, root, viewId) {
       const bar = el2("div", "st-bar");
       const tabsEl = el2("div", "st-tabs");
       const kibEl = el2("div", "st-kib");
@@ -3248,6 +3270,7 @@ ${priorContext}` : systemPrompt;
         pendingHuman: [],
         actives: /* @__PURE__ */ new Set(),
         cwd: projectCwd(),
+        viewId,
         msgs,
         tabsEl,
         kibEl,

@@ -173,7 +173,7 @@ describe("(1) 반복 탐지 — threshold 미만이면 제안 안 함, 도달하
 
 // ── (2) tainted 면 승격 불가 ──
 describe("(2) not promotable when tainted — tainted/flagged plan 은 절대 제안/저장 0(RULE 0)", () => {
-  const plan: PlanStep[] = [{ axis: "command", name: "panel.close", params: { group: "g3" } }];
+  const plan: PlanStep[] = [{ axis: "command", name: "panel.close", params: { panel: "g3" } }];
 
   it("순수 promotable — tainted/flagged false", () => {
     expect(promotable({})).toBe(true);
@@ -289,7 +289,7 @@ describe("(5) re-validation — 저장된 step 의 command 가 라이브 도메�
 
 // ── (6) danger 보존: destructive step 매크로도 confirm 게이트 ──
 describe("(6) danger preserved — destructive step 매크로는 confirm 게이트, deny → 미실행", () => {
-  const steps: PlanStep[] = [{ axis: "command", name: "panel.close", params: { group: "g3" } }];
+  const steps: PlanStep[] = [{ axis: "command", name: "panel.close", params: { panel: "g3" } }];
 
   it("confirm deny → destructive 매크로 미실행(게이트 우회 0)", async () => {
     const store = newStore();
@@ -312,7 +312,7 @@ describe("(6) danger preserved — destructive step 매크로는 confirm 게이�
     const r = await ex.runMacro("패널닫기");
     expect(r.ok).toBe(true);
     expect(confirmGate).toHaveBeenCalledTimes(1);
-    expect(executed).toEqual([{ name: "panel.close", params: { group: "g3" } }]);
+    expect(executed).toEqual([{ name: "panel.close", params: { panel: "g3" } }]);
   });
 });
 

@@ -86,7 +86,7 @@ describe("(M6-1) danger 직렬 confirm 큐 — 동시 destructive 도 한 번에
     const { d, executed } = deps({ confirmGate });
     const ex = createExecutor(d);
 
-    const planA: PlanStep[] = [{ axis: "command", name: "panel.close", params: { group: "gA" } }];
+    const planA: PlanStep[] = [{ axis: "command", name: "panel.close", params: { panel: "gA" } }];
     const planB: PlanStep[] = [{ axis: "command", name: "view.close", params: { view: "vB" } }];
     const rA = await ex.planAndRun("x", { injectPlan: planA });
     const rB = await ex.planAndRun("y", { injectPlan: planB });
@@ -124,7 +124,7 @@ describe("(M6-1) danger 직렬 confirm 큐 — 동시 destructive 도 한 번에
       new Promise<string | null>((resolve) => gates.push({ resolve, issue }));
     const { d, executed } = deps({ confirmGate });
     const ex = createExecutor(d);
-    const rA = await ex.planAndRun("x", { injectPlan: [{ axis: "command", name: "panel.close", params: { group: "gA" } }] });
+    const rA = await ex.planAndRun("x", { injectPlan: [{ axis: "command", name: "panel.close", params: { panel: "gA" } }] });
     const rB = await ex.planAndRun("y", { injectPlan: [{ axis: "command", name: "view.close", params: { view: "vB" } }] });
     if (!rA.ok || !rB.ok) throw new Error("dry-run");
     const pA = rA.commit();

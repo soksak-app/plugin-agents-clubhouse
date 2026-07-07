@@ -157,6 +157,7 @@ interface ClubhouseState {
   pendingHuman: string[]; // 진행 중 들어온 사람 참견 — 현재 턴 종결 후 세션 주입(취소-제거 아님)
   actives: Set<Current>; // 진행 중인 발화들(순차=최대 1, 동시=최대 N) — 중단·정리 대상
   cwd: string | undefined;
+  viewId: string | null; // 이 뷰 인스턴스의 sessions view.id(mount ctx 제공) — send/state 응답 자기서술용
   msgs: HTMLElement;
   tabsEl: HTMLElement; // 로스터 탭 컨테이너 — 세션 오류 시 자동 체크 해제 후 재렌더
   kibEl: HTMLElement; // 모드 토글(순차/진행/동시) 컨테이너 — setMode 가 버튼 하이라이트 동기화
@@ -260,6 +261,10 @@ export default {
           mode: { type: "string", description: "turn|facil|simul — set conversation mode before sending. Omit to keep current mode." },
           cut: { type: "boolean", description: "true = immediately interrupt the current agent turn without the ask/wait dialog (deterministic for E2E)." },
         },
+        // 다음 수 제시(1개, 강제 아님) — 발화가 스트리밍을 시작했는지는 state 로 확인할 수 있다(exec→read 결).
+        hint: () => [
+          { cmd: "plugin.soksak-plugin-agents-clubhouse.state", why: "전송한 메시지의 진행 상태를 확인할 수 있습니다" },
+        ],
         handler: async (p: any) => {
           const text = String(p?.text ?? "").trim();
           if (!text) return { ok: false, code: "INVALID_INPUT", message: "text 필수" };
@@ -268,7 +273,8 @@ export default {
             setMode(activeClubhouse, p.mode); // 버튼 클릭과 동치 — 하이라이트·👑 동기화
           }
           onHuman(activeClubhouse, text, p?.cut === true);
-          return { ok: true, sent: text, mode: activeClubhouse.mode, running: activeClubhouse.running };
+          // viewId — 이 send 가 작용한 뷰(sessions view.id, mount ctx 제공)를 응답에 실어 자기서술한다.
+          return { ok: true, sent: text, mode: activeClubhouse.mode, running: activeClubhouse.running, viewId: activeClubhouse.viewId };
         },
       }),
     );
@@ -294,6 +300,8 @@ export default {
             roster: st.roster.map((r) => ({ id: r.id, checked: r.checked })),
             // streamed = 지금까지 받은 message 청크 누적 길이(thought 제외) — >0 이면 '출력 시작'.
             actives: [...st.actives].map((c) => ({ id: c.agentId, streamed: c.liveRaw.length })),
+            // 이 상태가 어느 뷰의 것인지 자기서술(sessions view.id, mount ctx 제공).
+            viewId: st.viewId,
           };
         },
       }),
@@ -309,6 +317,11 @@ export default {
           "Drive the control-tower slow-path headlessly: turn an ambiguous natural-language request into a validated 3-axis plan (command/dom/status) via a planning turn with the live domain map injected, then return a dry-run preview (no execution). Pass commit:true to dispatch the validated plan (safe steps run; destructive steps still require the desktop confirm gate). Use for utterance E2E and AI automation of the tower.",
         triggers: { ko: "타워 계획 자연어 명령 변환 plan 슬로우패스 dry-run 컨트롤타워" },
         message: (d: any) => `step ${((d.steps ?? d.plans ?? []) as any[]).length}개 ${d.committed ? "실행" : "dry-run"}.`,
+        // 다음 수 제시(1개, 강제 아님) — dry-run(기본)은 이 명령 자신의 사이클대로 commit:true 가 다음 수다.
+        hint: (d: any) =>
+          d?.dryRun === true
+            ? [{ cmd: "plugin.soksak-plugin-agents-clubhouse.tower.plan", why: "commit:true 를 더해 같은 plan 을 실행할 수 있습니다" }]
+            : [],
         params: {
           text: { type: "string", required: true, description: "Natural-language request (e.g. \"close the left panel and show the terminal big\")." },
           commit: { type: "boolean", description: "true = dispatch the validated plan after planning (destructive steps still gated). Omit/false = dry-run only (return steps, execute nothing)." },
@@ -570,6 +583,20 @@ export default {
           if (d.proposed !== undefined) return d.proposed ? "승격 제안 1건." : "승격 제안 없음.";
           return "매크로 처리 완료.";
         },
+        // 다음 수 제시(1개, 강제 아님) — 이 명령 자신이 밝힌 사이클(save→run, propose→save)만 짚는다.
+        hint: (d: any) => {
+          if (d?.saved?.name) {
+            return [
+              { cmd: "plugin.soksak-plugin-agents-clubhouse.tower.macro", why: `verb:run, name:"${d.saved.name}" 으로 방금 저장한 매크로를 실행할 수 있습니다` },
+            ];
+          }
+          if (d?.proposed === true) {
+            return [
+              { cmd: "plugin.soksak-plugin-agents-clubhouse.tower.macro", why: "verb:save 로 이 제안을 명명 매크로로 승인·저장할 수 있습니다" },
+            ];
+          }
+          return [];
+        },
         params: {
           verb: { type: "string", required: true, description: "save | run | list | forget | propose." },
           name: { type: "string", description: "Macro name (user-coined). Required for save/run/forget." },
@@ -740,7 +767,7 @@ export default {
     const states = new WeakMap<HTMLElement, ClubhouseState>();
     ctx.subscriptions.push(
       app.ui.registerView("clubhouse", {
-        mount(container: HTMLElement) {
+        mount(container: HTMLElement, viewCtx: any) {
           teardown(container);
           // 호스트 슬롯에 확정 높이 부여(kanban 패턴) — .st 가 absolute inset:0 로 채워 flex 레이아웃이
           // 풀린다(컨테이너 height 미정 시 .st{height:100%} 가 0/콘텐츠로 붕괴 → 입력바 클리핑 방지).
@@ -749,7 +776,8 @@ export default {
           style.textContent = CSS;
           const root = document.createElement("div");
           root.className = "st";
-          buildClubhouse(container, root);
+          // viewId(sessions view.id) — send/state 응답에 실어 "어느 뷰에 작용했는지" 자기서술한다.
+          buildClubhouse(container, root, typeof viewCtx?.viewId === "string" ? viewCtx.viewId : null);
           container.replaceChildren(style, root);
         },
         unmount(container: HTMLElement) {
@@ -770,7 +798,7 @@ export default {
       container.replaceChildren();
     }
 
-    function buildClubhouse(container: HTMLElement, root: HTMLElement) {
+    function buildClubhouse(container: HTMLElement, root: HTMLElement, viewId: string | null) {
       const bar = el("div", "st-bar");
       const tabsEl = el("div", "st-tabs");
       const kibEl = el("div", "st-kib");
@@ -800,6 +828,7 @@ export default {
         pendingHuman: [],
         actives: new Set(),
         cwd: projectCwd(),
+        viewId,
         msgs,
         tabsEl,
         kibEl,

@@ -147,7 +147,7 @@ describe("(2) 미등록 command/주소 → validatePlan 거부 + 되먹임", () 
 
 describe("(3) 파괴적 step → commit 시 M4 confirm 게이트 발동", () => {
   it("destructive step 은 confirm 거부 시 미실행(commit)", async () => {
-    const { planner } = fixedPlanner([JSON.stringify([{ axis: "command", name: "panel.close", params: { group: "g3" } }])]);
+    const { planner } = fixedPlanner([JSON.stringify([{ axis: "command", name: "panel.close", params: { panel: "g3" } }])]);
     const confirmGate = vi.fn(async () => null); // 거부
     const { d, executed } = deps({ planner, confirmGate });
     const ex = createExecutor(d);
@@ -161,7 +161,7 @@ describe("(3) 파괴적 step → commit 시 M4 confirm 게이트 발동", () => 
   });
 
   it("destructive step 은 confirm 수락 시에만 실행(commit)", async () => {
-    const { planner } = fixedPlanner([JSON.stringify([{ axis: "command", name: "panel.close", params: { group: "g3" } }])]);
+    const { planner } = fixedPlanner([JSON.stringify([{ axis: "command", name: "panel.close", params: { panel: "g3" } }])]);
     const confirmGate = vi.fn(async (issue: () => string) => issue()); // 수락
     const { d, executed } = deps({ planner, confirmGate });
     const ex = createExecutor(d);
@@ -169,7 +169,7 @@ describe("(3) 파괴적 step → commit 시 M4 confirm 게이트 발동", () => 
     if (!res.ok) throw new Error("dry-run 실패");
     const commit = await res.commit();
     expect(commit.ok).toBe(true);
-    expect(executed).toEqual([{ name: "panel.close", params: { group: "g3" } }]);
+    expect(executed).toEqual([{ name: "panel.close", params: { panel: "g3" } }]);
     expect(confirmGate).toHaveBeenCalledTimes(1);
   });
 });
@@ -272,7 +272,7 @@ describe("injectPlan — 결정적 E2E 주입(planner 우회, 검증·게이트�
     const res = await ex.planAndRun("x", {
       injectPlan: [
         { axis: "status", name: "status.query", params: { view: "v9" } },
-        { axis: "command", name: "panel.close", params: { group: "g3" } }, // destructive
+        { axis: "command", name: "panel.close", params: { panel: "g3" } }, // destructive
       ],
     });
     expect(res.ok).toBe(true);
@@ -280,7 +280,7 @@ describe("injectPlan — 결정적 E2E 주입(planner 우회, 검증·게이트�
     expect(executed).toEqual([]); // dry-run — 아직 0
     const c = await res.commit();
     expect(c.ok).toBe(true);
-    expect(executed).toEqual([{ name: "panel.close", params: { group: "g3" } }]); // status 는 read(미기록)
+    expect(executed).toEqual([{ name: "panel.close", params: { panel: "g3" } }]); // status 는 read(미기록)
     expect(confirmGate).toHaveBeenCalledTimes(1); // panel.close = destructive → 게이트 발동
   });
 });

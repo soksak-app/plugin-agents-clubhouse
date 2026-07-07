@@ -14,7 +14,7 @@ import type { PlanStep } from "./plan";
 function plan(): PlanStep[] {
   return [
     { axis: "status", name: "status.query", params: {} },
-    { axis: "command", name: "panel.close", params: { group: "g3" } },
+    { axis: "command", name: "panel.close", params: { panel: "g3" } },
     { axis: "command", name: "theme.apply", params: { name: "Midnight" } },
   ];
 }
@@ -64,7 +64,7 @@ describe("editParams — 인라인 파라미터 수정(순수)", () => {
   it("해당 step 의 params 를 새 값으로 교체(다른 step 불변)", () => {
     const out = editParams(plan(), 2, { name: "Bare", mode: "light" });
     expect(out[2].params).toEqual({ name: "Bare", mode: "light" });
-    expect(out[1].params).toEqual({ group: "g3" });
+    expect(out[1].params).toEqual({ panel: "g3" });
   });
 
   it("dom step 의 address 도 params 키로 수정 가능(주소 갱신)", () => {

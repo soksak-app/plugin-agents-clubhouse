@@ -30,7 +30,7 @@ function fakeApp() {
           return { ok: true, nodes: [{ address: "win/main/chrome/tower/input" }] };
         }
         if (name === "panel.list") {
-          return { ok: true, activeGroupId: "g3", panels: [{ id: "g3", active: true, activeViewId: "v8", views: [{ id: "v8", kind: "plugin", plugin: "soksak-plugin-terminal" }, { id: "v9", kind: "editor" }] }] };
+          return { ok: true, activePanelId: "g3", panels: [{ id: "g3", active: true, activeViewId: "v8", views: [{ id: "v8", kind: "plugin", plugin: "soksak-plugin-terminal" }, { id: "v9", kind: "editor" }] }] };
         }
         if (name === "theme.list") {
           return { ok: true, current: "Cupertino", mode: "dark", themes: [{ name: "Cupertino" }, { name: "Midnight" }] };
@@ -82,7 +82,7 @@ describe("(a) destructive — confirm 통과 전엔 절대 미실행", () => {
   it("confirm 거부 → destructive 미실행", async () => {
     const { d, executed } = deps({ confirmGate: async () => null }); // 거부(토큰 미발급)
     const ex = createExecutor(d);
-    const r = await ex.runCommand("panel.close", { group: "g3" });
+    const r = await ex.runCommand("panel.close", { panel: "g3" });
     expect(r.ok).toBe(false);
     expect(executed).toEqual([]); // 0 실행
   });
@@ -97,9 +97,9 @@ describe("(a) destructive — confirm 통과 전엔 절대 미실행", () => {
   it("confirm 수락 → destructive 실행(긍정)", async () => {
     const { d, executed } = deps(); // 기본 수락
     const ex = createExecutor(d);
-    const r = await ex.runCommand("panel.close", { group: "g3" });
+    const r = await ex.runCommand("panel.close", { panel: "g3" });
     expect(r.ok).toBe(true);
-    expect(executed).toEqual([{ name: "panel.close", params: { group: "g3" } }]);
+    expect(executed).toEqual([{ name: "panel.close", params: { panel: "g3" } }]);
   });
 });
 
@@ -123,7 +123,7 @@ describe("(c) 게이트는 실행에 엮인다 — NOP-패치 우회 불가", ()
       },
     });
     const ex = createExecutor(d);
-    await ex.runCommand("panel.close", { group: "g3" }); // 토큰 소비
+    await ex.runCommand("panel.close", { panel: "g3" }); // 토큰 소비
     expect(executed).toHaveLength(1);
     // 동일 토큰으로 직접 재-dispatch 시도 → 이미 소비됨 → 미실행
     const r = await __unsafeDispatchForNopTest(ex, captured as unknown as string);

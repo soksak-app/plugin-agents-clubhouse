@@ -164,7 +164,7 @@ describe("(3) confirm 거부된 destructive step → 거부(미실행) 기록", 
     const confirmGate = vi.fn(async () => null); // 거부
     const { d, executed } = deps(trace, { confirmGate });
     const ex = createExecutor(d);
-    const plan: PlanStep[] = [{ axis: "command", name: "panel.close", params: { group: "g3" } }];
+    const plan: PlanStep[] = [{ axis: "command", name: "panel.close", params: { panel: "g3" } }];
     const res = await ex.planAndRun("패널 닫아", { injectPlan: plan, trace: { nl: "패널 닫아", mode: "facil" } });
     if (!res.ok) throw new Error("dry-run 실패");
     const c = await res.commit();

@@ -46,12 +46,12 @@ describe("invertibleStep — 명시 invertible-map(순수)", () => {
   });
 
   it("NON-invertible 닫기(panel.close)는 null — 가짜 복원 금지(정직)", () => {
-    const s: PlanStep = { axis: "command", name: "panel.close", params: { group: "g3" } };
+    const s: PlanStep = { axis: "command", name: "panel.close", params: { panel: "g3" } };
     expect(invertibleStep(s, snap())).toBeNull();
   });
 
   it("NON-invertible view.close/editor.close/window.close/data.import 전부 null", () => {
-    for (const name of ["view.close", "editor.close", "window.close", "data.import", "secret.delete"]) {
+    for (const name of ["view.close", "editor.close", "window.close", "data.import", "secret.remove"]) {
       expect(invertibleStep({ axis: "command", name, params: {} }, snap())).toBeNull();
     }
   });
@@ -66,7 +66,7 @@ describe("planRollback — 이미 실행된 step 들의 역계획(순수, 정직
   it("실행된 invertible step 들만 역순 inverse, non-invertible 은 unrestorable 로 분리", () => {
     const executed: PlanStep[] = [
       { axis: "command", name: "theme.apply", params: { name: "Midnight" } }, // invertible
-      { axis: "command", name: "panel.close", params: { group: "g3" } }, // non-invertible(실패 직전 성공)
+      { axis: "command", name: "panel.close", params: { panel: "g3" } }, // non-invertible(실패 직전 성공)
     ];
     const rb = planRollback(executed, snap());
     // 역순(가장 최근 실행부터) — 단, panel.close 는 inverse 불가 → unrestorable, theme.apply 만 inverse.

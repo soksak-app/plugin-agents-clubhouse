@@ -12,7 +12,7 @@
 
 // 코어 catalog*.ts 의 danger:"destructive" 선언 전수 미러(2026-06 기준). 닫기·제거·복원·치환 류.
 const DESTRUCTIVE = new Set<string>([
-  "content.close",
+  "sheet.close",
   "data.import",
   "data.restore",
   "panel.close",
@@ -22,7 +22,7 @@ const DESTRUCTIVE = new Set<string>([
   "plugin.remove",
   "plugin.update",
   "project.close",
-  "secret.delete",
+  "secret.remove",
   "view.close",
   "editor.close", // view.close 위임(코어 desc "same as view.close") — 닫기이므로 게이트.
   "window.close", // 창 닫기 — 파괴.
@@ -38,7 +38,7 @@ const INJECT = new Set<string>([
   "net.udp.request",
   "net.udp.send",
   "plugin.dev.load",
-  "plugin.dev.new",
+  "plugin.dev.create",
   "plugin.enable",
   "schedule.set",
   "secret.set",
@@ -259,10 +259,10 @@ export const EXAMPLE_COMMANDS: ExampleSpec[] = [
       const term = panels.find((p) =>
         (p.views ?? []).some((vw: any) => vw.plugin === "soksak-plugin-terminal"),
       );
-      if (term) return { group: term.id };
-      // 폴백 = 활성 그룹(마지막 패널은 코어가 거부 — 그 거부가 진실).
+      if (term) return { panel: term.id };
+      // 폴백 = 활성 패널(마지막 패널은 코어가 거부 — 그 거부가 진실).
       const active = panels.find((p) => p.active) ?? panels[0];
-      return active ? { group: active.id } : null;
+      return active ? { panel: active.id } : null;
     },
   },
   {

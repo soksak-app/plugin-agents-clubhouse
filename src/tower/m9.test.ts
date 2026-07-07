@@ -188,7 +188,7 @@ describe("(2) rollback invertible — 묶음 중간 실패 시 이미 실행된 
     const ex = createExecutor(d);
     const plan: PlanStep[] = [
       { axis: "command", name: "theme.apply", params: { name: "Midnight", mode: "light" } },
-      { axis: "command", name: "panel.close", params: { group: "g3" } },
+      { axis: "command", name: "panel.close", params: { panel: "g3" } },
     ];
     const res = await ex.revalidateAndRun(plan);
     expect(res.ok).toBe(true);
@@ -219,7 +219,7 @@ describe("(2) rollback honesty — non-invertible 실행분은 가짜 복원 금
     );
     const ex = createExecutor(d);
     const plan: PlanStep[] = [
-      { axis: "command", name: "panel.close", params: { group: "g3" } },
+      { axis: "command", name: "panel.close", params: { panel: "g3" } },
       { axis: "command", name: "view.close", params: { view: "v9" } },
     ];
     const res = await ex.revalidateAndRun(plan);
@@ -250,7 +250,7 @@ describe("(2) rollback cap — 현재 plan 1건만, 직전 plan 은 건드리지
     //   B 시작 시 스냅샷). 절대 plan A 까지 거슬러 Cupertino 로 가지 않는다(cap = 현재 plan 1건).
     const b = await ex.revalidateAndRun([
       { axis: "command", name: "theme.apply", params: { name: "Bare", mode: "dark" } },
-      { axis: "command", name: "panel.close", params: { group: "g3" } },
+      { axis: "command", name: "panel.close", params: { panel: "g3" } },
     ]);
     expect(b.ok).toBe(true);
     if (!b.ok) return;
@@ -281,7 +281,7 @@ describe("(2) rollback trace — restored/unrestorable 가 plan 레코드에 정
     const res = await ex.revalidateAndRun(
       [
         { axis: "command", name: "theme.apply", params: { name: "Midnight", mode: "light" } },
-        { axis: "command", name: "panel.close", params: { group: "g3" } },
+        { axis: "command", name: "panel.close", params: { panel: "g3" } },
         { axis: "command", name: "view.close", params: { view: "v9" } },
       ],
       { trace: { nl: "rollback audit", mode: "solo" } },
@@ -312,7 +312,7 @@ describe("(2) autoDenyConfirm — destructive 자동 거부로 결정적 rollbac
     const ex = createExecutor(d);
     const res = await ex.revalidateAndRun([
       { axis: "command", name: "theme.apply", params: { name: "Midnight", mode: "light" } },
-      { axis: "command", name: "panel.close", params: { group: "g3" } },
+      { axis: "command", name: "panel.close", params: { panel: "g3" } },
     ]);
     expect(res.ok).toBe(true);
     if (!res.ok) return;
@@ -334,7 +334,7 @@ describe("(2) rollback 게이트 — 안전 inverse 는 confirm 불필요, NEW d
     const ex = createExecutor(d);
     const plan: PlanStep[] = [
       { axis: "command", name: "theme.apply", params: { name: "Midnight" } }, // 비파괴 → confirm 0
-      { axis: "command", name: "panel.close", params: { group: "g3" } }, // destructive → confirm 1회
+      { axis: "command", name: "panel.close", params: { panel: "g3" } }, // destructive → confirm 1회
     ];
     const res = await ex.revalidateAndRun(plan);
     expect(res.ok).toBe(true);

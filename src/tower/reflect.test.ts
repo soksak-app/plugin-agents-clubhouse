@@ -292,7 +292,7 @@ describe("(M8-6) danger 게이트 — 재계획된 destructive step 도 confirm 
     // 1차 plan: 런타임 실패. 2차 plan: destructive(panel.close) — confirm 거부 → 미실행.
     const { planner } = scriptedPlanner([
       JSON.stringify([{ axis: "command", name: "panel.resize", params: { split: "bad" } }]),
-      JSON.stringify([{ axis: "command", name: "panel.close", params: { group: "g3" } }]),
+      JSON.stringify([{ axis: "command", name: "panel.close", params: { panel: "g3" } }]),
     ]);
     const confirmGate = vi.fn(async () => null); // 거부
     const { d, executed } = deps(
@@ -312,7 +312,7 @@ describe("(M8-6) danger 게이트 — 재계획된 destructive step 도 confirm 
   it("재계획 destructive step 도 confirm 수락 시에만 실행(긍정 대조)", async () => {
     const { planner } = scriptedPlanner([
       JSON.stringify([{ axis: "command", name: "panel.resize", params: { split: "bad" } }]),
-      JSON.stringify([{ axis: "command", name: "panel.close", params: { group: "g3" } }]),
+      JSON.stringify([{ axis: "command", name: "panel.close", params: { panel: "g3" } }]),
     ]);
     const confirmGate = vi.fn(async (issue: () => string) => issue()); // 수락
     const { d, executed } = deps(
