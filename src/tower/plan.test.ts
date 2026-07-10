@@ -92,7 +92,7 @@ describe("classifyDanger — 코어 레지스트리 danger 미러 (단일 진실
   it("destructive close 류는 destructive 로 분류", () => {
     expect(classifyDanger("panel.close")).toBe("destructive");
     expect(classifyDanger("view.close")).toBe("destructive");
-    expect(classifyDanger("sheet.close")).toBe("destructive");
+    expect(classifyDanger("space.close")).toBe("destructive");
     expect(classifyDanger("project.close")).toBe("destructive");
     expect(classifyDanger("secret.remove")).toBe("destructive");
   });

@@ -12,7 +12,7 @@
 
 // 코어 catalog*.ts 의 danger:"destructive" 선언 전수 미러(2026-06 기준). 닫기·제거·복원·치환 류.
 const DESTRUCTIVE = new Set<string>([
-  "sheet.close",
+  "space.close",
   "data.import",
   "data.restore",
   "panel.close",
