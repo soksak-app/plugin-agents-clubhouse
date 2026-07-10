@@ -90,6 +90,7 @@
         "placements": [
           "content"
         ],
+        "status": [],
         "defaultPlacement": "content"
       }
     ],
