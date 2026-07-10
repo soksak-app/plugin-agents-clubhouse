@@ -295,7 +295,7 @@ function tp(key, lang, vars) {
 
 // src/tower/plan.ts
 var DESTRUCTIVE = /* @__PURE__ */ new Set([
-  "sheet.close",
+  "space.close",
   "data.import",
   "data.restore",
   "panel.close",
