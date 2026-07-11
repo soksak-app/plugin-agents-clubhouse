@@ -224,8 +224,9 @@ function extractBalancedArray(text: string): string | null {
 }
 
 // 예시행 매핑 — 5 handoff 문장 → 실 코어 command + 라이브 파라미터 리졸버.
-//   command = 정식 레지스트리 이름(축1). resolveParams = 클릭 시점 라이브 상태(panel.list/theme.list/
-//   state.tree)에서 필수 파라미터를 채운다 — 정적 문장이 동적 컨텍스트로 해소(좌표 hallucination 0).
+//   command = 정식 레지스트리 이름(축1). resolveParams = 클릭 시점 라이브 상태(plugin.implementers/
+//   panel.list/theme.list/state.tree)에서 필수 파라미터를 채운다 — 정적 문장이 동적 컨텍스트로 해소
+//   (좌표 hallucination 0).
 //   query = executor 가 주입하는 read 명령 실행기(app.commands.execute 래퍼).
 export interface ExampleSpec {
   text: string; // handoff 고정 문구(modal EXAMPLES 와 동일 순서).
@@ -250,14 +251,21 @@ export const EXAMPLE_COMMANDS: ExampleSpec[] = [
     },
   },
   {
-    // "터미널 패널 닫아줘" — 터미널 뷰가 든 패널 그룹을 닫는다(destructive).
+    // "터미널 패널 닫아줘" — terminal-spec@1 계약 구현체 뷰가 든 패널 그룹을 닫는다(destructive).
+    //   특정 터미널 플러그인 id(xterm/ghostty)를 하드코딩하지 않는다 — 계약 발견(plugin.implementers)으로
+    //   구현체 집합을 라이브 해소하고 그 집합에 속하는 뷰를 찾는다(구현체 무차별, C3 L2). 새 터미널 엔진이
+    //   계약을 선언하면 이 코드 변경 없이 자동 편입.
     text: "터미널 패널 닫아줘",
     command: "panel.close",
     resolveParams: async (q) => {
+      const impl = await q("plugin.implementers", { contract: "terminal-spec@1" });
+      const termPlugins = new Set<string>(
+        (Array.isArray(impl?.implementers) ? impl.implementers : []).map((x: any) => x?.id),
+      );
       const r = await q("panel.list");
       const panels: any[] = Array.isArray(r?.panels) ? r.panels : [];
       const term = panels.find((p) =>
-        (p.views ?? []).some((vw: any) => vw.plugin === "soksak-plugin-terminal"),
+        (p.views ?? []).some((vw: any) => termPlugins.has(vw.plugin)),
       );
       if (term) return { panel: term.id };
       // 폴백 = 활성 패널(마지막 패널은 코어가 거부 — 그 거부가 진실).
