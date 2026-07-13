@@ -465,14 +465,14 @@ var EXAMPLE_COMMANDS = [
     }
   },
   {
-    // "터미널 패널 닫아줘" — terminal-spec@1 계약 구현체 뷰가 든 패널 그룹을 닫는다(destructive).
+    // "터미널 패널 닫아줘" — soksak-spec-plugin-terminal 계약 구현체 뷰가 든 패널 그룹을 닫는다(destructive).
     //   특정 터미널 플러그인 id(xterm/ghostty)를 하드코딩하지 않는다 — 계약 발견(plugin.implementers)으로
     //   구현체 집합을 라이브 해소하고 그 집합에 속하는 뷰를 찾는다(구현체 무차별, C3 L2). 새 터미널 엔진이
     //   계약을 선언하면 이 코드 변경 없이 자동 편입.
     text: "\uD130\uBBF8\uB110 \uD328\uB110 \uB2EB\uC544\uC918",
     command: "panel.close",
     resolveParams: async (q) => {
-      const impl = await q("plugin.implementers", { contract: "terminal-spec@1" });
+      const impl = await q("plugin.implementers", { contract: "soksak-spec-plugin-terminal" });
       const termPlugins = new Set(
         (Array.isArray(impl?.implementers) ? impl.implementers : []).map((x) => x?.id)
       );

@@ -30,8 +30,8 @@ function fakeApp() {
           return { ok: true, nodes: [{ address: "win/main/chrome/tower/input" }] };
         }
         if (name === "plugin.implementers") {
-          // terminal-spec@1 계약 발견 — 터미널 닫기 예시가 특정 플러그인 id 대신 계약으로 구현체를 해소한다.
-          return { ok: true, contract: "terminal-spec@1", implementers: [{ id: "soksak-plugin-terminal", version: "0.0.1", status: "enabled" }] };
+          // soksak-spec-plugin-terminal 계약 발견 — 터미널 닫기 예시가 특정 플러그인 id 대신 계약으로 구현체를 해소한다.
+          return { ok: true, contract: "soksak-spec-plugin-terminal", implementers: [{ id: "soksak-plugin-terminal", version: "0.0.1", status: "enabled" }] };
         }
         if (name === "panel.list") {
           return { ok: true, activePanelId: "g3", panels: [{ id: "g3", active: true, activeViewId: "v8", views: [{ id: "v8", kind: "plugin", plugin: "soksak-plugin-terminal" }, { id: "v9", kind: "editor" }] }] };
@@ -82,7 +82,7 @@ describe("fast-path 비파괴 — confirm 없이 즉시 실행 (긍정)", () => 
   });
 });
 
-describe("터미널 닫기 예시 — terminal-spec@1 계약 발견 fast-path(하드코딩 id 아님)", () => {
+describe("터미널 닫기 예시 — soksak-spec-plugin-terminal 계약 발견 fast-path(하드코딩 id 아님)", () => {
   it('runExample(1)="터미널 패널 닫아줘" 는 plugin.implementers 로 구현체를 찾아 panel.close(destructive, 게이트 경유)', async () => {
     const { d, executed } = deps(); // 기본 = 사람 수락
     const ex = createExecutor(d);

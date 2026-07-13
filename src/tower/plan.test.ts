@@ -218,11 +218,11 @@ describe("EXAMPLE_COMMANDS — 5 예시행 → 실 command 매핑", () => {
   });
 });
 
-// 터미널 닫기 예시(index 1)는 특정 터미널 플러그인 id 를 하드코딩하지 않고 terminal-spec@1 계약 발견
+// 터미널 닫기 예시(index 1)는 특정 터미널 플러그인 id 를 하드코딩하지 않고 soksak-spec-plugin-terminal 계약 발견
 // (plugin.implementers)으로 구현체 집합을 해소해 매칭한다(R7 강결합 금지). RED→GREEN: 구현체 id 가
 // 레거시 이름이 아니라 임의(ghostty)여도 계약 발견이므로 매칭돼야 한다 — 하드코딩 문자열 비교였다면
 // ghostty 뷰를 놓치고 활성 패널로 폴백한다(그 폴백이 RED). 기준 미달 시 단언을 약화하지 말고 구현을 고친다.
-describe("터미널 닫기 예시 — terminal-spec@1 계약 발견으로 패널 해소(하드코딩 id 아님)", () => {
+describe("터미널 닫기 예시 — soksak-spec-plugin-terminal 계약 발견으로 패널 해소(하드코딩 id 아님)", () => {
   const TERMINAL_EXAMPLE = 1; // EXAMPLE_COMMANDS[1] = "터미널 패널 닫아줘"
 
   it("계약 구현체 집합에 속하는 터미널 뷰의 패널을 panel.close 대상으로 해소(활성 폴백 아님)", async () => {
@@ -231,10 +231,10 @@ describe("터미널 닫기 예시 — terminal-spec@1 계약 발견으로 패널
     //   ghostty — 계약이므로 어떤 구현체든 매칭돼야 한다(하드코딩 비교였다면 놓쳐서 g1 폴백 = RED).
     const q = async (name: string, params?: Record<string, unknown>) => {
       if (name === "plugin.implementers") {
-        expect(params).toEqual({ contract: "terminal-spec@1" });
+        expect(params).toEqual({ contract: "soksak-spec-plugin-terminal" });
         return {
           ok: true,
-          contract: "terminal-spec@1",
+          contract: "soksak-spec-plugin-terminal",
           implementers: [
             { id: "soksak-plugin-terminal-xterm", version: "0.0.1", status: "enabled" },
             { id: "soksak-plugin-terminal-ghostty", version: "0.0.1", status: "enabled" },
@@ -261,7 +261,7 @@ describe("터미널 닫기 예시 — terminal-spec@1 계약 발견으로 패널
   it("계약 구현체가 하나도 없으면 활성 패널로 폴백(정직 — 가짜 매칭 0)", async () => {
     const spec = EXAMPLE_COMMANDS[TERMINAL_EXAMPLE];
     const q = async (name: string) => {
-      if (name === "plugin.implementers") return { ok: true, contract: "terminal-spec@1", implementers: [] };
+      if (name === "plugin.implementers") return { ok: true, contract: "soksak-spec-plugin-terminal", implementers: [] };
       if (name === "panel.list") {
         return {
           ok: true,
