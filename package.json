@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.0.1",
   "type": "module",
-  "description": "soksak 플러그인 — 여러 AI 코딩 에이전트를 한 워크스페이스에서 협업(체크박스 로스터·턴제/자유 대화·실파일). 사교는 에이전트 자율 회고·잡담. ACP 기반, acp-core 의존.",
+  "description": "soksak \ud50c\ub7ec\uadf8\uc778 \u2014 \uc5ec\ub7ec AI \ucf54\ub529 \uc5d0\uc774\uc804\ud2b8\ub97c \ud55c \uc6cc\ud06c\uc2a4\ud398\uc774\uc2a4\uc5d0\uc11c \ud611\uc5c5(\uccb4\ud06c\ubc15\uc2a4 \ub85c\uc2a4\ud130\u00b7\ud134\uc81c/\uc790\uc720 \ub300\ud654\u00b7\uc2e4\ud30c\uc77c). \uc0ac\uad50\ub294 \uc5d0\uc774\uc804\ud2b8 \uc790\uc728 \ud68c\uace0\u00b7\uc7a1\ub2f4. ACP \uae30\ubc18, acp-core \uc758\uc874.",
   "scripts": {
     "build": "node build.mjs",
     "dev": "node build.mjs --watch",
@@ -20,5 +20,11 @@
     "typescript": "~5.9.3",
     "vitest": "^2.1.8",
     "soksak-plugin-doctor": "github:soksak-ai/soksak-plugin-doctor"
+  },
+  "soksakRelease": {
+    "kind": "plugin",
+    "id": "soksak-plugin-agents-clubhouse",
+    "repository": "https://github.com/soksak-ai/soksak-plugin-agents-clubhouse",
+    "manifest": "release.json"
   }
 }

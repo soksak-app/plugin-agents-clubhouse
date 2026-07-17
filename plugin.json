@@ -3,13 +3,12 @@
   "id": "soksak-plugin-agents-clubhouse",
   "name": {
     "en": "Agents Clubhouse",
-    "ko": "에이전트 클럽하우스"
+    "ko": "\uc5d0\uc774\uc804\ud2b8 \ud074\ub7fd\ud558\uc6b0\uc2a4"
   },
   "version": "0.0.1",
-  "repo": "https://github.com/soksak-ai/soksak-plugin-agents-clubhouse.git",
   "description": {
-    "en": "A hub that brings multiple AI coding agents (Claude, Codex, Gemini) together in one workspace — select 1–3 via checkboxes, discuss in turn-based, free, or simultaneous mode, and mention a peer directly with '@name'. Conversation by default; the agents touch real files only when you ask. Runs agents through the agents-acp runtime.",
-    "ko": "여러 AI 코딩 에이전트(Claude·Codex·Gemini)를 한 워크스페이스에 모아주는 허브 — 체크박스로 1~3 선택, 탭 순서대로 턴제·자유·동시 모드로 함께 논의. 본문 '@이름' 으로 동료 직접 호출. 기본은 대화이고, 사용자가 요청할 때만 실파일 작업. 에이전트 실행은 agents-acp 런타임 경유."
+    "en": "A hub that brings multiple AI coding agents (Claude, Codex, Gemini) together in one workspace \u2014 select 1\u20133 via checkboxes, discuss in turn-based, free, or simultaneous mode, and mention a peer directly with '@name'. Conversation by default; the agents touch real files only when you ask. Runs agents through the agents-acp runtime.",
+    "ko": "\uc5ec\ub7ec AI \ucf54\ub529 \uc5d0\uc774\uc804\ud2b8(Claude\u00b7Codex\u00b7Gemini)\ub97c \ud55c \uc6cc\ud06c\uc2a4\ud398\uc774\uc2a4\uc5d0 \ubaa8\uc544\uc8fc\ub294 \ud5c8\ube0c \u2014 \uccb4\ud06c\ubc15\uc2a4\ub85c 1~3 \uc120\ud0dd, \ud0ed \uc21c\uc11c\ub300\ub85c \ud134\uc81c\u00b7\uc790\uc720\u00b7\ub3d9\uc2dc \ubaa8\ub4dc\ub85c \ud568\uaed8 \ub17c\uc758. \ubcf8\ubb38 '@\uc774\ub984' \uc73c\ub85c \ub3d9\ub8cc \uc9c1\uc811 \ud638\ucd9c. \uae30\ubcf8\uc740 \ub300\ud654\uc774\uace0, \uc0ac\uc6a9\uc790\uac00 \uc694\uccad\ud560 \ub54c\ub9cc \uc2e4\ud30c\uc77c \uc791\uc5c5. \uc5d0\uc774\uc804\ud2b8 \uc2e4\ud589\uc740 agents-acp \ub7f0\ud0c0\uc784 \uacbd\uc720."
   },
   "entry": "main.js",
   "permissions": [
@@ -34,13 +33,13 @@
         "ask"
       ],
       "enumLabels": [
-        "거부(안전)",
-        "허용",
-        "물어보기"
+        "\uac70\ubd80(\uc548\uc804)",
+        "\ud5c8\uc6a9",
+        "\ubb3c\uc5b4\ubcf4\uae30"
       ],
       "default": "deny",
-      "title": "권한 요청 정책",
-      "description": "에이전트가 파일/명령 권한을 요청할 때 처리 방식"
+      "title": "\uad8c\ud55c \uc694\uccad \uc815\ucc45",
+      "description": "\uc5d0\uc774\uc804\ud2b8\uac00 \ud30c\uc77c/\uba85\ub839 \uad8c\ud55c\uc744 \uc694\uccad\ud560 \ub54c \ucc98\ub9ac \ubc29\uc2dd"
     },
     {
       "key": "kibitzDefault",
@@ -51,13 +50,13 @@
         "simul"
       ],
       "enumLabels": [
-        "진행(사회자)",
-        "순차",
-        "동시"
+        "\uc9c4\ud589(\uc0ac\ud68c\uc790)",
+        "\uc21c\ucc28",
+        "\ub3d9\uc2dc"
       ],
       "default": "facil",
-      "title": "대화 기본 모드",
-      "description": "새 워크스페이스의 대화 스타일 기본값 — 진행(진행자가 동료를 조율·마무리), 순차(탭 순서 각 1회), 동시(전원 병렬 발화)"
+      "title": "\ub300\ud654 \uae30\ubcf8 \ubaa8\ub4dc",
+      "description": "\uc0c8 \uc6cc\ud06c\uc2a4\ud398\uc774\uc2a4\uc758 \ub300\ud654 \uc2a4\ud0c0\uc77c \uae30\ubcf8\uac12 \u2014 \uc9c4\ud589(\uc9c4\ud589\uc790\uac00 \ub3d9\ub8cc\ub97c \uc870\uc728\u00b7\ub9c8\ubb34\ub9ac), \uc21c\ucc28(\ud0ed \uc21c\uc11c \uac01 1\ud68c), \ub3d9\uc2dc(\uc804\uc6d0 \ubcd1\ub82c \ubc1c\ud654)"
     },
     {
       "key": "facilMaxRounds",
@@ -65,8 +64,8 @@
       "default": 6,
       "min": 1,
       "max": 20,
-      "title": "진행 모드 라운드 상한",
-      "description": "진행 모드에서 진행자↔동료 라운드의 하드 상한(폭주 방지 — 도달 시 강제 마무리)"
+      "title": "\uc9c4\ud589 \ubaa8\ub4dc \ub77c\uc6b4\ub4dc \uc0c1\ud55c",
+      "description": "\uc9c4\ud589 \ubaa8\ub4dc\uc5d0\uc11c \uc9c4\ud589\uc790\u2194\ub3d9\ub8cc \ub77c\uc6b4\ub4dc\uc758 \ud558\ub4dc \uc0c1\ud55c(\ud3ed\uc8fc \ubc29\uc9c0 \u2014 \ub3c4\ub2ec \uc2dc \uac15\uc81c \ub9c8\ubb34\ub9ac)"
     },
     {
       "key": "nameTriggerDepthCap",
@@ -74,8 +73,8 @@
       "default": 4,
       "min": 1,
       "max": 20,
-      "title": "@멘션 연쇄 상한",
-      "description": "한 @지목 스레드가 이어지는 최대 깊이(폭주 방지 안전판 — 강제 아님)"
+      "title": "@\uba58\uc158 \uc5f0\uc1c4 \uc0c1\ud55c",
+      "description": "\ud55c @\uc9c0\ubaa9 \uc2a4\ub808\ub4dc\uac00 \uc774\uc5b4\uc9c0\ub294 \ucd5c\ub300 \uae4a\uc774(\ud3ed\uc8fc \ubc29\uc9c0 \uc548\uc804\ud310 \u2014 \uac15\uc81c \uc544\ub2d8)"
     }
   ],
   "contributes": {
@@ -86,7 +85,7 @@
           "en": "Clubhouse",
           "ko": "Clubhouse"
         },
-        "icon": "💬",
+        "icon": "\ud83d\udcac",
         "placements": [
           "content"
         ],
@@ -99,94 +98,94 @@
         "name": "send",
         "title": {
           "en": "Send Message to Clubhouse",
-          "ko": "활성 Clubhouse 에 사람 메시지 전송(라이브 구동·자동화)"
+          "ko": "\ud65c\uc131 Clubhouse \uc5d0 \uc0ac\ub78c \uba54\uc2dc\uc9c0 \uc804\uc1a1(\ub77c\uc774\ube0c \uad6c\ub3d9\u00b7\uc790\ub3d9\ud654)"
         }
       },
       {
         "name": "state",
         "title": {
           "en": "Clubhouse Live State",
-          "ko": "활성 Clubhouse 라이브 상태(스트리밍 길이 등 — 관찰·E2E)"
+          "ko": "\ud65c\uc131 Clubhouse \ub77c\uc774\ube0c \uc0c1\ud0dc(\uc2a4\ud2b8\ub9ac\ubc0d \uae38\uc774 \ub4f1 \u2014 \uad00\ucc30\u00b7E2E)"
         }
       },
       {
         "name": "ask",
         "title": {
           "en": "Ask (single agent, headless)",
-          "ko": "프롬프트 1회(단일 에이전트, 헤드리스)"
+          "ko": "\ud504\ub86c\ud504\ud2b8 1\ud68c(\ub2e8\uc77c \uc5d0\uc774\uc804\ud2b8, \ud5e4\ub4dc\ub9ac\uc2a4)"
         }
       },
       {
         "name": "converse",
         "title": {
           "en": "Converse (multi-agent, headless)",
-          "ko": "다중 에이전트 1교환(턴테이킹, 헤드리스 E2E)"
+          "ko": "\ub2e4\uc911 \uc5d0\uc774\uc804\ud2b8 1\uad50\ud658(\ud134\ud14c\uc774\ud0b9, \ud5e4\ub4dc\ub9ac\uc2a4 E2E)"
         }
       },
       {
         "name": "tower.plan",
         "title": {
           "en": "Tower Plan (slow-path, headless)",
-          "ko": "컨트롤 타워 계획(slow-path NL→3축 plan, dry-run/commit)"
+          "ko": "\ucee8\ud2b8\ub864 \ud0c0\uc6cc \uacc4\ud68d(slow-path NL\u21923\ucd95 plan, dry-run/commit)"
         }
       },
       {
         "name": "tower.reflect",
         "title": {
           "en": "Tower Reflect (post-execution loop, headless)",
-          "ko": "컨트롤 타워 reflection(디스패치→검증→재계획→escalate, M8)"
+          "ko": "\ucee8\ud2b8\ub864 \ud0c0\uc6cc reflection(\ub514\uc2a4\ud328\uce58\u2192\uac80\uc99d\u2192\uc7ac\uacc4\ud68d\u2192escalate, M8)"
         }
       },
       {
         "name": "tower.trace",
         "title": {
           "en": "Tower Trace (session plan/step history)",
-          "ko": "컨트롤 타워 trace(세션 plan·step·결과 이력 조회)"
+          "ko": "\ucee8\ud2b8\ub864 \ud0c0\uc6cc trace(\uc138\uc158 plan\u00b7step\u00b7\uacb0\uacfc \uc774\ub825 \uc870\ud68c)"
         }
       },
       {
         "name": "tower.scan",
         "title": {
           "en": "Tower Scan (untrusted-content injection scanner, headless)",
-          "ko": "컨트롤 타워 스캔(비신뢰 콘텐츠 주입 시그니처 검사, M10)"
+          "ko": "\ucee8\ud2b8\ub864 \ud0c0\uc6cc \uc2a4\uce94(\ube44\uc2e0\ub8b0 \ucf58\ud150\uce20 \uc8fc\uc785 \uc2dc\uadf8\ub2c8\ucc98 \uac80\uc0ac, M10)"
         }
       },
       {
         "name": "tower.macro",
         "title": {
           "en": "Tower Macro (named fast-path: save/run/list/forget/propose)",
-          "ko": "컨트롤 타워 매크로(명명 fast-path: 저장·실행·목록·삭제·승격제안, M11)"
+          "ko": "\ucee8\ud2b8\ub864 \ud0c0\uc6cc \ub9e4\ud06c\ub85c(\uba85\uba85 fast-path: \uc800\uc7a5\u00b7\uc2e4\ud589\u00b7\ubaa9\ub85d\u00b7\uc0ad\uc81c\u00b7\uc2b9\uaca9\uc81c\uc548, M11)"
         }
       }
     ],
     "nodes": [
       {
         "id": "send",
-        "description": "전송 버튼"
+        "description": "\uc804\uc1a1 \ubc84\ud2bc"
       },
       {
         "id": "input",
-        "description": "메시지 입력"
+        "description": "\uba54\uc2dc\uc9c0 \uc785\ub825"
       },
       {
         "id": "tab",
-        "description": "에이전트 탭(체크·드래그)"
+        "description": "\uc5d0\uc774\uc804\ud2b8 \ud0ed(\uccb4\ud06c\u00b7\ub4dc\ub798\uadf8)"
       },
       {
         "id": "mode",
-        "description": "대화 모드 버튼(진행/순차/동시)"
+        "description": "\ub300\ud654 \ubaa8\ub4dc \ubc84\ud2bc(\uc9c4\ud589/\uc21c\ucc28/\ub3d9\uc2dc)"
       },
       {
         "id": "crown",
-        "description": "진행자 지정(👑, 진행 모드)"
+        "description": "\uc9c4\ud589\uc790 \uc9c0\uc815(\ud83d\udc51, \uc9c4\ud589 \ubaa8\ub4dc)"
       },
       {
         "id": "modal",
-        "description": "참견 모달 버튼(지금 끊기/끝나면/취소)"
+        "description": "\ucc38\uacac \ubaa8\ub2ec \ubc84\ud2bc(\uc9c0\uae08 \ub04a\uae30/\ub05d\ub098\uba74/\ucde8\uc18c)"
       },
       {
         "id": "tower",
-        "description": "AI-명령 컨트롤 타워 모달(NL 입력바·예시행·명령 팔레트·검색·라이브칸·닫기·드래그 그립)"
+        "description": "AI-\uba85\ub839 \ucee8\ud2b8\ub864 \ud0c0\uc6cc \ubaa8\ub2ec(NL \uc785\ub825\ubc14\u00b7\uc608\uc2dc\ud589\u00b7\uba85\ub839 \ud314\ub808\ud2b8\u00b7\uac80\uc0c9\u00b7\ub77c\uc774\ube0c\uce78\u00b7\ub2eb\uae30\u00b7\ub4dc\ub798\uadf8 \uadf8\ub9bd)"
       }
     ],
     "programs": [
@@ -197,7 +196,7 @@
           "ko": "Clubhouse"
         },
         "path": {
-          "ko": "에이전트",
+          "ko": "\uc5d0\uc774\uc804\ud2b8",
           "en": "Agents"
         },
         "kind": "view",
