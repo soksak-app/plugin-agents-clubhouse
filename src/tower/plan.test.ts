@@ -227,11 +227,11 @@ describe("터미널 닫기 예시 — soksak-spec-plugin-terminal 계약 발견�
 
   it("계약 구현체 집합에 속하는 터미널 뷰의 패널을 panel.close 대상으로 해소(활성 폴백 아님)", async () => {
     const spec = EXAMPLE_COMMANDS[TERMINAL_EXAMPLE];
-    // 계약 발견 = plugin.implementers(contract). 구현체 id 는 레거시 "soksak-plugin-terminal" 이 아니라
+    // 계약 발견 = plugin.implementers(id). 구현체 id 는 레거시 "soksak-plugin-terminal" 이 아니라
     //   ghostty — 계약이므로 어떤 구현체든 매칭돼야 한다(하드코딩 비교였다면 놓쳐서 g1 폴백 = RED).
     const q = async (name: string, params?: Record<string, unknown>) => {
       if (name === "plugin.implementers") {
-        expect(params).toEqual({ contract: "soksak-spec-plugin-terminal" });
+        expect(params).toEqual({ id: "soksak-spec-plugin-terminal" });
         return {
           ok: true,
           contract: "soksak-spec-plugin-terminal",

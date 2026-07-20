@@ -472,7 +472,7 @@ var EXAMPLE_COMMANDS = [
     text: "\uD130\uBBF8\uB110 \uD328\uB110 \uB2EB\uC544\uC918",
     command: "panel.close",
     resolveParams: async (q) => {
-      const impl = await q("plugin.implementers", { contract: "soksak-spec-plugin-terminal" });
+      const impl = await q("plugin.implementers", { id: "soksak-spec-plugin-terminal" });
       const termPlugins = new Set(
         (Array.isArray(impl?.implementers) ? impl.implementers : []).map((x) => x?.id)
       );

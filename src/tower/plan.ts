@@ -258,7 +258,7 @@ export const EXAMPLE_COMMANDS: ExampleSpec[] = [
     text: "터미널 패널 닫아줘",
     command: "panel.close",
     resolveParams: async (q) => {
-      const impl = await q("plugin.implementers", { contract: "soksak-spec-plugin-terminal" });
+      const impl = await q("plugin.implementers", { id: "soksak-spec-plugin-terminal" });
       const termPlugins = new Set<string>(
         (Array.isArray(impl?.implementers) ? impl.implementers : []).map((x: any) => x?.id),
       );
