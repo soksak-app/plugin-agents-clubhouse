@@ -42,6 +42,10 @@ const strings = {
     en: "Queued — reflected after current conversation ends",
     ko: "대기 중 — 현재 대화가 끝나면 반영",
   },
+  railNoBinding: {
+    en: "No clubhouse view bound",
+    ko: "결부된 클럽하우스 뷰 없음",
+  },
   modalTitle: {
     en: "{who} is speaking",
     ko: "{who} 말하는 중",

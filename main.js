@@ -98,6 +98,10 @@ var strings = {
     en: "Queued \u2014 reflected after current conversation ends",
     ko: "\uB300\uAE30 \uC911 \u2014 \uD604\uC7AC \uB300\uD654\uAC00 \uB05D\uB098\uBA74 \uBC18\uC601"
   },
+  railNoBinding: {
+    en: "No clubhouse view bound",
+    ko: "\uACB0\uBD80\uB41C \uD074\uB7FD\uD558\uC6B0\uC2A4 \uBDF0 \uC5C6\uC74C"
+  },
   modalTitle: {
     en: "{who} is speaking",
     ko: "{who} \uB9D0\uD558\uB294 \uC911"
@@ -291,6 +295,46 @@ function tp(key, lang, vars) {
   let s = t(key, lang);
   for (const [k, v] of Object.entries(vars)) s = s.replace(`{${k}}`, v);
   return s;
+}
+
+// src/railBridge.ts
+var containers = /* @__PURE__ */ new Map();
+var subs = /* @__PURE__ */ new Map();
+function notify(viewId) {
+  for (const fn of subs.get(viewId) ?? []) fn();
+}
+function registerRailContainer(viewId, slot, el2) {
+  const entry = containers.get(viewId) ?? {};
+  entry[slot] = el2;
+  containers.set(viewId, entry);
+  notify(viewId);
+  return () => {
+    const cur = containers.get(viewId);
+    if (!cur || cur[slot] !== el2) return;
+    delete cur[slot];
+    if (!cur.roster) containers.delete(viewId);
+    notify(viewId);
+  };
+}
+function railContainer(viewId, slot) {
+  if (!viewId) return null;
+  return containers.get(viewId)?.[slot] ?? null;
+}
+function subscribeRail(viewId, fn) {
+  if (!viewId) return () => {
+  };
+  let set = subs.get(viewId);
+  if (!set) {
+    set = /* @__PURE__ */ new Set();
+    subs.set(viewId, set);
+  }
+  set.add(fn);
+  return () => {
+    const s = subs.get(viewId);
+    if (!s) return;
+    s.delete(fn);
+    if (s.size === 0) subs.delete(viewId);
+  };
 }
 
 // src/tower/plan.ts
@@ -1899,7 +1943,7 @@ function createTowerModal(deps) {
   ensureStyle();
   let ov = null;
   let undrag = null;
-  let subs = [];
+  let subs2 = [];
   let palWrap = null;
   let macroWrap = null;
   let macroSec = null;
@@ -2419,22 +2463,22 @@ function createTowerModal(deps) {
       if (ov) return;
       ov = build();
       document.body.appendChild(ov);
-      subs.push(app.bus.on(TOWER_LIVE_TOPIC, (p) => onLive(p)));
-      subs.push(app.events.on("theme.changed", () => fetchCatalog()));
-      subs.push(app.events.on("locale.changed", () => fetchCatalog()));
+      subs2.push(app.bus.on(TOWER_LIVE_TOPIC, (p) => onLive(p)));
+      subs2.push(app.events.on("theme.changed", () => fetchCatalog()));
+      subs2.push(app.events.on("locale.changed", () => fetchCatalog()));
       void fetchCatalog();
       void fetchMacros();
       emit();
     },
     close: () => {
       if (!ov) return;
-      for (const off of subs) {
+      for (const off of subs2) {
         try {
           off.dispose();
         } catch {
         }
       }
-      subs = [];
+      subs2 = [];
       undrag?.();
       undrag = null;
       confirmOv?.remove();
@@ -2452,13 +2496,13 @@ function createTowerModal(deps) {
     toggle: () => ov ? api.close() : api.open(),
     // dispose — 액션 해지 중 호출되므로 onChange 재렌더를 일으키지 않는다(누수 방지).
     dispose: () => {
-      for (const off of subs) {
+      for (const off of subs2) {
         try {
           off.dispose();
         } catch {
         }
       }
-      subs = [];
+      subs2 = [];
       undrag?.();
       undrag = null;
       confirmOv?.remove();
@@ -2696,6 +2740,9 @@ var CSS2 = `
 .st-tab.drag{cursor:grabbing;opacity:.95;border-color:currentColor;box-shadow:0 3px 10px rgba(0,0,0,.35);transform:scale(1.06);position:relative;z-index:3}
 .st-tab .chk{width:13px;height:13px;border-radius:4px;border:1.5px solid currentColor;display:inline-flex;align-items:center;justify-content:center;font-size:10px;line-height:1}
 .st-tab .nm{font-weight:600}
+.st-roster-rail{display:flex;flex-direction:column;height:100%;min-height:0;overflow-y:auto;padding:8px}
+.st-roster-rail .st-tabs{flex-direction:column;align-items:stretch;flex:0 0 auto;overflow:visible}
+.st-roster-rail .st-tab{justify-content:flex-start}
 .st-crown{cursor:pointer;font-size:10px;opacity:.3;user-select:none;filter:grayscale(1)}
 .st-crown:hover{opacity:.7}
 .st-crown.on{opacity:1;filter:none}
@@ -3235,6 +3282,35 @@ ${priorContext}` : systemPrompt;
         }
       })
     );
+    const railCleanups = /* @__PURE__ */ new WeakMap();
+    ctx.subscriptions.push(
+      app.ui.registerView("roster", {
+        mount(container, viewCtx) {
+          railCleanups.get(container)?.();
+          container.replaceChildren();
+          const host = el2("div", "st-roster-rail");
+          container.append(host);
+          const bound = typeof viewCtx?.boundViewId === "string" && viewCtx.boundViewId ? viewCtx.boundViewId : null;
+          if (!bound) {
+            const note = document.createElement("div");
+            note.style.cssText = "padding:10px 12px;font-size:11px;opacity:.55";
+            note.textContent = t("railNoBinding", lang);
+            host.append(note);
+            railCleanups.set(container, () => container.replaceChildren());
+            return;
+          }
+          const off = registerRailContainer(bound, "roster", host);
+          railCleanups.set(container, () => {
+            off();
+            container.replaceChildren();
+          });
+        },
+        unmount(container) {
+          railCleanups.get(container)?.();
+          railCleanups.delete(container);
+        }
+      })
+    );
     function teardown(container) {
       const st = states.get(container);
       if (st) {
@@ -3243,6 +3319,7 @@ ${priorContext}` : systemPrompt;
         for (const connId of st.conns.values()) core("disconnect", { connId }).catch(() => {
         });
         st.conns.clear();
+        st.railOff?.();
       }
       states.delete(container);
       container.replaceChildren();
@@ -3290,6 +3367,20 @@ ${priorContext}` : systemPrompt;
       renderTabs(st, tabsEl);
       bar.append(elText2("b", "Clubhouse"), tabsEl, kibEl, status);
       root.append(bar, msgs, busy, inrow);
+      let rosterHost = null;
+      const applyRail = () => {
+        const target = railContainer(viewId, "roster");
+        if (target === rosterHost) return;
+        rosterHost = target;
+        if (target) target.append(tabsEl);
+        else bar.insertBefore(tabsEl, kibEl);
+      };
+      const offRail = subscribeRail(viewId, applyRail);
+      applyRail();
+      st.railOff = () => {
+        offRail();
+        tabsEl.remove();
+      };
       const doSend = () => {
         const t2 = ta.value.trim();
         if (!t2) return;

@@ -12,6 +12,7 @@
 
 import { createEngine } from "./engine";
 import { t, tp } from "./i18n";
+import { railContainer, registerRailContainer, subscribeRail } from "./railBridge";
 import { setupTower } from "./tower/header";
 import { TOWER_LIVE_TOPIC, type TowerLiveEvent } from "./tower/modal";
 import { createTrace, type DataApi, type TraceSink, type TracePlan, type TraceStep } from "./tower/trace";
@@ -78,6 +79,9 @@ const CSS = `
 .st-tab.drag{cursor:grabbing;opacity:.95;border-color:currentColor;box-shadow:0 3px 10px rgba(0,0,0,.35);transform:scale(1.06);position:relative;z-index:3}
 .st-tab .chk{width:13px;height:13px;border-radius:4px;border:1.5px solid currentColor;display:inline-flex;align-items:center;justify-content:center;font-size:10px;line-height:1}
 .st-tab .nm{font-weight:600}
+.st-roster-rail{display:flex;flex-direction:column;height:100%;min-height:0;overflow-y:auto;padding:8px}
+.st-roster-rail .st-tabs{flex-direction:column;align-items:stretch;flex:0 0 auto;overflow:visible}
+.st-roster-rail .st-tab{justify-content:flex-start}
 .st-crown{cursor:pointer;font-size:10px;opacity:.3;user-select:none;filter:grayscale(1)}
 .st-crown:hover{opacity:.7}
 .st-crown.on{opacity:1;filter:none}
@@ -163,6 +167,7 @@ interface ClubhouseState {
   kibEl: HTMLElement; // 모드 토글(순차/진행/동시) 컨테이너 — setMode 가 버튼 하이라이트 동기화
   status: HTMLElement;
   busy: HTMLElement; // 지속 활동 인디케이터(running & 활성 스트리밍 없음 구간) — refreshBusy 가 토글
+  railOff?: () => void; // 레일 방출 해제 — teardown 이 호출(레일에 나가 있는 탭스트립 회수 포함)
 }
 
 export default {
@@ -786,6 +791,38 @@ export default {
       }),
     );
 
+    // ── roster 레일 뷰 — 컨테이너만 소유·등록하고, 내용은 결부된 Clubhouse 뷰가 브리지로 옮겨
+    // 넣는다(상태 단일 소유·이중 진실 0). 미결부(클럽하우스 콘텐츠 뷰 없음)면 정적 안내. ──
+    const railCleanups = new WeakMap<HTMLElement, () => void>();
+    ctx.subscriptions.push(
+      app.ui.registerView("roster", {
+        mount(container: HTMLElement, viewCtx: any) {
+          railCleanups.get(container)?.();
+          container.replaceChildren();
+          const host = el("div", "st-roster-rail");
+          container.append(host);
+          const bound = typeof viewCtx?.boundViewId === "string" && viewCtx.boundViewId ? viewCtx.boundViewId : null;
+          if (!bound) {
+            const note = document.createElement("div");
+            note.style.cssText = "padding:10px 12px;font-size:11px;opacity:.55";
+            note.textContent = t("railNoBinding", lang);
+            host.append(note);
+            railCleanups.set(container, () => container.replaceChildren());
+            return;
+          }
+          const off = registerRailContainer(bound, "roster", host);
+          railCleanups.set(container, () => {
+            off();
+            container.replaceChildren();
+          });
+        },
+        unmount(container: HTMLElement) {
+          railCleanups.get(container)?.();
+          railCleanups.delete(container);
+        },
+      }),
+    );
+
     function teardown(container: HTMLElement) {
       const st = states.get(container);
       if (st) {
@@ -793,6 +830,7 @@ export default {
         for (const c of st.actives) engine.cancel(c.connId, c.sessionId); // 진행 중 전부 취소(동시=N)
         for (const connId of st.conns.values()) core("disconnect", { connId }).catch(() => {});
         st.conns.clear();
+        st.railOff?.(); // 레일에 나가 있던 탭스트립 회수 — replaceChildren 은 레일 안까지 못 닿는다
       }
       states.delete(container);
       container.replaceChildren();
@@ -842,6 +880,24 @@ export default {
       renderTabs(st, tabsEl);
       bar.append(elText("b", "Clubhouse"), tabsEl, kibEl, status);
       root.append(bar, msgs, busy, inrow);
+
+      // 사이드바 방출(rail) — roster 레일 컨테이너가 이 뷰 id 로 등록되면 탭스트립을 그리로 옮기고,
+      // 해제되면 상단 바(모드 버튼 앞)로 복귀한다. 등록이 없으면(구코어·레일 없는 호스트) 기존 배치
+      // 그대로. 요소는 하나뿐 — 체크·드래그·👑 상태와 data-node 주소가 갈리지 않는다.
+      let rosterHost: HTMLElement | null = null;
+      const applyRail = () => {
+        const target = railContainer(viewId, "roster");
+        if (target === rosterHost) return;
+        rosterHost = target;
+        if (target) target.append(tabsEl);
+        else bar.insertBefore(tabsEl, kibEl);
+      };
+      const offRail = subscribeRail(viewId, applyRail);
+      applyRail();
+      st.railOff = () => {
+        offRail();
+        tabsEl.remove(); // 더는 섬기지 않는 레일 컨테이너에 잔재를 안 남긴다
+      };
 
       const doSend = () => {
         const t = ta.value.trim();

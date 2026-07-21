@@ -90,7 +90,26 @@
           "content"
         ],
         "status": [],
-        "defaultPlacement": "content"
+        "defaultPlacement": "content",
+        "sidebar": {
+          "left": [
+            {
+              "ref": "self.roster",
+              "instance": "per-view"
+            }
+          ]
+        }
+      },
+      {
+        "id": "roster",
+        "title": {
+          "en": "Roster",
+          "ko": "\ub85c\uc2a4\ud130"
+        },
+        "icon": "\ud83d\udc65",
+        "placements": [
+          "rail"
+        ]
       }
     ],
     "commands": [
