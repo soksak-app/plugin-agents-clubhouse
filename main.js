@@ -3373,7 +3373,7 @@ ${priorContext}` : systemPrompt;
         if (target === rosterHost) return;
         rosterHost = target;
         if (target) target.append(tabsEl);
-        else bar.insertBefore(tabsEl, kibEl);
+        else tabsEl.remove();
       };
       const offRail = subscribeRail(viewId, applyRail);
       applyRail();

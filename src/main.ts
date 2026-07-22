@@ -881,16 +881,16 @@ export default {
       bar.append(elText("b", "Clubhouse"), tabsEl, kibEl, status);
       root.append(bar, msgs, busy, inrow);
 
-      // 사이드바 방출(rail) — roster 레일 컨테이너가 이 뷰 id 로 등록되면 탭스트립을 그리로 옮기고,
-      // 해제되면 상단 바(모드 버튼 앞)로 복귀한다. 등록이 없으면(구코어·레일 없는 호스트) 기존 배치
-      // 그대로. 요소는 하나뿐 — 체크·드래그·👑 상태와 data-node 주소가 갈리지 않는다.
+      // 사이드바 방출(rail) — roster 레일 컨테이너가 이 뷰 id 로 등록되면 탭스트립을 그린다.
+      // 레일 부재(비결부) 시에는 그리지 않는다 — 내부 폴백 없음(투영 공리). 요소는 하나뿐 —
+      // 체크·드래그·👑 상태와 data-node 주소가 갈리지 않는다.
       let rosterHost: HTMLElement | null = null;
       const applyRail = () => {
         const target = railContainer(viewId, "roster");
         if (target === rosterHost) return;
         rosterHost = target;
         if (target) target.append(tabsEl);
-        else bar.insertBefore(tabsEl, kibEl);
+        else tabsEl.remove();
       };
       const offRail = subscribeRail(viewId, applyRail);
       applyRail();
