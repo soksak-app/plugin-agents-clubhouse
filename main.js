@@ -2730,7 +2730,7 @@ function normalizeUntrusted(raw) {
 }
 var CSS2 = `
 .st{position:absolute;inset:0;display:flex;flex-direction:column;background:var(--bg,#1e1e1e);color:var(--fg,#ddd);font:13px system-ui,-apple-system,sans-serif;overflow:hidden}
-.st-bar{display:flex;align-items:center;gap:8px;padding:6px 10px;border-bottom:1px solid rgba(127,127,127,.2);flex:0 0 auto;flex-wrap:nowrap;min-width:0}
+.st-bar{display:flex;align-items:center;gap:8px;height:var(--toolbar-h,28px);padding:0 var(--toolbar-pad-x,8px);border-bottom:1px solid rgba(127,127,127,.2);flex:0 0 auto;flex-wrap:nowrap;min-width:0}
 .st-bar b{font-weight:700;letter-spacing:.02em;flex:0 0 auto;white-space:nowrap}
 .st-tabs{display:flex;align-items:center;gap:5px;flex-wrap:nowrap;flex:1 1 auto;min-width:0;overflow-x:auto;scrollbar-width:none}
 .st-tabs::-webkit-scrollbar{display:none}
