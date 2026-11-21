@@ -86,6 +86,22 @@ var strings = {
     en: "Simul",
     ko: "\uB3D9\uC2DC"
   },
+  termOpen: {
+    en: "Open this member's terminal (its session, resumed)",
+    ko: "\uC774 \uBA64\uBC84\uC758 \uD130\uBBF8\uB110 \uC5F4\uAE30(\uAC19\uC740 \uC138\uC158\uC744 \uC774\uC5B4\uC11C)"
+  },
+  termNoSession: {
+    en: "No session yet \u2014 run one turn first",
+    ko: "\uC138\uC158\uC774 \uC544\uC9C1 \uC5C6\uC2B5\uB2C8\uB2E4 \u2014 \uD55C \uD134\uC744 \uBA3C\uC800 \uC9C4\uD589\uD558\uC138\uC694"
+  },
+  termOpenFail: {
+    en: "Terminal open failed",
+    ko: "\uD130\uBBF8\uB110 \uC5F4\uAE30 \uC2E4\uD328"
+  },
+  sessionHeld: {
+    en: "session is held by another client (its TUI?) \u2014 turn deferred",
+    ko: "\uC138\uC158\uC744 \uB2E4\uB978 \uD074\uB77C\uC774\uC5B8\uD2B8(TUI?)\uAC00 \uC7A1\uACE0 \uC788\uC74C \u2014 \uC774 \uD134\uC740 \uAC74\uB108\uB701\uB2C8\uB2E4"
+  },
   crownTitle: {
     en: "Set as facilitator",
     ko: "\uC9C4\uD589\uC790\uB85C \uC9C0\uC815"
@@ -2793,6 +2809,8 @@ var CSS2 = `
 .st-roster-rail .st-tabs{flex-direction:column;align-items:stretch;flex:0 0 auto;overflow:visible}
 .st-roster-rail .st-tab{justify-content:flex-start}
 .st-crown{cursor:pointer;font-size:10px;opacity:.3;user-select:none;filter:grayscale(1)}
+.st-term{cursor:pointer;font-size:10px;opacity:.35;user-select:none}
+.st-term:hover{opacity:.85}
 .st-crown:hover{opacity:.7}
 .st-crown.on{opacity:1;filter:none}
 .st-kib{margin-left:4px;display:inline-flex;border-radius:8px;overflow:hidden;border:1px solid rgba(127,127,127,.28);flex:0 0 auto}
@@ -3576,6 +3594,14 @@ ${priorContext}` : systemPrompt;
         const nm = elText2("span", a?.label ?? entry.id, "nm");
         nm.style.color = "var(--fg,#ddd)";
         chip.append(chk, nm);
+        const term = elText2("span", "\u25A4", "st-term");
+        term.title = t("termOpen", lang);
+        term.dataset.node = `term/${entry.id}`;
+        term.addEventListener("click", (e) => {
+          e.stopPropagation();
+          void openMemberTerminal(st, entry.id);
+        });
+        chip.append(term);
         if (st.mode === "facil" && entry.checked) {
           const crown = elText2("span", "\u{1F451}", "st-crown" + (entry.id === st.facilitatorId ? " on" : ""));
           crown.title = t("crownTitle", lang);
@@ -3724,6 +3750,21 @@ ${priorContext}` : systemPrompt;
       const idx = st.conv.length - 1;
       if (idx >= s.cursor) s.cursor = idx + 1;
     }
+    async function openMemberTerminal(st, agentId) {
+      const stored = st.sessions.get(agentId)?.sessionId ?? (st.cwd ? (await memberSessionStore?.get(agentId).catch(() => null))?.sessionId : void 0);
+      if (!stored) {
+        setStatus(st, t("termNoSession", lang));
+        return;
+      }
+      const launch = agentId === "codex" ? { program: "codex", args: ["resume", stored] } : { program: "claude", args: ["--resume", stored] };
+      const r = await app.commands.execute("core.layout.open", {
+        card: "current",
+        plugin: "terminal",
+        side: "right",
+        params: { ...launch, cwd: st.cwd }
+      }).catch((e) => ({ error: String(e) }));
+      if (r && (r.error || r.message)) setStatus(st, String(r.error ?? r.message ?? t("termOpenFail", lang)));
+    }
     async function runOneTurn(st, speaker, prompt) {
       const row = renderTurnRow(st, speaker);
       const fail = (reason) => {
@@ -3740,8 +3781,14 @@ ${priorContext}` : systemPrompt;
       const connId = conn.connId;
       const session = await ensureSession(st, speaker);
       if ("error" in session) {
+        if (session.code === "SESSION_IN_USE") {
+          row.fail(t("sessionHeld", lang));
+          row.setEnd();
+          st.conv.push({ who: "system", text: `${nameOf(speaker)} ${t("sessionHeld", lang)}` });
+          return "";
+        }
         fail(`\uC138\uC158 \uC2E4\uD328: ${session.error}`);
-        if (session.code !== "SESSION_IN_USE") st.sessions.delete(speaker);
+        st.sessions.delete(speaker);
         return "";
       }
       const sessionId = session.sessionId;

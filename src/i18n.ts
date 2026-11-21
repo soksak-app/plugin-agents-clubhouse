@@ -30,6 +30,22 @@ const strings = {
     en: "Simul",
     ko: "동시",
   },
+  termOpen: {
+    en: "Open this member's terminal (its session, resumed)",
+    ko: "이 멤버의 터미널 열기(같은 세션을 이어서)",
+  },
+  termNoSession: {
+    en: "No session yet — run one turn first",
+    ko: "세션이 아직 없습니다 — 한 턴을 먼저 진행하세요",
+  },
+  termOpenFail: {
+    en: "Terminal open failed",
+    ko: "터미널 열기 실패",
+  },
+  sessionHeld: {
+    en: "session is held by another client (its TUI?) — turn deferred",
+    ko: "세션을 다른 클라이언트(TUI?)가 잡고 있음 — 이 턴은 건너뜁니다",
+  },
   crownTitle: {
     en: "Set as facilitator",
     ko: "진행자로 지정",

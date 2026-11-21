@@ -84,6 +84,8 @@ const CSS = `
 .st-roster-rail .st-tabs{flex-direction:column;align-items:stretch;flex:0 0 auto;overflow:visible}
 .st-roster-rail .st-tab{justify-content:flex-start}
 .st-crown{cursor:pointer;font-size:10px;opacity:.3;user-select:none;filter:grayscale(1)}
+.st-term{cursor:pointer;font-size:10px;opacity:.35;user-select:none}
+.st-term:hover{opacity:.85}
 .st-crown:hover{opacity:.7}
 .st-crown.on{opacity:1;filter:none}
 .st-kib{margin-left:4px;display:inline-flex;border-radius:8px;overflow:hidden;border:1px solid rgba(127,127,127,.28);flex:0 0 auto}
@@ -1062,6 +1064,15 @@ export default {
         const nm = elText("span", a?.label ?? entry.id, "nm");
         nm.style.color = "var(--fg,#ddd)";
         chip.append(chk, nm);
+        // 멤버 터미널 열기 — 같은 세션을 TUI 로 재개(claude --resume / codex resume). 세션 id 없으면 첫 턴 후 가능.
+        const term = elText("span", "▤", "st-term");
+        term.title = t("termOpen", lang);
+        term.dataset.node = `term/${entry.id}`; // contributes.nodes — ui.input.click 로 터미널 열기
+        term.addEventListener("click", (e) => {
+          e.stopPropagation();
+          void openMemberTerminal(st, entry.id);
+        });
+        chip.append(term);
         // 진행 모드 — 체크된 탭에 👑(진행자 지정). 현 진행자만 채워진 왕관(시각). 지정은 아래 pointer 처리.
         if (st.mode === "facil" && entry.checked) {
           const crown = elText("span", "👑", "st-crown" + (entry.id === st.facilitatorId ? " on" : ""));
@@ -1251,6 +1262,31 @@ export default {
       if (idx >= s.cursor) s.cursor = idx + 1;
     }
 
+    // 멤버 터미널 열기 — 그 멤버의 세션을 TUI 로 재개하는 창. 같은 세션 파일을 향해: 사람이 직접 보고 끼어든다.
+    //   claude 는 병행 허용(실증), codex 는 TUI 가 스레드를 잡는 동안 방 턴이 SESSION_IN_USE 로 이월된다(실증).
+    async function openMemberTerminal(st: ClubhouseState, agentId: string) {
+      const stored =
+        st.sessions.get(agentId)?.sessionId ??
+        (st.cwd ? (await memberSessionStore?.get(agentId).catch(() => null))?.sessionId : undefined);
+      if (!stored) {
+        setStatus(st, t("termNoSession", lang)); // 세션은 첫 턴에 생성 — 아직 없음
+        return;
+      }
+      const launch =
+        agentId === "codex"
+          ? { program: "codex", args: ["resume", stored] }
+          : { program: "claude", args: ["--resume", stored] };
+      const r: any = await app.commands
+        .execute("core.layout.open", {
+          card: "current",
+          plugin: "terminal",
+          side: "right",
+          params: { ...launch, cwd: st.cwd },
+        })
+        .catch((e: unknown) => ({ error: String(e) }));
+      if (r && (r.error || r.message)) setStatus(st, String(r.error ?? r.message ?? t("termOpenFail", lang)));
+    }
+
     // 한 발화 — 연결·세션·라이브 스트리밍·버블 확정. 순차/동시 공용. 성공/부분=work 반환(호출자가 conv 에 push).
     // 참견 중단 시 코어가 최종 텍스트를 못 줘도 스트리밍된 부분(liveRaw)을 '말해진 것'으로 종결 보존(취소-제거 아님).
     // 연결/세션/프롬프트 오류(순단 포함)=사유 행 + system 메시지 + 해당 에이전트 자동 체크 해제. 침묵(빈 ok)=흔적 없이.
@@ -1270,8 +1306,15 @@ export default {
       const connId = conn.connId;
       const session = await ensureSession(st, speaker);
       if ("error" in session) {
-        fail(`세션 실패: ${session.error}`); // 점유(N_USE)·생성 실패 사유 노출 — 폴백: 사람이 재체크
-        if (session.code !== "SESSION_IN_USE") st.sessions.delete(speaker); // 치명 → 캐시 폐기(재생성 경로)
+        if (session.code === "SESSION_IN_USE") {
+          // 이월 — 멤버 유지(체크 해제 안 함): 사람이 그 터미널을 닫으면 다음 턴에 자연 재개.
+          row.fail(t("sessionHeld", lang));
+          row.setEnd();
+          st.conv.push({ who: "system", text: `${nameOf(speaker)} ${t("sessionHeld", lang)}` });
+          return "";
+        }
+        fail(`세션 실패: ${session.error}`); // 치명 — 사유 노출 + 자동 드롭 + 캐시 폐기(재생성 경로)
+        st.sessions.delete(speaker);
         return "";
       }
       const sessionId = session.sessionId;
