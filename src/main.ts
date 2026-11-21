@@ -8,7 +8,7 @@
 // 탭(드래그 정렬·체크박스)=참여 로스터, 탭 순서=턴 순서. 모드: turn(각 1회)/free(라운드 반복)/simul(전원 병렬).
 //   사람 참견 = 언제나 최우선(진행 턴 중단 → 부분응답 종결 보존 → 입력 주입 → 재구동).
 //   기본은 대화만 — 사용자가 명시적으로 작업을 시켜야 자기 턴에 실작업(파일/명령). 안 시키면 대화창에서 말로만.
-//   순수 로직(participants/nextSpeaker/buildPrompt/inviteePreamble/detectMentions/drive*)은 conversation.ts(단위검증).
+//   순수 로직(participants/nextSpeaker/deltaFor/detectMentions/drive*)은 conversation.ts(단위검증).
 
 import { createEngine } from "./engine";
 import { t, tp } from "./i18n";
@@ -21,12 +21,10 @@ import { deleteStep, moveStep, editParams } from "./tower/editplan";
 import type { PlanStep } from "./tower/plan";
 import type { UntrustedSource } from "./tower/executor";
 import {
-  buildPrompt,
+  deltaFor,
   detectMentions,
   driveExchange,
   driveSimul,
-  facilitatorPreamble,
-  inviteePreamble,
   parseFacilitatorDirective,
   participants,
   pickFacilitator,
@@ -34,6 +32,9 @@ import {
   type RosterEntry,
   type Utterance,
 } from "./conversation";
+import { assemblePersona, createPersonaStore, toSystemPrompt, type PersonaStore } from "./room/persona";
+import { buildTurnEnvelope } from "./room/envelope";
+import { createMemberSessionStore, type MemberSessionStore } from "./room/session-store";
 
 const AGENTS: { id: string; label: string; color: string; hidden?: boolean }[] = [
   { id: "claude", label: "Claude", color: "#d97757" },
@@ -156,6 +157,7 @@ interface ClubhouseState {
   mode: KibitzMode;
   conv: Utterance[];
   conns: Map<string, number>; // agentId → connId(영속 프로세스, 재사용)
+  sessions: Map<string, { sessionId: string; cursor: number }>; // agentId → 지속 세션 + 마지막으로 본 발언 위치
   running: boolean;
   facilitatorId: string; // 진행(facil) 모드의 진행자(👑) — 기본 첫 체크, 탭 👑 클릭으로 변경
   pendingHuman: string[]; // 진행 중 들어온 사람 참견 — 현재 턴 종결 후 세션 주입(취소-제거 아님)
@@ -176,6 +178,9 @@ export default {
     const core = (name: string, params?: any) =>
       app.commands.execute("plugin.soksak-plugin-agents-acp." + name, params ?? {});
     const engine = createEngine(app);
+    // 플러그인 수명의 페르소나·세션 저장(app.data) — 뷰 밖 헤드리스(converse)와 뷰가 같은 표면을 공유.
+    const personaStore = createPersonaStore(app.data as any);
+    const memberSessionStore = createMemberSessionStore(app.data as any);
 
     // 라이브 relay — Clubhouse 스트림(단일 진실: onStream/runOneTurn/renderUser)을 stable bus 토픽으로
     //   재방송한다. 타워 라이브칸이 connId 추측 없이 이 한 토픽만 구독(이벤트-우선, 폴링 0). content 탭 렌더는
@@ -743,19 +748,43 @@ export default {
             const rosterIds = roster.map((r) => r.id);
             const conversation: Utterance[] = [{ who: "human", text: p.message }];
             const utterances: Utterance[] = [];
+            // 지속 세션 — 에이전트별 1세션(페르소나 주입)을 만들어 교환 내내 재사용(매발화 새 세션 폐지).
+            const sessions = new Map<string, { sessionId: string; cursor: number }>();
+            const cursors = new Map<string, number>();
             const askAgent = async (id: string, prompt: string): Promise<string> => {
               const connId = conns.get(id);
               if (connId == null) throw new Error(`연결 없음: ${id}`);
-              const sid = await engine.newSession(connId, cwd);
-              return (await engine.ask(connId, sid, prompt)).text;
+              let entry = sessions.get(id);
+              if (!entry) {
+                const personaText = (await personaStore?.read(id).catch(() => "")) ?? "";
+                const peers = rosterIds.filter((x) => x !== id).map(nameOf);
+                const s = await core("session-new", {
+                  connId,
+                  cwd,
+                  systemPrompt: toSystemPrompt(assemblePersona(id, personaText, peers)),
+                });
+                if (!s.ok) throw new Error(String(s.message || s.error || "세션 생성 실패"));
+                entry = { sessionId: s.sessionId, cursor: 0 };
+                sessions.set(id, entry);
+              }
+              return (await engine.ask(connId, entry.sessionId, prompt)).text;
             };
             await driveExchange({
               roster,
               conversation,
-              nameOf,
-              preamble: (s) => inviteePreamble(s, rosterIds, nameOf, cwd, "turn"),
+              prompt: (s) =>
+                buildTurnEnvelope({
+                  speaker: s,
+                  roster,
+                  utterances: deltaFor(cursors.get(s) ?? 0, conversation).utterances,
+                  mode: "turn",
+                  nameOf,
+                }),
               turn: async (id, prompt) => (await askAgent(id, prompt)).trim(), // 미연결이면 throw → 이 발화 skip
-              onUtterance: (u) => utterances.push(u),
+              onUtterance: (u) => {
+                utterances.push(u);
+                cursors.set(u.who, conversation.length); // 자기 발언 직후까지 봄
+              },
             });
             const filesWritten = engine.diffWritten(before, await engine.snapshot(cwd));
             return { ok: true, order: rosterIds, utterances, filesWritten, skipped };
@@ -861,6 +890,7 @@ export default {
         mode: settingMode(),
         conv: [],
         conns: new Map(),
+        sessions: new Map(),
         running: false,
         facilitatorId: ACTIVE_AGENTS[0]?.id ?? "", // 기본 진행자 = 첫 활성 에이전트
         pendingHuman: [],
@@ -1150,6 +1180,7 @@ export default {
     // 세션 오류(순단 포함) → 해당 에이전트 자동 체크 해제(roster 드롭). 다음 라운드 참여에서 빠지고, 사람이
     // 탭을 다시 켜서 재소환한다(이상하면 사람이 판단). 이미 꺼져 있으면 no-op.
     function dropAgent(st: ClubhouseState, agentId: string) {
+      st.sessions.delete(agentId); // 세션 캐시 폐기 — 재체크 시 새 세션(페르소나 재주입)
       const entry = st.roster.find((r) => r.id === agentId);
       if (entry?.checked) {
         entry.checked = false;
@@ -1170,6 +1201,56 @@ export default {
       return { connId: c.connId };
     }
 
+    // 지속 세션 보장(멤버별 1세션 재사용 — 무상태 매턴 새 세션 폐지). 회복 순서:
+    //   메모리 캐시 → 영속 id resume(뷰 재마운트) → 새 세션 생성(페르소나 systemPrompt 주입).
+    //   SESSION_NOT_FOUND(resume 대상 소멸) → 새 세션으로 자동 갱신. SESSION_IN_USE(codex TUI 점유) → 이월 사유 반환.
+    async function ensureSession(
+      st: ClubhouseState,
+      agentId: string,
+    ): Promise<{ sessionId: string } | { error: string; code?: string }> {
+      const cached = st.sessions.get(agentId);
+      if (cached) return { sessionId: cached.sessionId };
+      const conn = await ensureConn(st, agentId);
+      if ("error" in conn) return { error: `연결 실패: ${conn.error}` };
+      const connId = conn.connId;
+      const create = async (): Promise<{ sessionId: string } | { error: string; code?: string }> => {
+        const personaText = (await personaStore?.read(agentId).catch(() => "")) ?? "";
+        const peers = st.roster.filter((r) => r.id !== agentId).map((r) => nameOf(r.id));
+        const s = await core("session-new", {
+          connId,
+          cwd: st.cwd,
+          systemPrompt: toSystemPrompt(assemblePersona(agentId, personaText, peers)),
+        });
+        if (!s.ok) return { error: String(s.message || s.error || "세션 생성 실패"), code: s.code };
+        st.sessions.set(agentId, { sessionId: s.sessionId, cursor: 0 });
+        void memberSessionStore
+          ?.put({ agentId, sessionId: s.sessionId, cwd: st.cwd ?? "", savedAt: Date.now() })
+          .catch(() => {});
+        return { sessionId: s.sessionId };
+      };
+      const stored = st.cwd ? await memberSessionStore?.get(agentId).catch(() => null) : null;
+      if (stored && stored.cwd === st.cwd) {
+        const r = await core("session-resume", { connId, sessionId: stored.sessionId, cwd: st.cwd });
+        if (r.ok) {
+          st.sessions.set(agentId, { sessionId: stored.sessionId, cursor: 0 }); // 재마운트 — 커서 0(전체 재전달)
+          return { sessionId: stored.sessionId };
+        }
+        if (r.code === "SESSION_IN_USE") {
+          return { error: `세션 점유 중(다른 클라이언트가 잡고 있음): ${String(r.message ?? "")}`, code: "SESSION_IN_USE" };
+        }
+        // SESSION_NOT_FOUND 등 → 새 세션으로 갱신(이하 create)
+      }
+      return create();
+    }
+
+    // 멤버 발언 확정 → 커서 전진(자기 발언 직후까지 봄). 실패 턴은 호출 안 되므로 다음 봉투가 델타 재전달.
+    function advanceCursor(st: ClubhouseState, who: string) {
+      const s = st.sessions.get(who);
+      if (!s) return;
+      const idx = st.conv.length - 1; // 방금 push된 자기 발언의 위치
+      if (idx >= s.cursor) s.cursor = idx + 1;
+    }
+
     // 한 발화 — 연결·세션·라이브 스트리밍·버블 확정. 순차/동시 공용. 성공/부분=work 반환(호출자가 conv 에 push).
     // 참견 중단 시 코어가 최종 텍스트를 못 줘도 스트리밍된 부분(liveRaw)을 '말해진 것'으로 종결 보존(취소-제거 아님).
     // 연결/세션/프롬프트 오류(순단 포함)=사유 행 + system 메시지 + 해당 에이전트 자동 체크 해제. 침묵(빈 ok)=흔적 없이.
@@ -1187,13 +1268,13 @@ export default {
         return "";
       }
       const connId = conn.connId;
-      let sessionId: string;
-      try {
-        sessionId = await engine.newSession(connId, st.cwd);
-      } catch (e) {
-        fail(`세션 실패: ${String(e)}`);
+      const session = await ensureSession(st, speaker);
+      if ("error" in session) {
+        fail(`세션 실패: ${session.error}`); // 점유(N_USE)·생성 실패 사유 노출 — 폴백: 사람이 재체크
+        if (session.code !== "SESSION_IN_USE") st.sessions.delete(speaker); // 치명 → 캐시 폐기(재생성 경로)
         return "";
       }
+      const sessionId = session.sessionId;
       // 버블은 아직 안 만든다 — "응답 중…" 인디케이터를 첫 스트리밍 청크(또는 최종 텍스트)까지 유지.
       const cur: Current = { agentId: speaker, connId, sessionId, row, bubble: null, liveRaw: "" };
       st.actives.add(cur); // 동시=N개 병렬 등록(각자 connId 로 독립 스트리밍)
@@ -1221,6 +1302,7 @@ export default {
       }
       if (!r.ok) {
         fail(`프롬프트 실패: ${String(r.message ?? r.error ?? "")}`); // 오류 → 노출 + 자동 드롭
+        if (r.code === "SESSION_NOT_FOUND") st.sessions.delete(speaker); // 세션 소멸 → 캐시 폐기(재생성)
         return "";
       }
       row.remove(); // 빈 ok = 의도된 침묵(또는 참견 직격, 한 글자도 안 나옴) — 흔적 없이(침묵도 참여)
@@ -1245,15 +1327,19 @@ export default {
         for (const id of targets) {
           if (st.pendingHuman.length) return; // 참견 — 상위 루프가 주입·재구동
           setStatus(st, `${nameOf(id)} 지목 응답 중…`);
-          const prompt = buildPrompt({
-            roster: st.roster,
-            conversation: st.conv,
+          const prompt = buildTurnEnvelope({
             speaker: id,
+            roster: st.roster,
+            utterances: deltaFor(st.sessions.get(id)?.cursor ?? 0, st.conv).utterances,
+            mode: st.mode,
+            mentioned: true,
             nameOf,
-            preamble: `${inviteePreamble(id, ids, nameOf, st.cwd, st.mode)}\n(당신이 @${nameOf(id)} 으로 지목되었습니다 — 위 대화에 이어 답하세요.)`,
           });
           const work = await runOneTurn(st, id, prompt);
-          if (work) st.conv.push({ who: id, text: work });
+          if (work) {
+            st.conv.push({ who: id, text: work });
+            advanceCursor(st, id);
+          }
         }
       }
     }
@@ -1266,15 +1352,18 @@ export default {
         if (st.pendingHuman.length) return; // 참견 — 라운드 중단
         if (!st.roster.find((r) => r.id === speaker)?.checked) continue; // 중도 드롭 — 건너뜀
         setStatus(st, `${nameOf(speaker)} 응답 중…`);
-        const prompt = buildPrompt({
-          roster: st.roster,
-          conversation: st.conv,
+        const prompt = buildTurnEnvelope({
           speaker,
+          roster: st.roster,
+          utterances: deltaFor(st.sessions.get(speaker)?.cursor ?? 0, st.conv).utterances,
+          mode: "turn",
           nameOf,
-          preamble: inviteePreamble(speaker, ids, nameOf, st.cwd, "turn"),
         });
         const work = await runOneTurn(st, speaker, prompt);
-        if (work) st.conv.push({ who: speaker, text: work });
+        if (work) {
+          st.conv.push({ who: speaker, text: work });
+          advanceCursor(st, speaker);
+        }
         if (st.pendingHuman.length) return; // 발화 직후 참견 — 중단
       }
     }
@@ -1283,15 +1372,18 @@ export default {
     async function facilTurn(st: ClubhouseState, id: string, ids: string[]) {
       if (!st.roster.find((r) => r.id === id)?.checked) return;
       setStatus(st, `${nameOf(id)} 응답 중…`);
-      const prompt = buildPrompt({
-        roster: st.roster,
-        conversation: st.conv,
+      const prompt = buildTurnEnvelope({
         speaker: id,
+        roster: st.roster,
+        utterances: deltaFor(st.sessions.get(id)?.cursor ?? 0, st.conv).utterances,
+        mode: "facil",
         nameOf,
-        preamble: inviteePreamble(id, ids, nameOf, st.cwd, "facil"),
       });
       const w = await runOneTurn(st, id, prompt);
-      if (w) st.conv.push({ who: id, text: w });
+      if (w) {
+        st.conv.push({ who: id, text: w });
+        advanceCursor(st, id);
+      }
     }
 
     // 진행(facil) 구동 — 진행자가 사람의 단일 창구. 매 LOOP: [진행자 턴] → 지시 파싱 → 동료를 동시/순차/선택으로
@@ -1309,17 +1401,20 @@ export default {
         // [진행자 턴]
         setStatus(st, `${nameOf(facilitator)} 진행 중…`);
         const lastRound = round >= cap - 1;
-        const fprompt = buildPrompt({
-          roster: st.roster,
-          conversation: st.conv,
+        const fprompt = buildTurnEnvelope({
           speaker: facilitator,
+          roster: st.roster,
+          utterances: deltaFor(st.sessions.get(facilitator)?.cursor ?? 0, st.conv).utterances,
+          mode: "facil",
+          facilitator: true,
+          lastRound,
           nameOf,
-          preamble:
-            facilitatorPreamble(facilitator, ids, nameOf, st.cwd) +
-            (lastRound ? "\n(이번이 마지막 진행 차례입니다 — 정리하고 마무리하세요.)" : ""),
         });
         const fwork = await runOneTurn(st, facilitator, fprompt);
-        if (fwork) st.conv.push({ who: facilitator, text: fwork });
+        if (fwork) {
+          st.conv.push({ who: facilitator, text: fwork });
+          advanceCursor(st, facilitator);
+        }
         if (st.pendingHuman.length) return;
         if (!fwork) return; // 진행자 침묵/실패 → 종료
         // [지시 파싱]
@@ -1366,15 +1461,19 @@ export default {
       await Promise.all(
         targets.map(async (id) => {
           setStatus(st, `${nameOf(id)} 응답 중…`);
-          const prompt = buildPrompt({
-            roster: st.roster,
-            conversation: snapshot,
+          const prompt = buildTurnEnvelope({
             speaker: id,
+            roster: st.roster,
+            utterances: deltaFor(st.sessions.get(id)?.cursor ?? 0, snapshot).utterances,
+            mode: "simul",
+            mentioned: true,
             nameOf,
-            preamble: inviteePreamble(id, ids, nameOf, st.cwd, "simul"),
           });
           const w = await runOneTurn(st, id, prompt);
-          if (w) st.conv.push({ who: id, text: w });
+          if (w) {
+            st.conv.push({ who: id, text: w });
+            advanceCursor(st, id);
+          }
         }),
       );
     }
@@ -1392,9 +1491,16 @@ export default {
           await driveSimul({
             roster: st.roster,
             conversation: st.conv,
-            nameOf,
-            preamble: (s) => inviteePreamble(s, ids, nameOf, st.cwd, "simul"),
+            prompt: (s) =>
+              buildTurnEnvelope({
+                speaker: s,
+                roster: st.roster,
+                utterances: deltaFor(st.sessions.get(s)?.cursor ?? 0, st.conv).utterances,
+                mode: "simul",
+                nameOf,
+              }),
             onTurnStart: () => setStatus(st, t("statusSimul", lang)),
+            onUtterance: (u) => advanceCursor(st, u.who),
             turn: (speaker, prompt) => runOneTurn(st, speaker, prompt),
           });
         } else if (st.mode === "facil") {

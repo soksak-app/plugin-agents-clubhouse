@@ -1,11 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
-  buildPrompt,
+  deltaFor,
   detectMentions,
   driveExchange,
   driveSimul,
-  facilitatorPreamble,
-  inviteePreamble,
   nextSpeaker,
   parseFacilitatorDirective,
   participants,
@@ -101,51 +99,30 @@ describe("parseFacilitatorDirective — 진행자 지시 추출(동시/순차/�
   });
 });
 
-describe("buildPrompt — canonical 재주입(방 구성 + 전체 대화)", () => {
-  const r = roster(["claude", "codex"], ["claude", "codex"]);
+describe("deltaFor — 지속 세션의 델타 계산", () => {
   const conv: Utterance[] = [
     { who: "human", text: "안녕" },
     { who: "claude", text: "반가워요" },
+    { who: "codex", text: "코덱스요" },
   ];
-  it("로스터의 동료(자신 제외)를 알린다", () => {
-    const p = buildPrompt({ roster: r, conversation: conv, speaker: "codex" });
-    expect(p).toContain("codex");
-    expect(p).toContain("claude"); // 동료
+  it("cursor 0 = 세션 첫 턴 → 전체(full)", () => {
+    expect(deltaFor(0, conv)).toEqual({ utterances: conv, kind: "full" });
   });
-  it("전체 대화를 사용자/이름으로 재주입한다", () => {
-    const p = buildPrompt({ roster: r, conversation: conv, speaker: "codex" });
-    expect(p).toContain("사용자: 안녕");
-    expect(p).toContain("claude: 반가워요");
+  it("cursor 이후만 잘라 델타로 전달", () => {
+    const d = deltaFor(2, conv);
+    expect(d.kind).toBe("delta");
+    expect(d.utterances).toEqual([{ who: "codex", text: "코덱스요" }]);
   });
-  it("nameOf 로 표시명을 치환한다", () => {
-    const p = buildPrompt({
-      roster: r,
-      conversation: conv,
-      speaker: "codex",
-      nameOf: (id) => ({ claude: "Claude", codex: "Codex" })[id] ?? id,
-    });
-    expect(p).toContain("Codex");
-    expect(p).toContain("Claude: 반가워요");
+  it("cursor 가 대화 끝이면 빈 델타(새 글 없음 — 마커만 감)", () => {
+    expect(deltaFor(3, conv)).toEqual({ utterances: [], kind: "delta" });
   });
-  it("preamble 가 있으면 기본 지시를 대체한다", () => {
-    const p = buildPrompt({ roster: r, conversation: conv, speaker: "codex", preamble: "초대장X" });
-    expect(p.startsWith("초대장X")).toBe(true);
-  });
-  it("기본 지시 — 사용자 명시 요청 없으면 대화창에서 말로만, 파일/명령 금지", () => {
-    const p = buildPrompt({ roster: r, conversation: conv, speaker: "codex" });
-    expect(p).toContain("대화창에서 말로만");
-    expect(p).toContain("작업을 시키지 않았다면");
-    expect(p).toContain("파일을 만들거나 고치지 말고");
-    expect(p).toContain("명령도 실행하지 마세요");
-    expect(p).toContain("분명히 작업을 지시한 경우에만");
-  });
-  it("대화가 비면 [지금까지의 대화] 블록이 없다", () => {
-    const p = buildPrompt({ roster: r, conversation: [], speaker: "claude" });
-    expect(p).not.toContain("[지금까지의 대화]");
+  it("범위 밖 cursor 는 클램프(음수·초과 방어)", () => {
+    expect(deltaFor(-5, conv).kind).toBe("full");
+    expect(deltaFor(99, conv).utterances).toEqual([]);
   });
 });
 
-describe("runExchange — 1교환(각 1회, 탭 순서·canonical·견고함)", () => {
+describe("runExchange — 1교환(각 1회, 탭 순서·델타·견고함)", () => {
   const r = roster(["claude", "codex", "gemini"], ["claude", "codex", "gemini"]);
   const human: Utterance[] = [{ who: "human", text: "이 과제를 처리하자" }];
 
@@ -154,6 +131,7 @@ describe("runExchange — 1교환(각 1회, 탭 순서·canonical·견고함)", 
     const out = await runExchange({
       roster: r,
       conversation: human,
+      prompt: () => "봉투",
       turn: async (id) => {
         seen.push(id);
         return `${id} 응답`;
@@ -163,24 +141,30 @@ describe("runExchange — 1교환(각 1회, 탭 순서·canonical·견고함)", 
     expect(out.map((u) => u.who)).toEqual(["claude", "codex", "gemini"]);
   });
 
-  it("canonical: 뒤 발화자는 앞 발화자의 말을 프롬프트에서 본다", async () => {
+  it("지속 세션: 뒤 발화자는 앞 발화자의 말을 델타로 받는다(커서 = 자기 발언 직후)", async () => {
+    const conv: Utterance[] = [{ who: "human", text: "이 과제를 처리하자" }];
+    const cursors = new Map<string, number>();
     const prompts: Record<string, string> = {};
-    await runExchange({
+    await driveExchange({
       roster: r,
-      conversation: human,
+      conversation: conv,
+      prompt: (s) => `CTX:${JSON.stringify(conv.slice(cursors.get(s) ?? 0))}`,
       turn: async (id, prompt) => {
         prompts[id] = prompt;
         return `${id}의 의견`;
       },
+      onUtterance: (u) => cursors.set(u.who, conv.length),
     });
     expect(prompts["codex"]).toContain("claude의 의견");
     expect(prompts["gemini"]).toContain("codex의 의견");
+    expect(prompts["codex"]).not.toContain("codex의 의견"); // 자기 발언은 자기 델타에 없음
   });
 
   it("빈/실패 발화는 건너뛰되 대화는 지속(견고함)", async () => {
     const out = await runExchange({
       roster: r,
       conversation: human,
+      prompt: () => "봉투",
       turn: async (id) => {
         if (id === "claude") return "   "; // 빈 발화
         if (id === "codex") throw new Error("prompt 실패");
@@ -195,6 +179,7 @@ describe("runExchange — 1교환(각 1회, 탭 순서·canonical·견고함)", 
     await runExchange({
       roster: r,
       conversation: human,
+      prompt: () => "봉투",
       turn: async (id) => `${id}!`,
       onUtterance: (u) => live.push(u),
     });
@@ -219,6 +204,7 @@ describe("driveExchange — 사람 참견(cancel + 같은 화자 재시작)", ()
         interject = false;
         return v;
       },
+      prompt: () => conv.map((u) => u.text).join("|"), // 라이브 대화를 읽는 봉투(재시작 시 참견 가시)
       turn: async (speaker, prompt) => {
         seq.push(speaker);
         prompts.push(prompt);
@@ -245,6 +231,7 @@ describe("driveExchange — 사람 참견(cancel + 같은 화자 재시작)", ()
     await driveExchange({
       roster: r,
       conversation: conv,
+      prompt: () => "봉투",
       turn: async (speaker) => {
         seq.push(speaker);
         return `${speaker}!`;
@@ -263,6 +250,7 @@ describe("driveSimul — 동시(병렬·스냅샷 고정·도착순 push)", () =
     await driveSimul({
       roster: r,
       conversation: conv,
+      prompt: (s) => `CTX:${JSON.stringify(conv)}`, // 스냅샷 고정은 호출자 책임(전달 시점의 conv)
       turn: async (speaker, prompt) => {
         prompts[speaker] = prompt;
         return `${speaker} 답`;
@@ -286,6 +274,7 @@ describe("driveSimul — 동시(병렬·스냅샷 고정·도착순 push)", () =
     await driveSimul({
       roster: roster(["a", "b"], ["a", "b"]),
       conversation: conv,
+      prompt: () => "봉투",
       turn: async (speaker) => {
         started.push(speaker);
         if (speaker === "a") await aGate; // a 는 b 가 시작 신호를 줄 때까지 대기
@@ -303,75 +292,13 @@ describe("driveSimul — 동시(병렬·스냅샷 고정·도착순 push)", () =
     await driveSimul({
       roster: r,
       conversation: conv,
+      prompt: () => "봉투",
       turn: async (speaker) => {
         if (speaker === "b") throw new Error("b 연결 실패");
         return `${speaker}!`;
       },
     });
     expect(conv.filter((u) => u.who !== "human").map((u) => u.who).sort()).toEqual(["a", "c"]);
-  });
-});
-
-describe("inviteePreamble — 방 정체성 + base 결 + 모드별 발언 규범", () => {
-  it("Clubhouse 협업방·cwd·메타금지·독백금지·침묵허용·@이름", () => {
-    const p = inviteePreamble("claude", ["claude", "codex"], nameOf, "/repo");
-    expect(p).toContain("Clubhouse");
-    expect(p).toContain("협업");
-    expect(p).toContain("/repo");
-    expect(p).toContain("내부 절차"); // 메타 서술 금지
-    expect(p).toContain("Codex"); // 동료
-    expect(p).toContain("독백");
-    expect(p).toContain("침묵");
-    expect(p).toContain("@이름");
-  });
-  it("기본은 대화만 — 사용자 명시 요청 없으면 파일/명령 금지(주입 지시어)", () => {
-    const p = inviteePreamble("claude", ["claude", "codex"], nameOf, "/repo");
-    expect(p).toContain("대화창에서 말로만");
-    expect(p).toContain("작업을 시키지 않았다면");
-    expect(p).toContain("파일을 만들거나 고치지 말고");
-    expect(p).toContain("명령도 실행하지 마세요");
-    expect(p).toContain("분명히 작업을 지시한 경우에만");
-  });
-  it("mode=simul — 동시 노트(끝까지·기다림, 강제 아님)", () => {
-    const p = inviteePreamble("claude", ["claude", "codex"], nameOf, "/repo", "simul");
-    expect(p).toContain("[동시]");
-    expect(p).toContain("끝까지");
-    expect(p).toContain("기다려");
-    expect(p).toContain("강제는 아닙니다");
-  });
-  it("mode=turn — 순차 노트(차례대로·경청)", () => {
-    const p = inviteePreamble("claude", ["claude", "codex"], nameOf, "/repo", "turn");
-    expect(p).toContain("[순차]");
-    expect(p).toContain("차례");
-    expect(p).toContain("경청");
-  });
-  it("mode=facil — 진행 참여자 노트(진행자가 부르면 답·안 불리면 대기)", () => {
-    const p = inviteePreamble("claude", ["claude", "codex"], nameOf, "/repo", "facil");
-    expect(p).toContain("[진행]");
-    expect(p).toContain("진행자");
-    expect(p).toContain("기다리");
-  });
-  it("mode 없으면 모드 노트 없음(base 만)", () => {
-    const p = inviteePreamble("claude", ["claude", "codex"], nameOf, "/repo");
-    expect(p).not.toContain("[동시]");
-    expect(p).not.toContain("[순차]");
-    expect(p).not.toContain("[진행]");
-  });
-  it("회고 잔재 없음(폐기된 retro 컨셉)", () => {
-    const p = inviteePreamble("claude", ["claude", "codex"], nameOf, "/repo", "facil");
-    expect(p).not.toContain("<회고>");
-  });
-});
-
-describe("facilitatorPreamble — 진행자 전용(조율·종료 판단)", () => {
-  it("진행자 역할·동시/순차/@선택·마무리=아무도 안 부름", () => {
-    const p = facilitatorPreamble("claude", ["claude", "codex"], nameOf, "/repo");
-    expect(p).toContain("진행자");
-    expect(p).toContain("다 같이"); // 동시 부르는 법
-    expect(p).toContain("차례로"); // 순차
-    expect(p).toContain("@"); // @선택
-    expect(p).toContain("종료"); // 아무도 안 부르면 종료
-    expect(p).toContain("Codex"); // 동료
   });
 });
 
