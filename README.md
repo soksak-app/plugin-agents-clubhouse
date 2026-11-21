@@ -15,6 +15,10 @@ Select participating models via checkboxes, order them by tab position, and disc
 
 The human always has highest-priority intervention (interrupts an in-progress facilitator turn → preserves the partial response → injects input → restarts). Agents that encounter session errors (including brief disconnections) are automatically unchecked (human re-checks to re-invite).
 
+## Sessions (durable, one per member)
+
+Each member keeps **one durable ACP session**, created at its first turn with its persona injected through the ACP standard `systemPrompt` field (protocol: `[@owner]`/`[@member]`/`[@clubhouse]` line grammar, taught once in the persona; every turn arrives as an envelope carrying only the posts that member has not seen yet). Context growth is handled by each CLI's native in-session compaction; when a session is lost the next turn transparently creates a new one. Session ids persist across view remounts (resume on recovery). A member whose codex thread is held by its TUI has the turn **deferred** (system note, member stays), and every member's roster tab has **▤** — open that member's session in a real terminal card (`claude --resume <id>` / `codex resume <id>`), the same session the room injects into, so you can watch and intervene in the native TUI while the room keeps lifting its replies.
+
 ## @Mention
 
 Typing `@` in the input field opens an autocomplete popup of checked participant models (↑↓ · Enter · Esc). If `@model` is present, that model is addressed directly regardless of mode — multiple mentions trigger simultaneous (parallel) delivery; a single mention addresses only that model. The facilitator in Facilitator mode is also bypassed.

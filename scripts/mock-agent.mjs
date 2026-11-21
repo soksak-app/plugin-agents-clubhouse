@@ -41,8 +41,11 @@ const agent = {
       .map((b) => (b && b.type === "text" ? b.text : ""))
       .join("");
     const lines = userText.split("\n").map((s) => s.trim()).filter(Boolean);
-    // 직전 줄 echo — 꺾쇠 제거(태그 문자를 본문에 되울려 demux 가 재파싱하는 fixture 아티팩트 방지).
-    const last = (lines.length ? lines[lines.length - 1] : "").replace(/[<>]/g, "");
+    // 턴 봉투 문법 — 마지막 [\@화자] 포스트 줄을 echo(종료 마커 줄은 제외). 지속 세션 검증: 같은 sessionId 의
+    //   턴 수가 늘면 재사용, 새 sessionId 면 재생성된 것(매턴 새 세션 회귀 감지).
+    const postLines = lines.filter((l) => l.startsWith("[@"));
+    const last = ((postLines.length ? postLines[postLines.length - 1] : lines[lines.length - 1] ?? "") + "")
+      .replace(/[<>]/g, "");
     const n = (turns.get(sid) || 0) + 1;
     turns.set(sid, n);
     let text = `${name} 한마디(턴 ${n}) — 직전: "${last.slice(0, 48)}"`;
