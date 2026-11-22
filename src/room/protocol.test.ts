@@ -57,20 +57,20 @@ describe("roomProtocolLine", () => {
   });
 
   it("states that a mention passes the next turn to the mentioned member (docs/spec/room.md#conversation)", () => {
-    expect(roomProtocolLine("Claude", [], "room-1")).toContain("A mention @<name> gives that member the next turn; mention a member only when you want it to answer.");
+    expect(roomProtocolLine("Claude", [], "room-1")).toContain("A mention @<name> gives that member the next turn; mention only to get an answer.");
   });
 
   it("states that the turn line holds every unseen record line and that only the answer ends the turn (docs/spec/room.md#conversation-first)", () => {
     const line = roomProtocolLine("Claude", ["Codex"], "room-1");
-    expect(line).toContain("Your turn line holds every record line you have not seen; only your answer ends the turn, and each token takes one answer.");
+    expect(line).toContain("A line ending [@clubhouse] turn <token> is your turn; it holds every record line you have not seen, and only your answer ends it, one answer per token.");
     expect(line).not.toContain("record.ack");
     expect(line).not.toContain("답하지 말고");
   });
 
   it("states the answer command with the room surface and the turn token, the shell form first (docs/spec/room.md#answer)", () => {
     const line = roomProtocolLine("Claude", [], "room-1");
-    const shell = line.indexOf("sok soksak-plugin-agents-clubhouse.answer --surface room-1 --turn <token> --status <continue or settled> --text=\"$(cat <<'EOF'");
-    const mcp = line.indexOf('command_run with name soksak-plugin-agents-clubhouse.answer, surface room-1 and params {"turn": "<token>", "status": "continue or settled", "text": "<your answer>"}');
+    const shell = line.indexOf("sok soksak-plugin-agents-clubhouse.answer --surface room-1 --turn <token> --status <continue|settled> --text=\"$(cat <<'EOF' <text> EOF)\"");
+    const mcp = line.indexOf('MCP command_run {name: soksak-plugin-agents-clubhouse.answer, surface: room-1, params: {turn, status, text}}');
     expect(shell).toBeGreaterThan(0);
     expect(mcp).toBeGreaterThan(shell);
     expect(line).toContain("This protocol line takes no answer.");
@@ -176,10 +176,10 @@ describe("createProtocolInjector after a restart (docs/spec/room.md#restart)", (
 describe("nothing said outside the room", () => {
   it("the protocol line states the rules in short imperative sentences", () => {
     const line = roomProtocolLine("Claude", ["Codex"], "room-1");
-    expect(line).toContain("The room cannot read your terminal: say everything through the room, in your answer or with a report or a claim.");
-    expect(line).toContain("Put a message to the owner in your answer as a section @owner:.");
-    expect(line).toContain("Do not narrate what you are about to do, and do not confirm that you sent the answer.");
-    expect(line).toContain("Respond to what the speakers said");
+    expect(line).toContain("The room cannot read your terminal: say everything in your answer, a report or a claim, and write nothing in the terminal, no closing word either.");
+    expect(line).toContain("@owner: for the owner");
+    expect(line).toContain("Do not narrate plans or confirm a sent answer.");
+    expect(line).toContain("Answer each addressed speaker in speaking order, one line per section starting @<name>:");
     // The bound holds the line near its size after the rules of the soksak skill, the browser tab and the owner instruction were added
     // (docs/spec/room.md#soksak-knowledge); the earlier bound of 3000 characters held only the rules before them, and the line is the only
     // carrier of these rules because no launch argument carries the skill.
@@ -190,19 +190,20 @@ describe("nothing said outside the room", () => {
 describe("the work rules of the protocol (docs/spec/room.md#room-protocol)", () => {
   it("states the subagent rule, the empty terminal rule without a closing word and the claim rule of every turn", () => {
     const line = roomProtocolLine("Claude", [], "room-1");
-    expect(line).toContain("Split development work of a turn into independent parts and delegate them to subagents with the Agent tool, run them in parallel and verify their results before you report; edit a trivial single file directly.");
-    expect(line).toContain("Write nothing in your terminal, no closing word either: end a turn with no text. Never write a state word such as Waiting, Settled, Ready, Done, Sent or Noted; state lives only in the answer status and the session state.");
+    expect(line).toContain("Split development work into independent parts for parallel subagents (Agent tool) and verify their results before reporting; edit a trivial single file directly.");
+    expect(line).toContain("Never write a state word (Waiting, Settled, Ready, Done, Sent, Noted); state lives only in the answer status and the session state.");
     expect(line).not.toContain("one word");
-    expect(line).toContain("A claim ends with its turn: claim each file in the turn in which you write it, before you write it, and release it when you are done.");
-    expect(line).toContain('"paths": ["<path>"]');
+    expect(line).toContain("Claim each file in the turn you write it, before writing: ");
+    expect(line).toContain('A claim ends with its turn; a refusal names the holder to coordinate with.');
   });
 });
 
 describe("the room commands run alone (docs/spec/room.md#room-protocol)", () => {
   it("states that each room command runs alone in the foreground and that a timed-out command is reported, not claimed as sent", () => {
     const line = roomProtocolLine("Claude", [], "room-1");
-    expect(line).toContain("Run each room command (answer, report, claim, release) as a command of its own in the foreground, never chained with ;, && or |.");
-    expect(line).toContain("When a room command times out or goes to the background, report it with report and never say that it was sent.");
+    expect(line).toContain("Run each room command (answer, report, claim, release) alone in the foreground, never chained with ;, && or |.");
+    expect(line).toContain("If one times out or goes to the background, report it and never call it sent.");
+    expect(line).toContain("Run every other room command as sok soksak-plugin-agents-clubhouse.<command> --surface room-1 --params '<json>'.");
   });
 });
 
@@ -212,40 +213,36 @@ describe("soksak knowledge", () => {
   it("the protocol line tells the member to read the soksak skill and to check web pages in a soksak browser tab", () => {
     for (const mcp of [true, false]) {
       const line = roomProtocolLine("Claude", ["Codex"], "room-1", "", mcp);
-      expect(line).toContain("First run sok skill print once and follow it: it is the skill of soksak, which runs this room.");
-      expect(line).toContain("Check a web page or local server in a soksak browser tab first (core.layout.open with plugin browser, then browser.navigate {url});");
-      expect(line).toContain("use another browser only when no browser plugin is installed, and report which case applied.");
+      expect(line).toContain("First run sok skill print once and follow it.");
+      expect(line).toContain("Check web pages and local servers in a soksak browser tab (core.layout.open plugin browser, then browser.navigate {url});");
+      expect(line).toContain("use another browser only without a browser plugin, and say which case applied.");
       expect(line.length).toBeLessThan(3500);
     }
   });
   it("the protocol line tells how to read an injected owner instruction", () => {
-    expect(roomProtocolLine("Claude", ["Codex"], "room-1")).toContain("A line starting [@clubhouse] 방장의 새 지시야. is an owner instruction during your work: apply it, and answer it in your next answer.");
+    expect(roomProtocolLine("Claude", ["Codex"], "room-1")).toContain("A line starting [@clubhouse] 방장의 새 지시야. is an owner instruction: apply it and answer it in your next answer.");
   });
 });
 
 
 // The team protocol (docs/spec/room.md#team): the leader line states the summon and the merge, and the worker line the worktree
 // lifecycle inside the project, because Claude Code keeps a cd of the shell only inside the folders of the session.
-// The team rules have no other carrier than the protocol line of a team member, so a line with them has its own bound
-// (docs/spec/room.md#team): the longest measured team line, a leader with the MCP form, holds 4073 characters.
-const TEAM_BOUND = 4100;
-
 describe("the team protocol", () => {
   it("tells the leader that it leads, how to summon and that its settled answer ends the conversation", () => {
     const line = roomProtocolLine("Lead", ["W1"], "room-1", "", true, { leader: null });
-    expect(line).toContain("You lead: you get every record line, split the work, and your settled answer ends the conversation.");
-    expect(line).toContain(`sok soksak-plugin-agents-clubhouse.member.summon --surface room-1 --params '{"turn": "<token>", "definition": "<definition>", "role": "<role>", "directory": "<project folder>"}'`);
-    expect(line).toContain("Add .worktrees/ to .gitignore if missing. Merge each ready branch and name the merge commit.");
-    expect(line).toContain("brief it by mention; workers mentioned in one answer start together.");
-    expect(line.length).toBeLessThan(TEAM_BOUND);
+    expect(line).toContain("You lead: you get every line, split the work, and your settled answer ends the conversation.");
+    expect(line).toContain('member.summon {"turn":"<token>","definition":"<id>","role":"<role>","directory":"<project>"}');
+    expect(line).toContain("Add .worktrees/ to .gitignore if missing.");
+    expect(line).toContain("Record a merge with member.merged {turn, member, commit} and end a worker with member.release {turn, member}.");
+    expect(line).toContain("workers mentioned in one answer start together.");
   });
 
   it("tells a worker the worktree lifecycle inside the project", () => {
     const line = roomProtocolLine("W1", ["Lead"], "room-1", "server", true, { leader: "Lead" });
-    expect(line).toContain("You work for @Lead: you get the owner lines and the lines that mention you.");
-    expect(line).toContain("First run git worktree add -q .worktrees/W1 -b W1 && cd .worktrees/W1 in one Bash call and work there.");
-    expect(line).toContain("Tell @Lead when your branch is ready. After it names the merge commit, check your work and its unit tests in the integration branch, cd to the project root, run git worktree remove .worktrees/W1, delete branch W1, and report it.");
-    expect(line.length).toBeLessThan(TEAM_BOUND);
+    expect(line).toContain("You work for @Lead and get the owner lines and the lines mentioning you; your brief is your scope.");
+    expect(line).toContain("First, in one Bash call: git worktree add -q .worktrees/W1 -b W1 && cd .worktrees/W1; work there.");
+    expect(line).toContain("After it names the merge commit, check your work and unit tests in integration, cd to the project root, git worktree remove .worktrees/W1, delete branch W1, and report it.");
+    expect(line).toContain("Leave no background task running when you answer.");
   });
 
   it("states no team rule without a leader", () => {
@@ -257,7 +254,7 @@ describe("the team protocol", () => {
 describe("a failed room command", () => {
   it("tells the member to run a failed room command again with the same token", () => {
     const line = roomProtocolLine("Claude", ["Codex"], "room-1");
-    expect(line).toContain("When a room command fails, run it again with the same token until it is accepted or refused as not open.");
+    expect(line).toContain("If one fails, rerun it with the same token until it is accepted or refused as not open.");
     expect(line.length).toBeLessThan(3500);
   });
 });
@@ -265,9 +262,26 @@ describe("a failed room command", () => {
 describe("the work rules of the team (C90)", () => {
   it("states the work rules of the leader and of a worker", () => {
     const lead = roomProtocolLine("Lead", ["W1"], "room-1", "", true, { leader: null });
-    expect(lead).toContain("Fix the API contract in each brief, merge the server branches first, have dependent workers update from integration, and have each worker unit-test and merge integration into its branch before it asks for a merge.");
+    expect(lead).toContain("Each brief fixes the API contract; workers unit-test and merge integration into their branch before asking for a merge; merge server branches first, then dependents update from integration; name each merge commit.");
     const worker = roomProtocolLine("W1", ["Lead"], "room-1", "", true, { leader: "Lead" });
-    expect(worker).toContain("Your brief is your scope. Unit-test thoroughly, merge the latest integration into your branch and resolve conflicts before you report done, and leave no background task running when you answer.");
-    for (const line of [lead, worker]) expect(line.length).toBeLessThan(TEAM_BOUND);
+    expect(worker).toContain("Unit-test thoroughly; before reporting done, merge the latest integration and resolve conflicts, then tell @Lead the branch is ready.");
+  });
+});
+
+// The bound of every protocol line (C93, docs/spec/room.md#room-protocol): the line is one submit of 3500 characters at most, with the
+// MCP form, for the leader, a worker and a member without a leader, with a surface, names, a role and peers of the live form.
+describe("the protocol line bound", () => {
+  it("holds every line at 3500 characters or less, with and without the MCP form", () => {
+    const surface = "tab-2fm4e7";
+    // A leader and the six members of the default maxMembers.
+    const peers = ["Claude (lead)", "Codex-1 (client)", "Claude-2 (tests)", "Claude-3 (server)", "Codex-2 (docs)", "Claude-4 (review)", "Codex-3 (build)"];
+    for (const mcp of [true, false]) {
+      const lines = {
+        plain: roomProtocolLine("Claude", peers, surface, "reviewer", mcp),
+        leader: roomProtocolLine("Claude", peers, surface, "lead", mcp, { leader: null }),
+        worker: roomProtocolLine("Claude-1", peers, surface, "server", mcp, { leader: "Claude" }),
+      };
+      for (const [kind, line] of Object.entries(lines)) expect(line.length, `${kind} mcp=${mcp}`).toBeLessThanOrEqual(3500);
+    }
   });
 });
