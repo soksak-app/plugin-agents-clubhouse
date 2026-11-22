@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- C60: The version is 0.0.13, which releases C52 and C59.
 - C59: The room view and the conversation status name each member whose turn the room waits for, with the step `protocol` or `answer` and the program state of its session in `core.sessions`, so a member stopped at a question of its own program, such as a folder-trust prompt, shows which tab needs the person (`docs/spec/room.md#conversation-status`).
 - C52: The declared status `soksak-plugin-agents-clubhouse.conversation` carries the entries `{speaker, text}` that the room conversation shows and follows each change of the room record (`docs/spec/room.md#conversation-status`).
 - C58: The version is 0.0.12, which releases C57.
