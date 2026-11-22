@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- C38: `docs/spec/room.md#arrangement` states that the arrangement closes no tab that the room did not open: core keeps the other tabs of the plane at the end of the room card, and the room tab stays active.
 - C37: The room header wraps in a narrow card: the roster tabs keep at least 120 points, the buttons keep one line, and the transport status shrinks with an ellipsis and shows its whole text as its tooltip (`docs/spec/room.md#header`).
 - C36: The control tower button runs the declared command `tower.set {open}`, which opens and closes the modal (`docs/spec/room.md#commands`); the tower holds no click handler of its own.
 - C35: The room declares the commands `member.set {id, checked}`, `member.move {id, index}`, `mode.set {mode}` and `message.send {text}` (`docs/spec/room.md#commands`). The roster tabs, the mode buttons, the send button and the input run them through the binder of the page, so a click and a command call run the same path. Enter without Shift in the input sends. The version is 0.0.5.

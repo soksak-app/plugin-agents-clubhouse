@@ -128,3 +128,19 @@ describe("arrangeMembers", () => {
     expect(seen).toEqual([{ state: "group" }]);
   });
 });
+
+// The arrangement closes no tab that the room did not open (C38, docs/spec/room.md#arrangement): it passes no `close`, so core
+// keeps the other tabs of the plane at the end of the first card of the tree, the room card, whose active entry is the room tab.
+describe("the other tabs of the plane", () => {
+  it("plans and applies without close, with the room tab as the active entry of the first card", async () => {
+    const p = port(feasible);
+    await arrangeMembers(p.port, members, createArrangementStatus());
+    const sent = p.calls.filter(([name]) => name === "core.layout.plan" || name === "core.layout.apply");
+    expect(sent.map(([name]) => name)).toEqual(["core.layout.plan", "core.layout.apply"]);
+    for (const [, params] of sent) {
+      expect(Object.keys(params)).toEqual(["tree"]);
+      const first = (params.tree as any).tree.children[0];
+      expect(first.tabs[first.active ?? 0]).toEqual({ plugin: ROOM_PLUGIN, params: null });
+    }
+  });
+});

@@ -2,6 +2,7 @@
 
 ## 미출시
 
+- C38: `docs/spec/room.md#arrangement`는 arrangement가 방이 열지 않은 tab을 닫지 않는다고 밝힌다. Core는 plane의 다른 tab을 방 card의 끝에 남기고, 방 tab은 활성으로 남는다.
 - C37: 방 header는 좁은 card에서 줄바꿈한다. Roster tab은 최소 120 point를 유지하고, button은 한 줄을 유지하며, transport status는 ellipsis로 줄고 전체 text를 tooltip으로 보인다(`docs/spec/room.md#header`).
 - C36: Control tower button은 선언된 command `tower.set {open}`을 실행하며, 이 command가 modal을 열고 닫는다(`docs/spec/room.md#commands`). Tower는 자기 click handler를 갖지 않는다.
 - C32: `plugin.json`의 description은 152자로, core가 설치할 때 검사하는 1~200자 안에 든다. v0.0.2는 이를 넘었다. `src/manifest-rules.test.ts`가 길이 규칙을 고정한다.
