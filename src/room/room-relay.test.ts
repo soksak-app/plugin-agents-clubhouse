@@ -91,6 +91,8 @@ function fakeCore(
 // A conversation bound that never ends a relay early.
 const OPEN: ConversationBound = { limit: 8, stopped: () => false, accepted: () => {} };
 
+const WORKING_ALL = (session: string): FakeSession => ({ session, program: { state: "working" } });
+
 const IDLE = (session: string): FakeSession => ({ session, program: { state: "idle" } });
 
 const MEMBERS = [{ id: "reviewer", name: "Claude", session: "s-1" }, { id: "writer", name: "Codex", session: "s-2" }];
@@ -645,7 +647,7 @@ describe("a relay with a leader (docs/spec/room.md#leader)", () => {
   const TEAM = [{ id: "lead", name: "Lead", session: "s-l" }, { id: "w1", name: "W1", session: "s-1" }, { id: "w2", name: "W2", session: "s-2" }];
   const leaderRecord = () => {
     const record = createRoomRecord([], {}, (speaker) => speaker, () => {}, {}, () => 0, {},
-      leaderRoute(() => "s-l", (session) => TEAM.find((member) => member.session === session)));
+      leaderRoute(() => "s-l", () => TEAM));
     return record;
   };
 
@@ -709,6 +711,163 @@ describe("a relay with a leader (docs/spec/room.md#leader)", () => {
     await core.submits(3);
     core.answer("s-l", "settled", "end");
     await relay;
+  });
+});
+
+// C95 (docs/spec/room.md#mentions): `@all` addresses every checked member; only the owner and the leader start turns with it.
+describe("@all", () => {
+  const TEAM = [{ id: "lead", name: "Lead", session: "s-l" }, { id: "w1", name: "W1", session: "s-1" }, { id: "w2", name: "W2", session: "s-2" }];
+  const leaderRecord = () => createRoomRecord([], {}, (speaker) => speaker, () => {}, {}, () => 0, {}, leaderRoute(() => "s-l", () => TEAM));
+  const tick = () => new Promise<void>((resolve) => setImmediate(resolve));
+  const lead = (core: ReturnType<typeof fakeCore>, record: RoomRecord, message: string, bound: Partial<ConversationBound> = {}) => {
+    core.bound.record = record;
+    record.append("owner", message);
+    return relayInMode(core.ports, "turn", TEAM, message, record, { ...OPEN, leader: "lead", ...bound });
+  };
+
+  it("an @all line enters the list of every checked worker once and of no unchecked member", () => {
+    const record = leaderRecord();
+    record.append("w1", "@all: the server is up");
+    record.append("w1", "@all: the server is up again");
+    expect(record.unsent("s-2", "w2")).toEqual([0, 1]);
+    expect(record.unsent("s-l", "lead")).toEqual([0, 1]);
+    expect(record.unsent("s-9", "gone")).toEqual([]);
+  });
+
+  it("an owner @all starts every worker in one batch and then the leader", async () => {
+    const core = fakeCore([IDLE("s-l"), IDLE("s-1"), IDLE("s-2")], { manual: true });
+    const record = leaderRecord();
+    const relay = lead(core, record, "@all report");
+    await core.submits(2);
+    expect(core.submitted.map((entry) => entry.session).sort()).toEqual(["s-1", "s-2"]);
+    core.answer("s-1", "settled", "one");
+    core.answer("s-2", "settled", "two");
+    await core.submits(3);
+    expect(core.submitted[2].session).toBe("s-l");
+    core.answer("s-l", "settled", "end");
+    await relay;
+  });
+
+  it("an owner @W2 @all starts W2 first, then the rest in one batch, then the leader", async () => {
+    const core = fakeCore([IDLE("s-l"), IDLE("s-1"), IDLE("s-2")], { manual: true });
+    const record = leaderRecord();
+    const relay = lead(core, record, "@W2 first, then @all");
+    await core.submits(1);
+    expect(core.submitted[0].session).toBe("s-2");
+    core.answer("s-2", "settled", "two");
+    await core.submits(2);
+    expect(core.submitted[1].session).toBe("s-1");
+    core.answer("s-1", "settled", "one");
+    await core.submits(3);
+    expect(core.submitted[2].session).toBe("s-l");
+    core.answer("s-l", "settled", "end");
+    await relay;
+  });
+
+  it("a leader answer with @all starts every worker in one batch", async () => {
+    const core = fakeCore([IDLE("s-l"), IDLE("s-1"), IDLE("s-2")], { manual: true });
+    const record = leaderRecord();
+    const relay = lead(core, record, "go");
+    await core.submits(1);
+    core.answer("s-l", "continue", "@all build your part");
+    await core.submits(3);
+    expect(core.submitted.slice(1).map((entry) => entry.session).sort()).toEqual(["s-1", "s-2"]);
+    core.answer("s-1", "settled", "one");
+    core.answer("s-2", "settled", "two");
+    await core.submits(4);
+    core.answer("s-l", "settled", "end");
+    await relay;
+  });
+
+  it("a worker answer with @all: starts no turn, and the other worker reads it in its next turn", async () => {
+    const core = fakeCore([IDLE("s-l"), IDLE("s-1"), IDLE("s-2")], { manual: true });
+    const record = leaderRecord();
+    const relay = lead(core, record, "go");
+    await core.submits(1);
+    core.answer("s-l", "continue", "@W1 build the server");
+    await core.submits(2);
+    core.answer("s-1", "settled", "@all: the server is up");
+    await core.submits(3);
+    expect(core.submitted[2].session).toBe("s-l");
+    core.answer("s-l", "continue", "@W2 build the client");
+    await core.submits(4);
+    expect(core.submitted[3].session).toBe("s-2");
+    expect(core.submitted[3].text).toContain("the server is up");
+    core.answer("s-2", "settled", "client");
+    await core.submits(5);
+    core.answer("s-l", "settled", "end");
+    await relay;
+  });
+
+  it("two parallel workers that continue without mentioning each other give the next turn to the leader", async () => {
+    const core = fakeCore([IDLE("s-l"), IDLE("s-1"), IDLE("s-2")], { manual: true });
+    const record = leaderRecord();
+    const relay = lead(core, record, "go");
+    await core.submits(1);
+    core.answer("s-l", "continue", "@W1 a | @W2 b");
+    await core.submits(3);
+    core.answer("s-1", "continue", "working on a");
+    core.answer("s-2", "continue", "working on b");
+    await core.submits(4);
+    expect(core.submitted[3].session).toBe("s-l");
+    core.answer("s-l", "settled", "end");
+    await relay;
+  });
+
+  it("a worker answer that mentions the leader gives the leader the next turn before other worker turns", async () => {
+    const core = fakeCore([IDLE("s-l"), IDLE("s-1"), IDLE("s-2")], { manual: true });
+    const record = leaderRecord();
+    const relay = lead(core, record, "go");
+    await core.submits(1);
+    core.answer("s-l", "continue", "@W1 a | @W2 b");
+    await core.submits(3);
+    // An owner follow-up during the batch leaves both workers with an unreceived line.
+    record.append("owner", "also add tests");
+    core.answer("s-2", "settled", "b done");
+    await tick();
+    core.answer("s-1", "continue", "@Lead which port?");
+    await core.submits(4);
+    expect(core.submitted[3].session).toBe("s-l");
+    core.answer("s-l", "settled", "port 8080");
+    // Then each worker with the unreceived owner line takes a turn, and the leader reads their answers.
+    await core.submits(5);
+    expect(core.submitted[4].session).toBe("s-1");
+    core.answer("s-1", "settled", "ok");
+    await core.submits(6);
+    expect(core.submitted[5].session).toBe("s-2");
+    core.answer("s-2", "settled", "ok");
+    await core.submits(7);
+    core.answer("s-l", "settled", "end");
+    await relay;
+  });
+
+  it("the limit line of a leader relay names the members that still continue", async () => {
+    const core = fakeCore([IDLE("s-l"), IDLE("s-1"), IDLE("s-2")], { manual: true });
+    const record = leaderRecord();
+    const relay = lead(core, record, "go", { limit: 1 });
+    await core.submits(1);
+    core.answer("s-l", "continue", "@all build");
+    await relay;
+    expect(record.lines.at(-1)).toMatchObject({
+      speaker: "clubhouse",
+      text: "the conversation ended without settling: it reached the limit of 1 member turns; @Lead continue",
+    });
+  });
+
+  it("without a leader: simul runs every member at once, turn in roster order, facil every member without the idle choice", async () => {
+    const simul = fakeCore([IDLE("s-1"), IDLE("s-2"), IDLE("s-3")], { manual: true });
+    const record = roomRecord("@all report");
+    simul.bound.record = record;
+    const relay = relayInMode(simul.ports, "simul", THREE, "@all report", record, OPEN);
+    await simul.submits(3);
+    for (const session of ["s-1", "s-2", "s-3"]) simul.answer(session, "settled", "ok");
+    await relay;
+    const turn = fakeCore([IDLE("s-1"), IDLE("s-2"), IDLE("s-3")]);
+    await relayInMode(turn.ports, "turn", THREE, "@all report", roomRecord("@all report"), OPEN);
+    expect(turn.submitted.map((entry) => entry.session)).toEqual(["s-1", "s-2", "s-3"]);
+    const facil = fakeCore([WORKING_ALL("s-1"), WORKING_ALL("s-2"), WORKING_ALL("s-3")]);
+    await relayInMode(facil.ports, "facil", THREE, "@all report", roomRecord("@all report"), OPEN);
+    expect(facil.submitted.map((entry) => entry.session)).toEqual(["s-1", "s-2", "s-3"]);
   });
 });
 

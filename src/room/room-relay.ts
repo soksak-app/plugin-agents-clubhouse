@@ -4,7 +4,7 @@
 // answer arrives (docs/spec/room.md#turn-end). Each turn line carries every line of the room record that its member has not received, and
 // the record reaches a member in no other line (docs/spec/room.md#conversation-first).
 import { sessionProgram, type SessionCommandPort } from "./session-channel";
-import { mentionedMembers } from "./mention";
+import { mentionedMembers, mentionsAll } from "./mention";
 import type { AnswerChannel, AnswerStatus } from "./answer";
 import type { SubmitQueue } from "./submit-queue";
 import type { RoomMode } from "./commands";
@@ -337,8 +337,12 @@ async function runLeader(
   const members = (): NamedRelayMember[] => bound.members?.() ?? given;
   const workers = (): NamedRelayMember[] => members().filter((member) => member.id !== leader.id);
   const answers: MemberAnswer[] = [];
+  // An owner `@all` adds every worker that the message does not name in one batch after the named workers (docs/spec/room.md#mentions).
+  const named = mentionedMembers(message, workers());
+  const rest = mentionsAll(message) ? workers().filter((member) => !named.includes(member)) : [];
   const batches: { members: NamedRelayMember[]; byAnswer: boolean }[] = [
-    ...mentionedMembers(message, workers()).map((member) => ({ members: [member], byAnswer: false })),
+    ...named.map((member) => ({ members: [member], byAnswer: false })),
+    ...(rest.length > 0 ? [{ members: rest, byAnswer: false }] : []),
     { members: [leader], byAnswer: false },
   ];
   const queued = (member: NamedRelayMember): boolean => batches.some((batch) => batch.members.some((one) => one.id === member.id));
@@ -360,7 +364,13 @@ async function runLeader(
     }
     const batch = batches[0];
     if (batch.byAnswer && started + batch.members.length > bound.limit) {
-      record.append("clubhouse", `the conversation ended: it reached the limit of ${bound.limit} member turns`);
+      const open = continuing(answers, members());
+      record.append(
+        "clubhouse",
+        open.length > 0
+          ? `the conversation ended without settling: it reached the limit of ${bound.limit} member turns; ${open.map((member) => `@${member.name}`).join(", ")} continue`
+          : `the conversation ended: it reached the limit of ${bound.limit} member turns`,
+      );
       break;
     }
     batches.shift();
@@ -382,10 +392,17 @@ async function runLeader(
       break;
     }
     for (const answer of arrived) {
-      const named = mentionedMembers(answer.text, workers().filter((member) => member.id !== answer.id && !queued(member)));
-      if (named.length === 0) continue;
-      if (answer.id === leader.id) batches.push({ members: named, byAnswer: true });
-      else batches.push(...named.map((member) => ({ members: [member], byAnswer: true })));
+      const free = workers().filter((member) => member.id !== answer.id && !queued(member));
+      const named = mentionedMembers(answer.text, free);
+      if (answer.id === leader.id) {
+        // A leader `@all` starts every worker with the named workers first, in one batch.
+        const all = mentionsAll(answer.text) ? [...named, ...free.filter((member) => !named.includes(member))] : named;
+        if (all.length > 0) batches.push({ members: all, byAnswer: true });
+        continue;
+      }
+      // A worker `@all` addresses the line and starts no turn; a mention of the leader gives the leader the next turn.
+      if (mentionedMembers(answer.text, [leader]).length > 0 && !queued(leader)) batches.unshift({ members: [leader], byAnswer: true });
+      batches.push(...named.map((member) => ({ members: [member], byAnswer: true })));
     }
   }
   return answers;
@@ -437,7 +454,8 @@ export async function relayInMode(
     for (const [index, answer] of answers.slice(first.length).entries()) queueMentions(queue, answer.text, targets[index], members);
     return [...answers, ...(await runTurns(ports, queue, members, record, bound, answers))];
   }
-  if (mode === "turn" || mentioned.length > 0) return runTurns(ports, turnsOf([...mentioned, ...others]), members, record, bound);
+  // An owner `@all` in facil runs every member in roster order without the idle choice, because the owner asked every member.
+  if (mode === "turn" || mentioned.length > 0 || mentionsAll(message)) return runTurns(ports, turnsOf([...mentioned, ...others]), members, record, bound);
   const sessions = ports.sessions();
   const idle = members.find((member) => sessionProgram(sessions, member.session) === "idle");
   if (!idle) throw new Error("no member is idle");

@@ -1,5 +1,5 @@
 // The sections of an answer (docs/spec/room.md#sections). A line that starts with `@<name>:`, `<name>` being the name or the identifier
-// of a member or `owner` compared without case by the mention rules, or `@all:`, starts the section for that addressee; the section holds
+// of a member or `owner` compared without case by the mention rules, or `@all:` (everyone), starts the section for that addressee; the section holds
 // the text up to the next such line. Text before the first section belongs to `all`. An answer without such a line has no sections. The
 // text of the answer stays unchanged in the record; a section `@<name>:` is a mention of that member.
 

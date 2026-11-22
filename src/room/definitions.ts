@@ -35,7 +35,11 @@ function sameMembers(record: Record<string, unknown>, members: string[]): boolea
 
 // Reads the definitions and the accounts, and resolves each definition with the program and arguments of its account, in the code
 // point order of its identifier. An absent key reads as no definitions and no accounts.
-export async function readAgentDefinitions(get: AgentDataGet): Promise<AgentDefinition[]> {
+// The names that a mention or a section heading reserves (docs/spec/room.md#mentions), compared without case.
+const RESERVED = ["all", "owner", "clubhouse"];
+
+// A definition whose name or identifier is reserved is refused through report, and the other definitions stay.
+export async function readAgentDefinitions(get: AgentDataGet, report: (text: string) => void): Promise<AgentDefinition[]> {
   const stored = (await get("definitions")) ?? {};
   const accounts = (await get("accounts")) ?? [];
   if (!isRecord(stored)) throw new Error(`${WHERE} definitions: the value is not an object of definition identifier to {name, account, plugin, role, cwd}`);
@@ -63,7 +67,11 @@ export async function readAgentDefinitions(get: AgentDataGet): Promise<AgentDefi
       cwd: record.cwd as string,
     };
   });
-  return definitions;
+  return definitions.filter((definition) => {
+    const reserved = [definition.id, definition.name].find((name) => RESERVED.includes(name.toLowerCase()));
+    if (reserved !== undefined) report(`${WHERE} definitions: definition ${definition.id} uses the reserved name ${reserved}`);
+    return reserved === undefined;
+  });
 }
 
 // The member of the room for a definition: the session opens with the terminal's start values of the definition (program, arguments,

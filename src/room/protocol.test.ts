@@ -177,7 +177,9 @@ describe("nothing said outside the room", () => {
   it("the protocol line states the rules in short imperative sentences", () => {
     const line = roomProtocolLine("Claude", "room-1");
     expect(line).toContain("The room cannot read your terminal: say everything in your answer, a report or a claim; write nothing there, not even a closing word.");
-    expect(line).toContain("(@owner: the owner, @all: the rest)");
+    expect(line).toContain("(@owner: the owner, @all: everyone)");
+    // C95 (docs/spec/room.md#mentions): `@all` has one meaning, and only the owner and the leader start turns with it.
+    expect(line).toContain("@all addresses everyone, and yours starts no turn.");
     expect(line).toContain("Do not narrate plans or confirm a sent answer.");
     expect(line).toContain("Answer each addressed speaker in speaking order, one section per line starting @<name>:");
     // The bound holds the line near its size after the rules of the soksak skill, the browser tab and the owner instruction were added
@@ -235,13 +237,15 @@ describe("the team protocol", () => {
     expect(line).toContain("Add .worktrees/ to .gitignore if missing.");
     expect(line).toContain("Record a merge with member.merged {turn, member, commit} and end a worker with member.release {turn, member}.");
     expect(line).toContain("workers mentioned in one answer start together.");
+    expect(line).toContain("@all addresses everyone, and yours starts every worker.");
     expect(line).toContain("List the agents you can summon with definitions {} and read the file of each before you choose.");
   });
 
   it("tells a worker the worktree lifecycle inside the project", () => {
     const line = roomProtocolLine("W1", "room-1", true, { leader: "Lead" });
     expect(line).toContain("You work for @Lead and get the owner lines and the lines mentioning you; your brief is your scope.");
-    expect(line).toContain("Your worktree .worktrees/W1 and its branch share your name: create it and cd into it in one Bash call (W=W1; git worktree add -q .worktrees/$W -b $W && cd .worktrees/$W) and work there.");
+    expect(line).toContain("In one Bash call create your worktree and branch, named as you, and cd into it (W=W1; git worktree add -q .worktrees/$W -b $W && cd .worktrees/$W); work there.");
+    expect(line).toContain("@all addresses everyone, and yours starts no turn.");
     expect(line).toContain("After it names the merge commit, check your work and unit tests in integration, cd to the project root, remove your worktree, delete your branch, and report it.");
     expect(line).toContain("Leave no background task running when you answer.");
   });
@@ -265,7 +269,7 @@ describe("the work rules of the team (C90)", () => {
     const lead = roomProtocolLine("Lead", "room-1", true, { leader: null });
     expect(lead).toContain("Each brief fixes the API contract; workers unit-test and merge integration into their branch before asking for a merge; merge server branches first, then dependents update from integration; name each merge commit.");
     const worker = roomProtocolLine("W1", "room-1", true, { leader: "Lead" });
-    expect(worker).toContain("Unit-test thoroughly; before reporting done, merge the latest integration and resolve conflicts, then tell @Lead the branch is ready.");
+    expect(worker).toContain("Unit-test thoroughly; before reporting done, merge the latest integration and resolve conflicts, then report the branch ready.");
   });
 });
 

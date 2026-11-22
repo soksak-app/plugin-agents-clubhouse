@@ -4,7 +4,7 @@
 // sent position to the end, and the delivered position rises only when the answer of the token of the line arrives, so every member reads
 // each line addressed to it once and in order (docs/spec/room.md#conversation-first).
 
-import { mentionedMembers } from "./mention";
+import { mentionedMembers, mentionsAll } from "./mention";
 
 export interface RecordLine {
   // `owner` or the identifier of a member.
@@ -58,17 +58,19 @@ export interface RoomRecord {
 // Whether a record line is addressed to a session; without a leader every line is (docs/spec/room.md#addressed-views).
 export type AddressedTo = (line: RecordLine, session: string) => boolean;
 
-// The route of a room with a leader (docs/spec/room.md#addressed-views): the leader receives every line, and a worker the lines of the
-// owner and the lines that mention it. Without a leader, and for a session of no known member, every line is addressed.
+// The route of a room with a leader (docs/spec/room.md#addressed-views): the leader receives every line, and a checked worker the lines
+// of the owner and the lines that mention it or `@all`. `checked` gives the checked members, the same set that the relay runs; a session
+// of no checked member receives no line. Without a leader every line is addressed.
 export function leaderRoute(
   leaderSession: () => string | null,
-  memberOf: (session: string) => { id: string; name: string } | undefined,
+  checked: () => { id: string; name: string; session: string }[],
 ): AddressedTo {
   return (line, session) => {
     const leader = leaderSession();
-    if (leader === null || session === leader || line.speaker === "owner") return true;
-    const member = memberOf(session);
-    return member === undefined || mentionedMembers(line.text, [member]).length > 0;
+    if (leader === null || session === leader) return true;
+    const member = checked().find((entry) => entry.session === session);
+    if (member === undefined) return false;
+    return line.speaker === "owner" || mentionsAll(line.text) || mentionedMembers(line.text, [member]).length > 0;
   };
 }
 

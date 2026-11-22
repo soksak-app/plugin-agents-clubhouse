@@ -53,11 +53,23 @@ Member Claude Code session은 인자가 막지 않으면 사람의 user-level in
 
 ## Soksak knowledge
 
-Isolation은 사람의 개인 설정을 없애고 soksak 지식은 없애지 않는다. Soksak agent skill, 곧 `sok skill print`의 출력은 사람의 user scope(`~/.claude/skills/soksak`)에만 설치되고 `--setting-sources project,local`은 그것을 읽지 않으므로, room은 protocol 줄로 각 member에게 skill을 준다. 어떤 launch argument도 skill을 싣지 않는다. `--append-system-prompt`는 text를, `--append-system-prompt-file`은 file을 받는데(Claude Code CLI reference, [system prompt flags](https://code.claude.com/docs/en/cli-reference#system-prompt-flags)), room의 page는 `sok skill print`를 실행할 수 없고, terminal은 shell 없이 program을 시작하며, file은 사람의 folder에 써야 한다. SessionStart hook의 plain stdout은 10,000자로 제한되고 더 긴 출력은 file 경로와 preview로 바뀌는데(Claude Code hooks reference, [JSON output](https://code.claude.com/docs/en/hooks#json-output)), skill은 그보다 길다. 그래서 protocol 줄은 member에게 먼저 `sok skill print`를 한 번 실행하고 따르라고 한다. 또 web page나 local server를 먼저 soksak browser tab에서, plugin `browser`로 `core.layout.open`한 뒤 `browser.navigate {url}`로 확인하고, browser plugin이 설치되지 않았을 때만 다른 browser를 쓰며, 어느 경우였는지 보고하라고 한다. Leader가 없는 member, leader, worker의 모든 protocol 줄은 MCP form이 있든 없든 3500자 이하다. 새 규칙은 bound를 올리지 않고 맞도록 쓴다. 각 규칙은 반복과 규칙을 되풀이하는 예시 없이 한 번 말하고, `answer` 밖의 room command는 `sok soksak-plugin-agents-clubhouse.<command> --surface <surface> --params <json>` 형식으로 한 번 이름 붙인다. 이 bound는 가장 큰 구성, 곧 이름 40자와 role 200자인 team member 열여섯에서도 지켜진다. 줄에서 바뀌는 것은 member와 그 leader의 이름뿐이기 때문이다. Worker는 worktree 이름을 한 번만 말하고 command는 shell 변수를 쓴다. 이름 40자로 측정한 줄은 MCP form이 있을 때 leader 없이 2673자, leader 3293자, worker 3460자이고, 없을 때 2556자, 3176자, 3343자다. 이 문구 전에는 peer 열여섯과 role 200자인 leader 줄이 7749자였다.
+Isolation은 사람의 개인 설정을 없애고 soksak 지식은 없애지 않는다. Soksak agent skill, 곧 `sok skill print`의 출력은 사람의 user scope(`~/.claude/skills/soksak`)에만 설치되고 `--setting-sources project,local`은 그것을 읽지 않으므로, room은 protocol 줄로 각 member에게 skill을 준다. 어떤 launch argument도 skill을 싣지 않는다. `--append-system-prompt`는 text를, `--append-system-prompt-file`은 file을 받는데(Claude Code CLI reference, [system prompt flags](https://code.claude.com/docs/en/cli-reference#system-prompt-flags)), room의 page는 `sok skill print`를 실행할 수 없고, terminal은 shell 없이 program을 시작하며, file은 사람의 folder에 써야 한다. SessionStart hook의 plain stdout은 10,000자로 제한되고 더 긴 출력은 file 경로와 preview로 바뀌는데(Claude Code hooks reference, [JSON output](https://code.claude.com/docs/en/hooks#json-output)), skill은 그보다 길다. 그래서 protocol 줄은 member에게 먼저 `sok skill print`를 한 번 실행하고 따르라고 한다. 또 web page나 local server를 먼저 soksak browser tab에서, plugin `browser`로 `core.layout.open`한 뒤 `browser.navigate {url}`로 확인하고, browser plugin이 설치되지 않았을 때만 다른 browser를 쓰며, 어느 경우였는지 보고하라고 한다. Leader가 없는 member, leader, worker의 모든 protocol 줄은 MCP form이 있든 없든 3500자 이하다. 새 규칙은 bound를 올리지 않고 맞도록 쓴다. 각 규칙은 반복과 규칙을 되풀이하는 예시 없이 한 번 말하고, `answer` 밖의 room command는 `sok soksak-plugin-agents-clubhouse.<command> --surface <surface> --params <json>` 형식으로 한 번 이름 붙인다. 이 bound는 가장 큰 구성, 곧 이름 40자와 role 200자인 team member 열여섯에서도 지켜진다. 줄에서 바뀌는 것은 member와 그 leader의 이름뿐이기 때문이다. Worker는 worktree 이름을 한 번만 말하고 command는 shell 변수를 쓴다. 이름 40자로 측정한 줄은 MCP form이 있을 때 leader 없이 2724자, leader 3445자, worker 3401자이고, 없을 때 2607자, 3328자, 3284자다. 이 문구 전에는 peer 열여섯과 role 200자인 leader 줄이 7749자였다.
 
 ## Mention
 
 Mention은 `@` 뒤의 member 이름이나 identifier이며 대소문자를 구분하지 않고 비교한다. 메시지의 시작이나 공백 뒤에서 시작하고, 공백, `-`, `_`, `.`이 아닌 문장 부호, 또는 메시지의 끝에서 끝난다. Mention 끝의 `.`은 mention에 속하지 않는다. 어떤 member도 가리키지 않는 mention은 text다. Mention은 turn의 순서를 정하고 받는 member를 줄이지 않는다. Mention된 member가 처음 mention된 순서로 차례로 첫 turn을 받고, mode의 다른 member가 roster 순서로 뒤따르므로, 뒤의 각 member는 mention된 member의 답을 읽는다. Roster가 A, B, C일 때 메시지 `@B 정리해 줘. 나머지는 보태 줘.`는 turn을 B, A, C 순서로 주고, A의 turn 줄은 B의 답을 담는다. 답의 section `@<name>:`([section](#sections))도 mention이다.
+
+Inline code span, fenced code block, `>`로 시작하는 인용 줄 안의 mention은 mention이 아니다. 그것들은 text를 인용하기 때문이다. 한글이 바로 뒤따르는 mention은 그 mention이다. 예를 들어 `@harness가`, `@all에게`다. 단어의 접두사이고 나머지가 한글 음절로 시작하는 가장 긴 member 이름이나 identifier, 또는 `all`이 mention을 가리킨다. 한국어 조사가 이름에 붙기 때문이다. `email@all`, `@allison`, `@all-hands`는 mention이 아니다.
+
+대소문자를 구분하지 않는 `@all`은 체크된 모든 member, 곧 roster에서 체크된 member와 team에게 간다. 함수 하나가 이 집합을 만들고, [addressed views](#addressed-views)의 route와 relay가 그것을 쓰므로, `@all` 줄은 체크된 각 member의 addressed list에 한 번 들어가고 체크되지 않은 member의 list에는 들어가지 않는다. Owner 메시지와 leader 답만 `@all`로 turn을 시작한다. 그 밖의 답, 곧 worker의 답이나 leader 없는 방 member의 답에서 `@all`과 section 제목 `@all:`은 줄을 체크된 모든 member에게 보내고, 그들은 다음 turn에 읽으며, turn을 시작하지 않는다. 결정: protocol은 답의 section 제목으로 `@all:`을 권하고, 답마다 모두에게 퍼지면 답 하나가 turn 2개에서 15개를 시작해 `conversationTurns` 한도 48을 답 몇 개에 다 쓴다. 이름 mention과 `@all`이 함께 있으면 이름 mention된 member가 mention 순서로 먼저, 나머지가 그 뒤에 온다.
+
+Leader가 있는 방에서 owner의 `@all`은 이름 mention된 worker를 mention 순서로, 그다음 다른 모든 worker를 병렬 batch 하나로, 그다음 leader를 시작하므로 leader는 모든 답을 읽는다. `@all`이 있는 leader 답은 모든 worker를 batch 하나로 시작한다. Leader가 없으면 `turn`은 전처럼 모든 member를 roster 순서로, `simul`은 모든 member를 동시에, `facil`은 idle member 하나를 고르지 않고 모든 member를 roster 순서로 실행한다. Owner가 모든 member에게 물었기 때문이다.
+
+답한 반론: 서로를 mention하지 않고 `continue`로 답한 병렬 worker 둘은 서로의 답으로 turn을 받지 않는다. 답은 worker를 mention할 때만 그 worker에게 가므로 다음 turn은 leader의 것이다. Leader를 mention한 worker 답은 그 답이 시작하지 않은 어떤 worker turn보다 먼저 leader에게 다음 turn을 준다. Leader가 있는 relay의 한도 줄은 아직 `continue`를 밝힌 member를 밝힌다.
+
+대소문자를 구분하지 않는 이름과 identifier `all`, `owner`, `clubhouse`는 예약되어 있다. Definition을 읽을 때 그중 하나를 쓰는 definition을 `agents project data definitions: definition <id> uses the reserved name <name>`으로 거부하고, error display로 보고하며, 다른 definition은 남긴다. Team id는 그 definition에서 나온다.
+
+거부한 반론: turn 줄에는 길이 bound가 없다. 그것이 싣는 record는 설계상 한계가 없고, 450,000자 submit이 Claude Code의 transcript에 온전히 도착했다. 명시적 bound는 tab state 한도 1 MiB다([restart](#restart)).
 
 ## Mode
 
@@ -89,7 +101,7 @@ Room이 메시지를 전달하는 동안 owner가 보낸 메시지는 바로 own
 
 ## Sections
 
-여러 화자에게 답하는 답은 말한 화자의 순서대로 화자마다 section 하나를 둔다. Section은 자기 줄의 `@<name>:`로 시작하며, `<name>`은 member의 이름이나 identifier 또는 `owner`이고 대소문자를 구분하지 않는다. `@all:`은 나머지를 담고, 첫 section 앞의 text는 `all`에 속한다. Record는 답의 text를 바꾸지 않는다. Room view는 section마다 addressee를 머리로 단 block 하나를 그리고, [conversation status](#conversation-status)의 각 항목은 `sections: [{to, text}]`를 가지며 `to`는 `owner`, `all` 또는 member identifier다. Section 줄이 없는 답은 `[]`이다.
+여러 화자에게 답하는 답은 말한 화자의 순서대로 화자마다 section 하나를 둔다. Section은 자기 줄의 `@<name>:`로 시작하며, `<name>`은 member의 이름이나 identifier 또는 `owner`이고 대소문자를 구분하지 않는다. `@all:`은 [mention 규칙](#mention)으로 모두에게 가고, 첫 section 앞의 text는 `all`에 속한다. Record는 답의 text를 바꾸지 않는다. Room view는 section마다 addressee를 머리로 단 block 하나를 그리고, [conversation status](#conversation-status)의 각 항목은 `sections: [{to, text}]`를 가지며 `to`는 `owner`, `all` 또는 member identifier다. Section 줄이 없는 답은 `[]`이다.
 
 ## Room role
 
@@ -109,7 +121,7 @@ Team member는 summon id `<definition>-<n>`을 가진다. `<n>`은 그 definitio
 
 ## Addressed views
 
-각 member session은 addressed list, 곧 그 session에 가는 줄의 record index를 record 순서로 가지며 tab state의 `addressed`로 남는다. Leader가 없으면 모든 줄이 모든 session에 간다. Leader가 있으면 leader는 모든 줄을 받고, 그 밖의 모든 member인 worker는 owner의 줄, [mention 규칙](#mention)으로 자기를 mention한 줄, 자기를 mention한 방의 줄을 받는다. Worker에게는 자기 brief와 자기에게 온 질문이 필요하고, 전체 record는 다른 member의 작업으로 그 context를 채우기 때문이다. 방은 새 줄을 덧붙일 때 그 줄이 가는 각 session의 list에 index를 더하고, list가 없는 session은 처음 쓰일 때 자기에게 가는 모든 줄의 index를 받는다. `sent`와 `delivered`는 session의 addressed list 안의 위치이고, turn 줄은 `sent`부터 끝까지의 addressed 줄을 member 자신의 줄 없이 담는다.
+각 member session은 addressed list, 곧 그 session에 가는 줄의 record index를 record 순서로 가지며 tab state의 `addressed`로 남는다. Leader가 없으면 모든 줄이 모든 session에 간다. Leader가 있으면 leader는 모든 줄을 받고, 그 밖의 모든 member인 worker는 owner의 줄, [mention 규칙](#mention)으로 자기나 `@all`을 mention한 줄, 자기를 mention한 방의 줄을 받는다. Worker에게는 자기 brief와 자기에게 온 질문이 필요하고, 전체 record는 다른 member의 작업으로 그 context를 채우기 때문이다. 방은 새 줄을 덧붙일 때 그 줄이 가는 각 session의 list에 index를 더하고, list가 없는 session은 처음 쓰일 때 자기에게 가는 모든 줄의 index를 받는다. `sent`와 `delivered`는 session의 addressed list 안의 위치이고, turn 줄은 `sent`부터 끝까지의 addressed 줄을 member 자신의 줄 없이 담는다.
 
 Leader의 답이 여러 worker를 mention하면 그 worker들은 함께 turn을 시작하고, 방은 각 답이 도착할 때 record에 덧붙인다. 그래서 leader의 다음 turn 줄은 그 답을 모두 담고, leader는 일찍 끝낸 worker를 본다. Worker의 답이 시작하는 turn은 차례로 진행된다.
 

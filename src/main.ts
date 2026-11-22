@@ -453,7 +453,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   let unsaved = saved === null;
   const agentData: AgentDataGet = (key) => bridge!.calls.request("runtime.data.get", { key, plugin: AGENTS_PLUGIN });
   const refreshDefinitions = (): void => {
-    readAgentDefinitions(agentData)
+    readAgentDefinitions(agentData, (text) => report("room members", text))
       .then(async (next) => {
         definitions = next;
         // A room tab without a state checks the members whose stored session core.sessions lists with this room as owner, so it
@@ -723,7 +723,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
       const leader = leaderEntry();
       return leader === undefined ? null : (memberSessions.get(leader.id) ?? null);
     },
-    (session) => openMembers().find((member) => member.session === session),
+    () => openMembers(),
   );
   const record = createRoomRecord(conversation, saved?.delivered ?? {}, speakerName, () => {
     conversationStatus.changed();

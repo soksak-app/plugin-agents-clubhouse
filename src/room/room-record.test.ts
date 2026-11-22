@@ -75,7 +75,7 @@ describe("settledRelay", () => {
 
 describe("addressed views (docs/spec/room.md#addressed-views)", () => {
   const MEMBERS = [{ id: "lead", name: "Lead", session: "s-l" }, { id: "w1", name: "W1", session: "s-1" }, { id: "w2", name: "W2", session: "s-2" }];
-  const route = leaderRoute(() => "s-l", (session) => MEMBERS.find((member) => member.session === session));
+  const route = leaderRoute(() => "s-l", () => MEMBERS);
 
   it("gives the leader every line and a worker only the owner lines and the lines that mention it", () => {
     const record = createRoomRecord([], {}, nameOf, () => {}, {}, () => 0, {}, route);
@@ -105,7 +105,7 @@ describe("addressed views (docs/spec/room.md#addressed-views)", () => {
   });
 
   it("keeps every line addressed to every session without a leader", () => {
-    const record = createRoomRecord([], {}, nameOf, () => {}, {}, () => 0, {}, leaderRoute(() => null, () => undefined));
+    const record = createRoomRecord([], {}, nameOf, () => {}, {}, () => 0, {}, leaderRoute(() => null, () => []));
     record.append("owner", "go");
     record.append("a", "x");
     expect(record.unsent("s-b", "b")).toEqual([0, 1]);

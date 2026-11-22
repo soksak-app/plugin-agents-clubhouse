@@ -39,8 +39,8 @@ function teamRules(self: string, surface: string, team: TeamPlace): string[] {
   const leader = `@${team.leader}`;
   return [
     `You work for ${leader} and get the owner lines and the lines mentioning you; your brief is your scope.`,
-    `Your worktree .worktrees/${self} and its branch share your name: create it and cd into it in one Bash call (W=${self}; git worktree add -q .worktrees/$W -b $W && cd .worktrees/$W) and work there.`,
-    `Unit-test thoroughly; before reporting done, merge the latest integration and resolve conflicts, then tell ${leader} the branch is ready.`,
+    `In one Bash call create your worktree and branch, named as you, and cd into it (W=${self}; git worktree add -q .worktrees/$W -b $W && cd .worktrees/$W); work there.`,
+    `Unit-test thoroughly; before reporting done, merge the latest integration and resolve conflicts, then report the branch ready.`,
     "After it names the merge commit, check your work and unit tests in integration, cd to the project root, remove your worktree, delete your branch, and report it.",
     "Leave no background task running when you answer.",
   ];
@@ -57,8 +57,9 @@ export function roomProtocolLine(self: string, surface: string, mcp = true, team
     "The room cannot read your terminal: say everything in your answer, a report or a claim; write nothing there, not even a closing word.",
     "Never write a state word (Waiting, Settled, Ready, Done, Sent, Noted); state lives only in the answer status.",
     "Do not narrate plans or confirm a sent answer.",
-    "Answer each addressed speaker in speaking order, one section per line starting @<name>: (@owner: the owner, @all: the rest).",
+    "Answer each addressed speaker in speaking order, one section per line starting @<name>: (@owner: the owner, @all: everyone).",
     "A mention @<name> gives that member the next turn; mention only to get an answer.",
+    team?.leader === null ? "@all addresses everyone, and yours starts every worker." : "@all addresses everyone, and yours starts no turn.",
     "A line ending [@clubhouse] turn <token> is your turn; it holds every record line you have not seen, and only your answer ends it, one answer per token.",
     `Answer with ${answer}` +
       (mcp ? `, or MCP command_run {name: ${ANSWER_COMMAND}, surface: ${surface}, params: {turn, status, text}}.` : "."),
