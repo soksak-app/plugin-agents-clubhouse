@@ -15,7 +15,7 @@ describe("conversation status", () => {
       properties: {
         entries: { type: "array", items: { required: ["speaker", "text", "at", "elapsedMs", "sections"] } },
         waiting: { type: "array", items: { required: ["member", "session", "step", "program"], properties: { step: { enum: ["protocol", "turn", "answer"] } } } },
-        delivery: { type: "array", items: { required: ["member", "session", "sent", "delivered", "length", "unreceived"] } },
+        delivery: { type: "array", items: { required: ["member", "name", "role", "session", "sent", "delivered", "length", "unreceived"] } },
       },
       required: ["entries", "waiting", "delivery", "team"],
     });
@@ -45,7 +45,7 @@ describe("conversation status", () => {
   });
 
   it("carries the delivery entries of the members (docs/spec/room.md#conversation-status)", () => {
-    const entry = { member: "reviewer", session: "s-1", sent: 1, delivered: 1, length: 2, unreceived: 1 };
+    const entry = { member: "reviewer", name: "Claude", role: "review", session: "s-1", sent: 1, delivered: 1, length: 2, unreceived: 1 };
     const status = createConversationStatus([], () => [], () => [entry]);
     expect(status.read().delivery).toEqual([entry]);
   });

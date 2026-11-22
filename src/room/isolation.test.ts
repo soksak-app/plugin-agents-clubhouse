@@ -16,7 +16,7 @@ describe("memberLaunch", () => {
   });
 
   it("gives an isolated member the shell forms only, because the user-scope MCP servers are not loaded", () => {
-    const line = roomProtocolLine("Claude", [], "room-1", "", false);
+    const line = roomProtocolLine("Claude", "room-1", false);
     expect(line).toContain("sok soksak-plugin-agents-clubhouse.answer --surface room-1");
     expect(line).not.toContain("command_run");
   });

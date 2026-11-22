@@ -751,6 +751,8 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
     roomMembers().map((member) => {
       return {
         member: member.id,
+        name: member.name,
+        role: member.role,
         session: member.session,
         sent: record.sent()[member.session] ?? 0,
         delivered: record.delivered()[member.session] ?? 0,
@@ -768,10 +770,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   const taughtMembers = async (members: OpenMember[]): Promise<OpenMember[]> => {
     const outcomes = await Promise.all(
       members.map((member) =>
-        protocol.ensure(
-          { ...member, team: placeOf(member) },
-          members.filter((other) => other !== member).map((other) => (other.role === "" ? other.name : `${other.name} (${other.role})`)),
-        ),
+        protocol.ensure({ ...member, team: placeOf(member) }),
       ),
     );
     return members.filter((_, index) => outcomes[index].ok);
@@ -808,8 +807,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
     }
     const member = openMembers().find((one) => one.id === entry.id);
     if (member === undefined) throw new Error(`member ${entry.id}: its session is not open`);
-    const peers = openMembers().filter((one) => one.id !== member.id).map((one) => (one.role === "" ? one.name : `${one.name} (${one.role})`));
-    const outcome = await protocol.ensure({ ...member, team: placeOf(member) }, peers);
+    const outcome = await protocol.ensure({ ...member, team: placeOf(member) });
     if (!outcome.ok) throw new Error(outcome.reason);
     return { member: entry.id, session: member.session };
   };

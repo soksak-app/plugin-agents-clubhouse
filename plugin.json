@@ -120,13 +120,15 @@
                 "type": "object",
                 "properties": {
                   "member": { "type": "string" },
+                  "name": { "type": "string" },
+                  "role": { "type": "string" },
                   "session": { "type": "string" },
                   "sent": { "type": "integer" },
                   "delivered": { "type": "integer" },
                   "length": { "type": "integer" },
                   "unreceived": { "type": "integer" }
                 },
-                "required": ["member", "session", "sent", "delivered", "length", "unreceived"]
+                "required": ["member", "name", "role", "session", "sent", "delivered", "length", "unreceived"]
               }
             },
             "team": {
