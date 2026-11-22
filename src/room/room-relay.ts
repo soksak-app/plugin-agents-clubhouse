@@ -40,6 +40,8 @@ export interface MemberAnswer {
   text: string;
   // The state that the answer declares (docs/spec/room.md#settling).
   status: AnswerStatus;
+  // The milliseconds from the submit of the turn line to the arrival of the answer (docs/spec/room.md#timing).
+  elapsedMs: number;
 }
 
 export interface RelayPorts extends SessionCommandPort {
@@ -107,13 +109,20 @@ async function relayToMember(
   const controller = new AbortController();
   // A value of core.sessions that the relay cannot read ends the turn with this error, so the relay never waits on a bad value.
   let failure: unknown = null;
+  let submittedAt = 0;
   // The line is built at the head of the submit queue of the session, from its sent number (docs/spec/room.md#work-reports).
   const port: SessionRelayPort = {
     submit: async (end) => {
       await ports.lines.submit(member.session, () => {
         const lines = record.pending(member.session, member.id);
         if (lines === null) throw new Error("the room record holds no line that the member has not received");
-        return { text: `${lines.text} | ${end}`, accepted: () => record.markSent(member.session, lines.count) };
+        return {
+          text: `${lines.text} | ${end}`,
+          accepted: () => {
+            submittedAt = record.now();
+            record.markSent(member.session, lines.count);
+          },
+        };
       });
       accepted();
     },
@@ -140,7 +149,7 @@ async function relayToMember(
   });
   try {
     const reply = await Promise.race([turn.answer, ended]);
-    return { id: member.id, text: reply.text, status: reply.status as AnswerStatus };
+    return { id: member.id, text: reply.text, status: reply.status as AnswerStatus, elapsedMs: record.now() - submittedAt };
   } catch (error) {
     throw new Error(`member ${member.id}: ${messageOf(failure ?? error)}`);
   } finally {
@@ -237,7 +246,7 @@ async function runTurns(
     const turn = queue.shift()!;
     if (turn.byAnswer) started += 1;
     const answer = await relayToMember(ports, turn.member, record, bound.accepted, rolesLine(turn.member, members));
-    record.append(turn.member.id, answer.text);
+    record.append(turn.member.id, answer.text, answer.elapsedMs);
     answers.push(answer);
     if (closing) queueMentions(queue, answer.text, turn.member, members);
   }
@@ -274,7 +283,7 @@ export async function relayInMode(
     if (targets.length === 0) return [...first, ...(await runTurns(ports, [], members, record, bound, first))];
     const results = await Promise.allSettled(targets.map((member) => relayToMember(ports, member, record, bound.accepted, rolesLine(member, members))));
     // The answers that arrived are record lines in member order, also when another turn failed.
-    for (const [index, result] of results.entries()) if (result.status === "fulfilled") record.append(targets[index].id, result.value.text);
+    for (const [index, result] of results.entries()) if (result.status === "fulfilled") record.append(targets[index].id, result.value.text, result.value.elapsedMs);
     const failed = results.find((result): result is PromiseRejectedResult => result.status === "rejected");
     if (failed) throw failed.reason;
     const answers = [...first, ...results.map((result) => (result as PromiseFulfilledResult<MemberAnswer>).value)];

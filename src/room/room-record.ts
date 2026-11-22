@@ -7,6 +7,10 @@ export interface RecordLine {
   // `owner` or the identifier of a member.
   speaker: string;
   text: string;
+  // The time at which the room took the line, in epoch milliseconds; null for a line kept from before the room recorded times.
+  at: number | null;
+  // For an answer of a member, the milliseconds from the submit of its turn line to the arrival of the answer; null otherwise.
+  elapsedMs: number | null;
 }
 
 export interface PendingLines {
@@ -27,7 +31,10 @@ export interface RoomRecord {
   sent(): Record<string, number>;
   // Raises the sent number of the session to count after core accepted a submit of the lines up to count.
   markSent(session: string, count: number): void;
-  append(speaker: string, text: string): void;
+  // Appends a line at the time of the clock of the record; `elapsedMs` is the time of the turn of an answer.
+  append(speaker: string, text: string, elapsedMs?: number | null): void;
+  // The clock of the record in epoch milliseconds.
+  now(): number;
   // The lines from the sent number of `session` of the member `self` to the end, without its own lines; null when there is none.
   pending(session: string, self: string): PendingLines | null;
   // Raises the delivered number of the session to its sent number, at least count, at the answer or the acknowledgement of a token;
@@ -47,6 +54,7 @@ export function createRoomRecord(
   changed: () => void,
   // The sent numbers of the tab state; a record without them starts at the delivered numbers.
   sent: Record<string, number> = delivered,
+  now: () => number = () => Date.now(),
 ): RoomRecord {
   const counts = new Map(Object.entries(delivered));
   const sentCounts = new Map(Object.entries(sent));
@@ -68,8 +76,9 @@ export function createRoomRecord(
       sentCounts.set(session, count);
       changed();
     },
-    append(speaker, text) {
-      lines.push({ speaker, text });
+    now,
+    append(speaker, text, elapsedMs = null) {
+      lines.push({ speaker, text, at: now(), elapsedMs });
       changed();
     },
     pending(session, self) {

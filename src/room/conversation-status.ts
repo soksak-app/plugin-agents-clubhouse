@@ -10,6 +10,10 @@ export interface ConversationEntry {
   // `owner` or the identifier of a member.
   speaker: string;
   text: string;
+  // The time at which the room took the entry in epoch milliseconds, null for an entry without a time (docs/spec/room.md#timing).
+  at: number | null;
+  // The time of the turn of an answer in milliseconds, null otherwise.
+  elapsedMs: number | null;
 }
 
 // An entry of the status: the record entry and the sections of its answer (docs/spec/room.md#sections), [] for an entry without them.
@@ -76,7 +80,7 @@ export function createConversationStatus(
     const value = sessions();
     if (!Array.isArray(value)) throw new Error("core.sessions is not a list");
     return {
-      entries: lines.map((line) => ({ speaker: line.speaker, text: line.text, sections: sections(line) })),
+      entries: lines.map((line) => ({ speaker: line.speaker, text: line.text, at: line.at, elapsedMs: line.elapsedMs, sections: sections(line) })),
       waiting: [...waits].map((wait) => ({ ...wait, program: programOf(value as { session?: unknown }[], wait.session) })),
       delivery: delivery().map((entry) => ({ ...entry })),
     };

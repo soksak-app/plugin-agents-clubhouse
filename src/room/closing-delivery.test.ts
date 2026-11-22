@@ -258,7 +258,7 @@ describe.each(MODES)("the delivery invariants in %s", (mode) => {
     const r = room(core);
     await r.send(mode, "@Alpha begin", { stopAfter: 1 });
     await quiet(r);
-    expect(r.record.lines.at(-1)).toEqual({ speaker: "clubhouse", text: "the conversation ended: the owner stopped it" });
+    expect(r.record.lines.at(-1)).toMatchObject({ speaker: "clubhouse", text: "the conversation ended: the owner stopped it" });
     invariants(core, r);
   });
 
@@ -369,7 +369,7 @@ describe.each(MODES)("the rounds until settled in %s", (mode) => {
     const alpha = core.received.get("s-a").join(" | ");
     expect(alpha).toContain("[@Gamma] conclusion: the API only");
     expect(r.record.lines.filter((line) => line.speaker === "a").map((line) => line.text)).toEqual(["open question: the scope", "agreed with the conclusion"]);
-    expect(r.record.lines.at(-1)).toEqual({ speaker: "clubhouse", text: "the conversation settled" });
+    expect(r.record.lines.at(-1)).toMatchObject({ speaker: "clubhouse", text: "the conversation settled" });
     invariants(core, r);
   });
 
@@ -383,7 +383,7 @@ describe.each(MODES)("the rounds until settled in %s", (mode) => {
     await r.send(mode === "facil" ? "turn" : mode, "build the feature");
     await quiet(r);
     expect(r.record.lines.filter((line) => line.speaker === "a")).toHaveLength(3);
-    expect(r.record.lines.at(-1)).toEqual({ speaker: "clubhouse", text: "the conversation settled" });
+    expect(r.record.lines.at(-1)).toMatchObject({ speaker: "clubhouse", text: "the conversation settled" });
     invariants(core, r);
   });
 
@@ -392,7 +392,7 @@ describe.each(MODES)("the rounds until settled in %s", (mode) => {
     const r = room(core);
     await r.send(mode === "facil" ? "turn" : mode, "go", { limit: 3 });
     await quiet(r);
-    expect(r.record.lines.at(-1)).toEqual({
+    expect(r.record.lines.at(-1)).toMatchObject({
       speaker: "clubhouse",
       text: "the conversation ended without settling: it reached the limit of 3 member turns; @Alpha continue",
     });

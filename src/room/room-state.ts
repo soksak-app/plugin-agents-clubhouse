@@ -9,7 +9,7 @@ export interface RoomState {
   roster: { id: string; checked: boolean; role: string }[];
   mode: RoomMode;
   // The conversation as the room shows it: the owner or the member identifier, and the text.
-  conversation: { speaker: string; text: string }[];
+  conversation: { speaker: string; text: string; at: number | null; elapsedMs: number | null }[];
   // The member sessions that this room opened; a tab of one of them whose session has ended is a tab of the room to close.
   sessions: string[];
   // The sessions that received the room protocol with the answer command (docs/spec/room.md#room-protocol).
@@ -54,8 +54,12 @@ export function parseRoomState(value: unknown): RoomState | null {
     throw new Error(`room tab state: mode must be facil, turn or simul, got ${JSON.stringify(state.mode)}`);
   }
   const conversation = state.conversation;
-  if (!Array.isArray(conversation) || !conversation.every((entry) => isText(entry?.speaker) && typeof entry?.text === "string")) {
-    throw new Error("room tab state: conversation must be an array of {speaker, text}");
+  const timeOrNull = (value: unknown): boolean => value === null || (typeof value === "number" && Number.isFinite(value) && value >= 0);
+  if (
+    !Array.isArray(conversation) ||
+    !conversation.every((entry) => isText(entry?.speaker) && typeof entry?.text === "string" && timeOrNull(entry?.at) && timeOrNull(entry?.elapsedMs))
+  ) {
+    throw new Error("room tab state: conversation must be an array of {speaker, text, at, elapsedMs}");
   }
   for (const field of ["sessions", "protocolSessions"] as const) {
     const list = state[field];
@@ -100,7 +104,7 @@ export function parseRoomState(value: unknown): RoomState | null {
   return {
     roster: roster.map((entry) => ({ id: entry.id, checked: entry.checked, role: entry.role })),
     mode: state.mode as RoomMode,
-    conversation: conversation.map((entry) => ({ speaker: entry.speaker, text: entry.text })),
+    conversation: conversation.map((entry) => ({ speaker: entry.speaker, text: entry.text, at: entry.at, elapsedMs: entry.elapsedMs })),
     sessions: [...(state.sessions as string[])],
     protocolSessions: [...(state.protocolSessions as string[])],
     delivered: { ...(delivered as Record<string, number>) },

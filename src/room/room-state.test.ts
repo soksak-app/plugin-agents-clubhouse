@@ -7,8 +7,8 @@ const state: RoomState = {
   roster: [{ id: "harness-harness", checked: true, role: "" }, { id: "moai-manager-lead", checked: false, role: "" }],
   mode: "turn",
   conversation: [
-    { speaker: "owner", text: "한 문장씩만" },
-    { speaker: "harness-harness", text: "여러분들, 저는 harness고\n커밋하는 일을 잘해요." },
+    { speaker: "owner", text: "한 문장씩만", at: null, elapsedMs: null },
+    { speaker: "harness-harness", text: "여러분들, 저는 harness고\n커밋하는 일을 잘해요.", at: null, elapsedMs: null },
   ],
   sessions: ["owned-1"],
   protocolSessions: ["owned-1"],
@@ -29,7 +29,7 @@ describe("parseRoomState", () => {
   });
 
   it("refuses to write a state over the 1048576 bytes of surface.unload, with its size", () => {
-    const big = { ...state, conversation: [{ speaker: "owner", text: "x".repeat(1048576) }] };
+    const big = { ...state, conversation: [{ speaker: "owner", text: "x".repeat(1048576), at: null, elapsedMs: null }] };
     expect(() => serializedRoomState(big)).toThrow(/^the state is \d+ bytes, over the limit of 1048576 bytes$/);
     expect(JSON.parse(serializedRoomState(state))).toEqual(state);
   });
@@ -50,7 +50,7 @@ describe("parseRoomState", () => {
   it("refuses a value of another form with the field and the value it found", () => {
     expect(() => parseRoomState({ ...state, mode: "solo" })).toThrow('room tab state: mode must be facil, turn or simul, got "solo"');
     expect(() => parseRoomState({ ...state, roster: [{ id: 1 }] })).toThrow("room tab state: roster must be an array of {id, checked, role}");
-    expect(() => parseRoomState({ ...state, conversation: "x" })).toThrow("room tab state: conversation must be an array of {speaker, text}");
+    expect(() => parseRoomState({ ...state, conversation: "x" })).toThrow("room tab state: conversation must be an array of {speaker, text, at, elapsedMs}");
     expect(() => parseRoomState({ ...state, protocolSessions: [3] })).toThrow(
       "room tab state: protocolSessions must be an array of session identifiers",
     );
@@ -64,5 +64,13 @@ describe("parseRoomState", () => {
   it("refuses the earlier field taught, whose sessions received a protocol line without the answer command", () => {
     const { protocolSessions: _current, ...rest } = state;
     expect(() => parseRoomState({ ...rest, taught: ["owned-1"] })).toThrow("room tab state: unknown field taught");
+  });
+
+  it("refuses a conversation entry without its times, and accepts null times (docs/spec/room.md#timing)", () => {
+    expect(() => parseRoomState({ ...state, conversation: [{ speaker: "owner", text: "hi" }] })).toThrow(
+      "room tab state: conversation must be an array of {speaker, text, at, elapsedMs}",
+    );
+    const timed = [{ speaker: "owner", text: "hi", at: null, elapsedMs: null }, { speaker: "a", text: "yes", at: 1700000000000, elapsedMs: 12400 }];
+    expect(parseRoomState({ ...state, conversation: timed })?.conversation).toEqual(timed);
   });
 });

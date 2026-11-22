@@ -52,7 +52,7 @@ describe("work reports", () => {
     const turn = r.answers.open("s-a", "a", "answer", 1);
     expect(r.work.reportCommand({ turn: turn.turn, text: "I change src/api.ts" })).toEqual({ turn: turn.turn });
     await flush();
-    expect(r.record.lines.at(-1)).toEqual({ speaker: "a", text: "(report) I change src/api.ts" });
+    expect(r.record.lines.at(-1)).toMatchObject({ speaker: "a", text: "(report) I change src/api.ts" });
     expect(r.submitted).toEqual([{ session: "s-b", text: `${INJECT_TEXT} | [@Alpha] (report) I change src/api.ts` }]);
     expect(r.record.sent()["s-b"]).toBe(2);
     expect(r.record.delivered()["s-b"] ?? 0).toBe(0);
@@ -97,7 +97,7 @@ describe("path claims", () => {
     r.work.claim({ turn: a.turn, paths: ["web/app.ts"] });
     r.answers.deliver({ turn: a.turn, text: "done", status: "settled" });
     expect(r.work.claims()).toEqual([]);
-    expect(r.record.lines.at(-1)).toEqual({ speaker: "a", text: "(release) web/app.ts" });
+    expect(r.record.lines.at(-1)).toMatchObject({ speaker: "a", text: "(release) web/app.ts" });
   });
 });
 

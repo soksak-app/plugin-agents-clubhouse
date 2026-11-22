@@ -19,6 +19,7 @@ import { createRoomReport } from "./room/report";
 import { createArrangementStatus } from "./room/arrangement";
 import { HEADER_CSS, createRoomHeader } from "./room/header";
 import { memberLaunch } from "./room/isolation";
+import { conversationView, elapsedLabel } from "./room/bubbles";
 import { readAgentDefinitions, toMemberDefinition, type AgentDataGet, type AgentDefinition } from "./room/definitions";
 import { createMemberSessionStore } from "./room/session-store";
 import { serialRunner, summonAndArrange, type TriggerDeps } from "./room/trigger";
@@ -50,6 +51,9 @@ const EXPOSE = "soksak-plugin-agents-clubhouse";
 // The plugin whose stored definitions and accounts the room reads (agents docs/spec/definitions.md, dependencies in plugin.json).
 const AGENTS_PLUGIN = "agents";
 
+// The number of member colors; a member takes the color of its roster place modulo this number.
+const MEMBER_COLORS = 6;
+
 const CSS = `
 .st{position:absolute;inset:0;display:flex;flex-direction:column;background:var(--bg,#1e1e1e);color:var(--fg,#ddd);font:13px system-ui,-apple-system,sans-serif;overflow:hidden}
 .st-tab{flex:0 0 auto}
@@ -59,7 +63,6 @@ const CSS = `
 .st-tab .chk{width:13px;height:13px;border-radius:4px;border:1.5px solid currentColor;display:inline-flex;align-items:center;justify-content:center;font-size:10px;line-height:1}
 .st-tab .nm{font-weight:600}
 .st-role{width:72px;font:inherit;font-size:11px;background:transparent;color:inherit;border:0;border-bottom:1px dashed rgba(127,127,127,.4);padding:0 2px}
-.st-section{padding-left:12px;white-space:pre-wrap}
 .st-roster-rail{display:flex;flex-direction:column;height:100%;min-height:0;overflow-y:auto;padding:8px}
 .st-roster-rail .st-tabs{flex-direction:column;align-items:stretch;flex:0 0 auto;overflow:visible}
 .st-roster-rail .st-tab{justify-content:flex-start}
@@ -73,7 +76,21 @@ const CSS = `
 .st-row.user{align-self:flex-end;align-items:flex-end}
 .st-row.assistant{align-self:flex-start}
 .st-bubble{padding:8px 11px;border-radius:10px;white-space:pre-wrap;word-break:break-word;line-height:1.45}
-.st-row.user .st-bubble{background:#2d6cdf;color:#fff}
+.st-row.user .st-bubble{background:var(--acc,#2d6cdf);color:#fff}
+.st-row[data-color="0"] .st-bubble{background:color-mix(in srgb,var(--card,#2a2a2a) 80%,#4f9d69)}
+.st-row[data-color="1"] .st-bubble{background:color-mix(in srgb,var(--card,#2a2a2a) 80%,#c7853a)}
+.st-row[data-color="2"] .st-bubble{background:color-mix(in srgb,var(--card,#2a2a2a) 80%,#8a63c9)}
+.st-row[data-color="3"] .st-bubble{background:color-mix(in srgb,var(--card,#2a2a2a) 80%,#3a9fb0)}
+.st-row[data-color="4"] .st-bubble{background:color-mix(in srgb,var(--card,#2a2a2a) 80%,#c15b78)}
+.st-row[data-color="5"] .st-bubble{background:color-mix(in srgb,var(--card,#2a2a2a) 80%,#8f9b3c)}
+.st-who-role{opacity:.8}
+.st-section+.st-section{margin-top:6px;padding-top:6px;border-top:1px solid rgba(127,127,127,.25)}
+.st-section-to{font-size:10.5px;font-weight:600;color:var(--fg3,#888)}
+.st-section-text{white-space:pre-wrap}
+.st-note{font-size:11px;color:var(--fg3,#888);padding:0 6px}
+.st-system{align-self:center;font-size:11px;color:var(--fg3,#888);text-align:center;max-width:88%}
+.st-round{display:flex;align-items:center;gap:8px;font-size:10.5px;color:var(--fg3,#888)}
+.st-round::before,.st-round::after{content:"";flex:1;border-top:1px solid rgba(127,127,127,.25)}
 .st-row.assistant .st-bubble{background:rgba(127,127,127,.14)}
 .st-who{display:flex;align-items:center;gap:5px;flex-wrap:wrap;font-size:10.5px;color:var(--fg3,#888);padding:0 4px}
 .st-who-name{font-weight:600}
@@ -503,24 +520,62 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
       report("room conversation", String((error as Error)?.message ?? error));
       return;
     }
-    msgs.replaceChildren(
-      ...value.entries.map((entry) => {
-        const who = entry.speaker === "owner" ? (lang === "ko" ? "나" : "You") : memberName(entry.speaker);
-        if (entry.sections.length === 0) return elText("div", `${who}: ${entry.text}`, "st-msg");
-        // An answer with sections shows one block per addressee under its speaker, so a reader sees who answered whom.
-        const block = el("div", "st-msg st-sections");
-        block.append(elText("div", who, "st-who-name"));
-        for (const section of entry.sections) {
-          const to = section.to === "all" ? "@all" : section.to === "owner" ? "@owner" : `@${memberName(section.to)}`;
-          block.append(elText("div", `→ ${to}: ${section.text}`, "st-section"));
-        }
-        return block;
-      }),
-      ...value.waiting.map((wait) =>
-        elText("div", tp("waitingFor", lang, { name: memberName(wait.member), step: wait.step, program: String(wait.program) }), "st-pending st-waiting"),
-      ),
-    );
+    // Each entry is a bubble, a room line or a round divider (docs/spec/room.md#conversation-view).
+    const rows = conversationView(value.entries, roster.map((entry) => entry.id)).map((item) => {
+      if (item.kind === "divider") return elText("div", tp("round", lang, { round: String(item.round) }), "st-round");
+      if (item.kind === "system") return elText("div", item.text, "st-system");
+      const owner = item.side === "right";
+      const row = el("div", `st-row ${owner ? "user" : "assistant"}`);
+      if (item.color !== null) row.dataset.color = String(item.color % MEMBER_COLORS);
+      const who = el("div", "st-who");
+      const role = roster.find((entry) => entry.id === item.speaker)?.role ?? "";
+      who.append(elText("span", owner ? (lang === "ko" ? "나" : "You") : memberName(item.speaker), "st-who-name"));
+      if (role !== "") who.append(elText("span", role, "st-who-role"));
+      if (item.elapsedMs !== null) who.append(elText("span", elapsedLabel(item.elapsedMs, lang), "st-who-time"));
+      const bubble = el("div", "st-bubble");
+      if (item.sections.length === 0) bubble.textContent = item.text;
+      // An answer with sections shows one block per addressee, so a reader sees who answered whom.
+      for (const section of item.sections) {
+        const block = el("div", "st-section");
+        const to = section.to === "all" ? "@all" : section.to === "owner" ? "@owner" : `@${memberName(section.to)}`;
+        block.append(elText("div", to, "st-section-to"), elText("div", section.text, "st-section-text"));
+        bubble.append(block);
+      }
+      row.append(who, bubble);
+      for (const note of item.notes) row.append(elText("div", `${note.kind} · ${note.text}`, `st-note st-note-${note.kind}`));
+      return row;
+    });
+    // A waiting member shows the time since the room began to wait for it, which the display frames of the window advance.
+    const waitRows = value.waiting.map((wait) => {
+      const key = `${wait.member}/${wait.session}/${wait.step}`;
+      if (!waitStarts.has(key)) waitStarts.set(key, Date.now());
+      const line = elText("div", "", "st-pending st-waiting");
+      line.dataset.key = key;
+      line.dataset.text = tp("waitingFor", lang, { name: memberName(wait.member), step: wait.step, program: String(wait.program) });
+      return line;
+    });
+    const keys = new Set(waitRows.map((line) => line.dataset.key!));
+    for (const key of [...waitStarts.keys()]) if (!keys.has(key)) waitStarts.delete(key);
+    msgs.replaceChildren(...rows, ...waitRows);
+    tickWaits();
     msgs.scrollTop = msgs.scrollHeight;
+  };
+  // The live counter of the waiting members runs on the display frames of the window through requestAnimationFrame, so it follows the
+  // refresh rate of the display that shows the window and stops when no member is waited for (AGENTS.md, refresh rate).
+  const waitStarts = new Map<string, number>();
+  let frame = 0;
+  const tickWaits = (): void => {
+    const lines = [...msgs.querySelectorAll<HTMLElement>(".st-waiting")];
+    for (const line of lines) {
+      const started = waitStarts.get(line.dataset.key!) ?? Date.now();
+      line.textContent = `${line.dataset.text} · ${elapsedLabel(Date.now() - started, lang)}`;
+    }
+    if (lines.length > 0 && frame === 0) {
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        tickWaits();
+      });
+    }
   };
   // Each member receives the record lines that it has not received at the start of its turn (docs/spec/room.md#room-record).
   const speakerName = (speaker: string): string => (speaker === "owner" ? "owner" : memberName(speaker));

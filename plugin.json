@@ -79,6 +79,8 @@
                 "properties": {
                   "speaker": { "type": "string" },
                   "text": { "type": "string" },
+                  "at": { "type": ["number", "null"] },
+                  "elapsedMs": { "type": ["number", "null"] },
                   "sections": {
                     "type": "array",
                     "items": {
@@ -88,7 +90,7 @@
                     }
                   }
                 },
-                "required": ["speaker", "text", "sections"]
+                "required": ["speaker", "text", "at", "elapsedMs", "sections"]
               }
             },
             "waiting": {

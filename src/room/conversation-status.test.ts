@@ -3,7 +3,7 @@
 import { describe, expect, it } from "vitest";
 import manifest from "../../plugin.json";
 import { createConversationStatus } from "./conversation-status";
-import { createRoomRecord } from "./room-record";
+import { createRoomRecord, type RecordLine } from "./room-record";
 
 const NAME = "soksak-plugin-agents-clubhouse.conversation";
 
@@ -13,7 +13,7 @@ describe("conversation status", () => {
     expect(status?.schema).toMatchObject({
       type: "object",
       properties: {
-        entries: { type: "array", items: { required: ["speaker", "text", "sections"] } },
+        entries: { type: "array", items: { required: ["speaker", "text", "at", "elapsedMs", "sections"] } },
         waiting: { type: "array", items: { required: ["member", "session", "step", "program"], properties: { step: { enum: ["protocol", "answer", "record"] } } } },
         delivery: { type: "array", items: { required: ["member", "session", "sent", "delivered", "length", "pending"] } },
       },
@@ -21,23 +21,23 @@ describe("conversation status", () => {
     });
   });
 
-  it("carries the record entries and publishes each change, also a withdrawn line", () => {
-    const lines: { speaker: string; text: string }[] = [];
+  it("carries the record entries with their times (docs/spec/room.md#timing) and publishes each change, also a withdrawn line", () => {
+    const lines: RecordLine[] = [];
     const status = createConversationStatus(lines, () => [], () => []);
-    const record = createRoomRecord(lines, {}, (speaker) => speaker, () => status.changed());
+    const record = createRoomRecord(lines, {}, (speaker) => speaker, () => status.changed(), {}, () => 1000);
     const values: unknown[] = [];
     const stop = status.subscribe((value) => values.push(value));
     expect(status.read()).toEqual({ entries: [], waiting: [], delivery: [] });
     record.append("owner", "hello");
     record.append("reviewer", "hi");
-    expect(status.read()).toEqual({ entries: [{ speaker: "owner", text: "hello", sections: [] }, { speaker: "reviewer", text: "hi", sections: [] }], waiting: [], delivery: [] });
+    expect(status.read()).toEqual({ entries: [{ speaker: "owner", text: "hello", at: 1000, elapsedMs: null, sections: [] }, { speaker: "reviewer", text: "hi", at: 1000, elapsedMs: null, sections: [] }], waiting: [], delivery: [] });
     record.append("owner", "again");
     record.withdrawLast(2);
     expect(values).toEqual([
-      { entries: [{ speaker: "owner", text: "hello", sections: [] }], waiting: [], delivery: [] },
-      { entries: [{ speaker: "owner", text: "hello", sections: [] }, { speaker: "reviewer", text: "hi", sections: [] }], waiting: [], delivery: [] },
-      { entries: [{ speaker: "owner", text: "hello", sections: [] }, { speaker: "reviewer", text: "hi", sections: [] }, { speaker: "owner", text: "again", sections: [] }], waiting: [], delivery: [] },
-      { entries: [{ speaker: "owner", text: "hello", sections: [] }, { speaker: "reviewer", text: "hi", sections: [] }], waiting: [], delivery: [] },
+      { entries: [{ speaker: "owner", text: "hello", at: 1000, elapsedMs: null, sections: [] }], waiting: [], delivery: [] },
+      { entries: [{ speaker: "owner", text: "hello", at: 1000, elapsedMs: null, sections: [] }, { speaker: "reviewer", text: "hi", at: 1000, elapsedMs: null, sections: [] }], waiting: [], delivery: [] },
+      { entries: [{ speaker: "owner", text: "hello", at: 1000, elapsedMs: null, sections: [] }, { speaker: "reviewer", text: "hi", at: 1000, elapsedMs: null, sections: [] }, { speaker: "owner", text: "again", at: 1000, elapsedMs: null, sections: [] }], waiting: [], delivery: [] },
+      { entries: [{ speaker: "owner", text: "hello", at: 1000, elapsedMs: null, sections: [] }, { speaker: "reviewer", text: "hi", at: 1000, elapsedMs: null, sections: [] }], waiting: [], delivery: [] },
     ]);
     stop();
     record.append("owner", "after");
@@ -51,7 +51,7 @@ describe("conversation status", () => {
   });
 
   it("gives copies, so a reader cannot change the record", () => {
-    const lines = [{ speaker: "owner", text: "hello" }];
+    const lines = [{ speaker: "owner", text: "hello", at: null, elapsedMs: null }];
     const status = createConversationStatus(lines, () => [], () => []);
     const value = status.read() as { entries: { text: string }[] };
     value.entries[0].text = "changed";

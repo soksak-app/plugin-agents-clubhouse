@@ -118,7 +118,7 @@ describe("relayInMode one member at a time", () => {
     const reply = Array.from({ length: 451 }, (_, index) => `row ${index}`).join("\n");
     const core = fakeCore([IDLE("s-1")], { replies: { "s-1": reply } });
     const answers = await relayInMode(core.ports, "turn", [MEMBERS[0]], "hello", roomRecord("hello"), OPEN);
-    expect(answers).toEqual([{ id: "reviewer", text: reply, status: "settled" }]);
+    expect(answers).toMatchObject([{ id: "reviewer", text: reply, status: "settled" }]);
   });
 
   it("fails the turn of a member whose program reports idle without an answer, and the members after it receive nothing", async () => {
@@ -284,7 +284,7 @@ describe("the room record across turns (docs/spec/room.md#room-record)", () => {
     for (let attempt = 0; attempt < 3; attempt += 1) {
       await expect(send(core, "turn", [MEMBERS[0]], record, "same message")).rejects.toThrow("member reviewer: core.session.submit refused");
     }
-    expect(record.lines).toEqual([]);
+    expect(record.lines).toMatchObject([]);
     expect(record.delivered()).toEqual({});
   });
 
@@ -292,7 +292,7 @@ describe("the room record across turns (docs/spec/room.md#room-record)", () => {
     const core = fakeCore([IDLE("s-1")], { replies: { "s-1": null } });
     const record = roomRecord();
     await expect(send(core, "turn", [MEMBERS[0]], record, "hello")).rejects.toThrow("member reviewer: the member ended its turn");
-    expect(record.lines).toEqual([
+    expect(record.lines).toMatchObject([
       { speaker: "owner", text: "hello" },
       { speaker: "clubhouse", text: "the relay failed: member reviewer: the member ended its turn without an answer: it ran no soksak-plugin-agents-clubhouse.answer" },
     ]);
@@ -314,7 +314,7 @@ describe("the conversation of the members (docs/spec/room.md#conversation)", () 
     });
     const record = roomRecord();
     const answers = await send(core, "turn", THREE, record, "@claude start");
-    expect(answers).toEqual([
+    expect(answers).toMatchObject([
       { id: "reviewer", text: "@Codex and @tester, your view?", status: "settled" },
       { id: "writer", text: "@Claude I disagree", status: "settled" },
       { id: "tester", text: "fine", status: "settled" },
@@ -353,7 +353,7 @@ describe("the conversation of the members (docs/spec/room.md#conversation)", () 
     );
     // Claude and then Codex take the turns of the message; the mentions of the answers start the turns that the limit counts.
     expect(answers.map((answer) => answer.text)).toEqual(["@codex 1", "@claude 2", "@codex 3", "@claude 4"]);
-    expect(record.lines.at(-1)).toEqual({ speaker: "clubhouse", text: "the conversation ended: it reached the limit of 2 member turns" });
+    expect(record.lines.at(-1)).toMatchObject({ speaker: "clubhouse", text: "the conversation ended: it reached the limit of 2 member turns" });
     expect(core.status.read().waiting).toEqual([]);
   });
 
@@ -375,7 +375,7 @@ describe("the conversation of the members (docs/spec/room.md#conversation)", () 
     const answers = await relay;
     expect(answers.map((answer) => answer.id)).toEqual(["reviewer"]);
     expect(core.submitted).toHaveLength(1);
-    expect(record.lines.at(-1)).toEqual({ speaker: "clubhouse", text: "the conversation ended: the owner stopped it" });
+    expect(record.lines.at(-1)).toMatchObject({ speaker: "clubhouse", text: "the conversation ended: the owner stopped it" });
     expect(core.status.read().waiting).toEqual([]);
   });
 
@@ -428,5 +428,19 @@ describe("the turn rule (docs/spec/room.md#room-protocol)", () => {
     await send(core, "turn", [MEMBERS[0]], roomRecord(), "hi");
     expect(core.submitted[0].text).toContain(`[@clubhouse] ${TURN_RULE} | [@clubhouse] turn t-1`);
     expect(TURN_RULE).toBe("answer through the room only: reply to the speakers, put a message to the owner in @owner:, write nothing in your terminal");
+  });
+});
+
+describe("the times of the record (docs/spec/room.md#timing)", () => {
+  it("records the time of each line and the time from the submit of the turn line to the answer", async () => {
+    let clock = 0;
+    const core = fakeCore([IDLE("s-1")]);
+    const record = createRoomRecord([], {}, (speaker) => (speaker === "reviewer" ? "Claude" : speaker), () => {}, {}, () => (clock += 100));
+    record.append("owner", "hi");
+    await relayInMode(core.ports, "turn", [MEMBERS[0]], "hi", record, OPEN);
+    const answer = record.lines.find((line) => line.speaker === "reviewer")!;
+    expect(record.lines[0].at).toBe(100);
+    expect(answer.elapsedMs).toBe(100);
+    expect(answer.at).toBeGreaterThan(record.lines[0].at!);
   });
 });

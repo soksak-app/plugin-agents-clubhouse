@@ -2,6 +2,7 @@
 
 ## 미출시
 
+- C71: 대화 view는 이름, role, roster 색이 있는 말풍선, system 줄인 방의 줄, note인 report, claim, release, block인 section, round마다 구분선을 그린다. 각 항목은 `at`을, 답은 `elapsedMs`를 가지며 말풍선이 그것을 보여 주고, 기다리는 member는 display frame마다 counter를 보여 준다(`docs/spec/room.md#conversation-view`, `docs/spec/room.md#timing`).
 - C73: 방은 각 member CLI를 isolation table의 인자 `claude: ["--setting-sources", "project,local"]`로 시작하므로 member는 사람의 개인 instruction을 읽지 않는다. Transport status는 격리되지 않은 member를 `notIsolated`에 밝히고, 격리된 member는 shell 형식만 받는다(`docs/spec/room.md#isolation`).
 - C72: Protocol 줄은 짧은 명령문이며, 각 turn 줄과 함께 모든 말을 방을 통해 하고 owner에게 할 말은 `@owner:`에 넣고 terminal에는 다른 것을 쓰지 말라고 말한다. 각 command의 shell 형식이 먼저 온다(`docs/spec/room.md#room-protocol`).
 - C70: 각 roster member는 `member.role`로 정하는 role을 가지며 protocol 줄과 각 turn 줄이 이를 밝힌다. Mention된 member가 먼저 turn을 받고 다른 member가 roster 순서로 뒤따르므로 mention은 받는 member를 줄이지 않는다. Protocol은 작업 규칙을 밝히고, `conversationTurns` 기본값은 48이다(`docs/spec/room.md#roles`).

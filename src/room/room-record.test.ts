@@ -21,7 +21,7 @@ describe("createRoomRecord", () => {
   });
 
   it("starts from the stored delivered numbers", () => {
-    const record = createRoomRecord([{ speaker: "owner", text: "one" }, { speaker: "a", text: "two" }], { "s-b": 1 }, nameOf, () => {});
+    const record = createRoomRecord([{ speaker: "owner", text: "one", at: null, elapsedMs: null }, { speaker: "a", text: "two", at: null, elapsedMs: null }], { "s-b": 1 }, nameOf, () => {});
     expect(record.pending("s-b", "b")?.text).toBe("[@Alpha] two");
   });
 
@@ -31,7 +31,7 @@ describe("createRoomRecord", () => {
     record.append("owner", "one");
     expect(record.withdrawLast(1)).toBe(false);
     expect(record.withdrawLast(0)).toBe(true);
-    expect(record.lines).toEqual([]);
+    expect(record.lines).toMatchObject([]);
     expect(changes).toBe(2);
     record.append("owner", "two");
     record.markDelivered("s-a", 1);
@@ -39,7 +39,7 @@ describe("createRoomRecord", () => {
   });
 
   it("raises a delivered number and refuses a number that falls or exceeds the record", () => {
-    const record = createRoomRecord([{ speaker: "owner", text: "one" }, { speaker: "a", text: "two" }], {}, nameOf, () => {});
+    const record = createRoomRecord([{ speaker: "owner", text: "one", at: null, elapsedMs: null }, { speaker: "a", text: "two", at: null, elapsedMs: null }], {}, nameOf, () => {});
     record.markDelivered("s-a", 2);
     record.markDelivered("s-a", 1);
     expect(() => record.markDelivered("s-a", 3)).toThrow("delivered s-a must be an integer from 0 to 2, got 3");
@@ -54,7 +54,7 @@ describe("settledRelay", () => {
     await expect(settledRelay(record, async () => { throw new Error("no member has the room protocol"); })).rejects.toThrow(
       "no member has the room protocol",
     );
-    expect(record.lines).toEqual([]);
+    expect(record.lines).toMatchObject([]);
   });
 
   it("keeps the owner line of a relay that fails after an accepted submit and appends the failure line of the room", async () => {
@@ -66,7 +66,7 @@ describe("settledRelay", () => {
         throw new Error("member b: failed");
       }),
     ).rejects.toThrow("member b: failed");
-    expect(record.lines).toEqual([
+    expect(record.lines).toMatchObject([
       { speaker: "owner", text: "hi" },
       { speaker: "clubhouse", text: "the relay failed: member b: failed" },
     ]);
