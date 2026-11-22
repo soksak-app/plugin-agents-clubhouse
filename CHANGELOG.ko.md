@@ -13,4 +13,4 @@
 - C12: room은 각 실패를 window 오류 표시(`tab.error`)로 보여 주며, 거부된 표시는 `runtime.error`로 기록한다.
 - C4: room은 방 card와 member card의 배치를 `core.layout.plan`으로 계획하고, feasible한 계획은 `core.layout.apply`로 짓는다. 아니면 member의 owned session을 tab으로 열고 계획의 reason을 선언된 arrangement status에 남긴다. 소환 뒤의 호출 지점은 아직 연결되지 않았다(C4는 열려 있다).
 - 경계: 방 테스트는 member를 실행하는 plugin을 실제 plugin id 대신 각 테스트가 선언한 fixture id(`fixture-terminal`)로 쓴다. 방 코드는 plugin id를 갖지 않는다. member의 plugin은 호출자가 넘긴다.
-- C5: `src/room/session-channel.ts`가 방의 입력을 `core.session.input {session, text}`로 보내고, owned session을 `core.session.read {session}`로 읽는다. 둘 다 core F1062-7의 owner 커맨드다(`src/room/session-channel.test.ts`). owned session의 차례 끝에는 출처가 없고 읽기 응답 형식도 선언되지 않았으므로, C5은 F1062-7 병합을 기다리며 열려 있다.
+- C5: 방은 message를 member의 owned session에 `core.session.submit`으로 보내고, `core.session.read`로 화면을 읽으며(형식 검사), program 상태는 `core.sessions`에서 읽는다. 중계(`src/room/relay.ts`)는 program이 idle일 때만 보내고, working을 거쳐 다시 idle이 되면 차례를 끝낸다. page 연결은 C3-1과 core F1062-7 release를 기다린다(C5은 열려 있다).
