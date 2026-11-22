@@ -2,6 +2,7 @@
 
 ## 미출시
 
+- C61: 버전은 0.0.14이며 C39를 출시한다.
 - C39: Arrangement의 각 member tab entry는 `{plugin, params: {session, title}}`이며, 방이 member에 보이는 이름을 terminal plugin 0.0.53의 tab title로 준다. Control character 없는 1~256자 밖의 이름은 layout command 전에 거부된다(`docs/spec/room.md#arrangement`).
 - C60: 버전은 0.0.13이며 C52와 C59를 출시한다.
 - C59: Room view와 conversation status는 방이 turn을 기다리는 각 member를 단계 `protocol` 또는 `answer`와 `core.sessions`에서 그 session의 program state와 함께 밝힌다. 그래서 folder-trust prompt처럼 자기 program의 질문에서 멈춘 member는 어느 tab에 사람이 필요한지 보여 준다(`docs/spec/room.md#conversation-status`).
