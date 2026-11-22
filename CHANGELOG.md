@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- C48: The version is 0.0.8, which releases C46.
 - C46: The screen fixtures of the answer tests hold neutral words of the same width in place of a personal form of address, and two checklist items state the window verification without a person.
 - C45: The version is 0.0.7, which releases C41 to C44.
 - C44: The room tab keeps its roster order and checks, mode, conversation, opened sessions and protocol sessions in its tab state (`surface.unload` format 1), reattaches at start to the sessions of `core.sessions` that it owns, sends no second protocol line, and closes the tabs of its ended member sessions after the arrangement (`docs/spec/room.md#restart`). A relay reports `tab.keep busy`.

@@ -2,6 +2,7 @@
 
 ## 미출시
 
+- C48: 버전은 0.0.8이며 C46을 출시한다.
 - C46: 답 test의 화면 fixture는 개인 호칭 대신 같은 너비의 중립 단어를 담고, checklist item 두 개는 사람 없이 window 검증을 밝힌다.
 - C45: 버전은 0.0.7이며 C41부터 C44까지를 출시한다.
 - C44: 방 tab은 roster 순서와 check, mode, 대화, 연 session, protocol을 받은 session을 tab state(`surface.unload` format 1)에 보관하고, 시작할 때 자기가 소유한 `core.sessions`의 session에 다시 붙으며, protocol 줄을 다시 보내지 않고, arrangement 뒤 끝난 member session의 tab을 닫는다(`docs/spec/room.md#restart`). Relay는 `tab.keep busy`를 보고한다.
