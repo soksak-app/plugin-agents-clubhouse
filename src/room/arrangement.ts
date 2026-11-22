@@ -7,9 +7,11 @@
 export const ROOM_PLUGIN = "soksak-plugin-agents-clubhouse";
 const GROUP_NAME = "Room";
 
+// A member is the owned session of C3. Its card shows the session through its params (core docs/spec/plugins.md#owned-sessions),
+// so the card attaches to the running session and starts no process.
 export interface Member {
   plugin: string;
-  params: Record<string, unknown>;
+  session: string;
 }
 
 export type ArrangementState = { state: "idle" } | { state: "group" } | { state: "tabs"; reason: string } | { state: "error"; reason: string };
@@ -28,7 +30,8 @@ export interface ArrangementPort {
 // A group whose tree is a row of the room card and a column of the member cards. A single member takes the row beside the room card.
 export function arrangementTree(members: Member[]): Record<string, unknown> {
   if (members.length === 0) throw new Error("arrangement needs at least one member");
-  const memberCards = members.map((m) => ({ tabs: [{ plugin: m.plugin, params: m.params }] }));
+  if (members.some((m) => m.session === "")) throw new Error("arrangement member needs a session");
+  const memberCards = members.map((m) => ({ tabs: [{ plugin: m.plugin, params: { session: m.session } }] }));
   const memberPart = memberCards.length === 1 ? memberCards[0] : { direction: "column", children: memberCards };
   return {
     group: { name: GROUP_NAME },
@@ -54,7 +57,7 @@ export async function arrangeMembers(
     }
     const reason = String(plan.reason);
     for (const member of members) {
-      await port.commands.execute("core.layout.open", { card: "current", plugin: member.plugin, params: member.params });
+      await port.commands.execute("core.layout.open", { card: "current", plugin: member.plugin, params: { session: member.session } });
     }
     status.set({ state: "tabs", reason });
     return { state: "tabs", reason };

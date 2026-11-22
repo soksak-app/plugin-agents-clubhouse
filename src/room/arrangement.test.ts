@@ -3,9 +3,10 @@
 import { describe, expect, it, vi } from "vitest";
 import { ROOM_PLUGIN, arrangeMembers, arrangementTree, createArrangementStatus, type Member } from "./arrangement";
 
+// Each member is the owned session of C3: its card shows the session, so no member starts a process of its own.
 const members: Member[] = [
-  { plugin: "terminal", params: { program: "claude", args: [] } },
-  { plugin: "terminal", params: { program: "codex", args: [] } },
+  { plugin: "terminal", session: "s-claude" },
+  { plugin: "terminal", session: "s-codex" },
 ];
 
 function port(plan: unknown, options: { applyRejects?: boolean; planRejects?: boolean } = {}) {
@@ -49,8 +50,8 @@ describe("arrangementTree", () => {
           {
             direction: "column",
             children: [
-              { tabs: [{ plugin: "terminal", params: { program: "claude", args: [] } }] },
-              { tabs: [{ plugin: "terminal", params: { program: "codex", args: [] } }] },
+              { tabs: [{ plugin: "terminal", params: { session: "s-claude" } }] },
+              { tabs: [{ plugin: "terminal", params: { session: "s-codex" } }] },
             ],
           },
         ],
@@ -60,11 +61,15 @@ describe("arrangementTree", () => {
 
   it("uses one member card directly when there is a single member", () => {
     const tree = arrangementTree([members[0]]) as { tree: { children: unknown[] } };
-    expect(tree.tree.children[1]).toEqual({ tabs: [{ plugin: "terminal", params: { program: "claude", args: [] } }] });
+    expect(tree.tree.children[1]).toEqual({ tabs: [{ plugin: "terminal", params: { session: "s-claude" } }] });
   });
 
   it("refuses an empty member list at the boundary", () => {
     expect(() => arrangementTree([])).toThrow("arrangement needs at least one member");
+  });
+
+  it("refuses a member without a session, because its card would start a second process", () => {
+    expect(() => arrangementTree([{ plugin: "terminal", session: "" }])).toThrow("arrangement member needs a session");
   });
 });
 
@@ -79,7 +84,7 @@ describe("arrangeMembers", () => {
     expect(status.read()).toEqual({ state: "group" });
   });
 
-  it("opens the members as tabs with the reason of the plan when the plan is not feasible", async () => {
+  it("opens the members as tabs of their sessions with the reason of the plan when the plan is not feasible", async () => {
     const { port: p, calls } = port(infeasible);
     const status = createArrangementStatus();
     const result = await arrangeMembers(p, members, status);
@@ -89,7 +94,8 @@ describe("arrangeMembers", () => {
       "core.layout.open",
       "core.layout.open",
     ]);
-    expect(calls[1][1]).toEqual({ card: "current", plugin: "terminal", params: members[0].params });
+    expect(calls[1][1]).toEqual({ card: "current", plugin: "terminal", params: { session: "s-claude" } });
+    expect(calls[2][1]).toEqual({ card: "current", plugin: "terminal", params: { session: "s-codex" } });
     expect(status.read()).toEqual({ state: "tabs", reason: infeasible.reason });
   });
 
