@@ -3,7 +3,7 @@
 // (docs/spec/room.md#answer). The room port double answers with the declared shapes and moves a session through idle, working and idle
 // as core would; the member of a session runs the answer command during its turn, before its program reports idle.
 import { describe, expect, it } from "vitest";
-import { TURN_RULE, conversationTurnsOf, relayInMode, type ConversationBound, type RelayPorts } from "./room-relay";
+import { EMPTY_TURN_TEXT, TURN_RULE, conversationTurnsOf, relayInMode, type ConversationBound, type RelayPorts } from "./room-relay";
 import { createRoomRecord, settledRelay, type RoomRecord } from "./room-record";
 import { createSubmitQueue } from "./submit-queue";
 import { createAnswerChannel } from "./answer";
@@ -498,6 +498,21 @@ describe("an owner line during a relay (docs/spec/room.md#owner-follow-up)", () 
     await relay;
     const counts = core.submitted.map((entry) => entry.text.split("also add a README").length - 1);
     expect(counts).toEqual([0, 1, 1]);
+    expect(record.lines.at(-1)).toMatchObject({ speaker: "clubhouse", text: "the conversation settled" });
+  });
+});
+
+describe("a turn without new lines (docs/spec/room.md#room-record)", () => {
+  it("runs when the member has received every line, carries no record line, and its status settles the conversation", async () => {
+    const core = fakeCore([IDLE("s-1"), IDLE("s-2")]);
+    const record = roomRecord("build it");
+    core.bound.record = record;
+    // The lines were injected while the sessions worked, so every line is sent before the turns.
+    for (const member of MEMBERS) record.markSent(member.session, record.lines.length);
+    const answers = await relayInMode(core.ports, "turn", MEMBERS, "build it", record, OPEN);
+    expect(answers.map((answer) => answer.id)).toEqual(["reviewer", "writer"]);
+    expect(core.submitted[0].text).toBe(`[@clubhouse] ${EMPTY_TURN_TEXT} | [@clubhouse] ${TURN_RULE} | [@clubhouse] turn t-1`);
+    for (const entry of core.submitted) expect(entry.text).not.toContain("build it");
     expect(record.lines.at(-1)).toMatchObject({ speaker: "clubhouse", text: "the conversation settled" });
   });
 });

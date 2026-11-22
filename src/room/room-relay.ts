@@ -26,6 +26,9 @@ export interface NamedRelayMember extends RelayMember {
 
 // The roles that a turn line states to its member when a member of the relay has a role: its own role and the roles of the others.
 // The rule of each turn line (docs/spec/room.md#room-protocol): the room cannot read the terminal of a member.
+// The room line of a turn of a member that has received every record line: the turn still runs and takes an answer with a status
+// (docs/spec/room.md#room-record).
+export const EMPTY_TURN_TEXT = "새 줄은 없어. 네 차례야: 지금까지 기록에 답하고 status를 정해.";
 export const TURN_RULE = "answer through the room only: reply to the speakers, put a message to the owner in @owner:, write nothing in your terminal";
 
 export function rolesLine(member: NamedRelayMember, members: NamedRelayMember[]): string | null {
@@ -101,7 +104,8 @@ async function lineFree(ports: RelayPorts, member: RelayMember, stopping?: Conve
   }
 }
 
-// Sends one member the record lines that it has not received, followed by the token of its turn, and resolves with the text of its
+// Sends one member the record lines that it has not received, or the room line of an empty turn when it has received every line,
+// followed by the token of its turn, and resolves with the text of its
 // answer command (docs/spec/room.md#room-record). The answer raises the delivered number of the session; `accepted` runs after core
 // accepted the submit. A refusal, a turn that is blocked, a session that leaves core.sessions, or a program that reports idle without an
 // answer rejects with the member identifier and the reason. The member runs the answer command during its turn, and core answers that
@@ -115,8 +119,6 @@ async function relayToMember(
   stopping?: ConversationBound["stopping"],
 ): Promise<MemberAnswer> {
   if (!(await lineFree(ports, member, stopping))) throw new TurnStopped();
-  const pending = record.pending(member.session, member.id);
-  if (pending === null) throw new Error(`member ${member.id}: the room record holds no line that the member has not received`);
   const controller = new AbortController();
   // A value of core.sessions that the relay cannot read ends the turn with this error, so the relay never waits on a bad value.
   let failure: unknown = null;
@@ -126,12 +128,12 @@ async function relayToMember(
     submit: async (end) => {
       await ports.lines.submit(member.session, () => {
         const lines = record.pending(member.session, member.id);
-        if (lines === null) throw new Error("the room record holds no line that the member has not received");
+        const count = lines === null ? record.lines.length : lines.count;
         return {
-          text: `${lines.text} | ${end}`,
+          text: `${lines === null ? `[@clubhouse] ${EMPTY_TURN_TEXT}` : lines.text} | ${end}`,
           accepted: () => {
             submittedAt = record.now();
-            record.markSent(member.session, lines.count);
+            record.markSent(member.session, count);
           },
         };
       });
@@ -149,7 +151,7 @@ async function relayToMember(
   };
   let turn;
   try {
-    turn = ports.answers.open(member.session, member.id, "answer", pending.count);
+    turn = ports.answers.open(member.session, member.id, "answer", record.lines.length);
   } catch (error) {
     throw new Error(`member ${member.id}: ${messageOf(error)}`);
   }

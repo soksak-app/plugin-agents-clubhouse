@@ -103,6 +103,8 @@ Room record는 방의 대화다. Owner의 각 메시지 줄, 각 member의 답, 
 
 방은 record를 각 member session에 전달한다. Record의 줄은 `[@<speaker>] <text>`이고 text 안의 줄바꿈은 공백으로 바뀌며, 한 submit의 줄은 ` | `로 잇는다. `core.session.submit`이 CR과 LF를 거부하기 때문이다. 방은 session마다 delivered number `d`, 즉 그 session이 받은 record 줄의 수를 보관한다(`delivered`, [tab state](#restart)). 수가 없는 session은 아무 줄도 받지 않았다. Session이 받지 않은 record 줄은 `d`부터 record 끝까지의 줄에서 그 member가 직접 한 줄을 뺀 것이다. Member가 그 줄을 준 당사자이기 때문이다. 전달은 다음 불변식을 지킨다.
 
+모든 record 줄을 이미 받은 member의 turn도, 예컨대 session이 working인 동안 방이 줄을 inject한 뒤에도 실행된다. 그 줄은 record 줄 없이 turn rule과 token 앞에 `[@clubhouse] 새 줄은 없어. 네 차례야: 지금까지 기록에 답하고 status를 정해.`만 담고, 답과 status는 다른 turn처럼 센다.
+
 - Turn completeness: turn의 줄은 session이 받지 않은 record 줄을 record 순서로 담으므로, member는 답하기 전에 그때까지 나온 모든 줄을 읽는다.
 - Closing completeness: 방은 relay마다 끝에 각 member session에 받지 않은 record 줄을 보낸다([closing delivery](#closing-delivery)).
 - Exactly once and in order: 각 submit은 `d`부터 방이 줄을 만들 때의 record 길이 `n`까지의 줄을 담고, submit의 token은 `n`을 기록한다. `d`는 turn token의 [답](#answer)이나 record token의 acknowledgement가 도착할 때만 `n`으로 오른다. 받아들여진 submit은 program이 그 줄을 읽었다는 것을 알려 주지 않기 때문이다(core `docs/spec/persistent-services.md#owned-sessions`). 수는 내려가지 않으므로 한 session의 submit들은 record를 0부터 빈틈도 겹침도 없이 덮는다.
