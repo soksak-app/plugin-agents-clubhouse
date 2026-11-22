@@ -1,7 +1,7 @@
 // The roster of the room (C3, C34): one entry per agent definition, in the order of the definitions. A definition that the agents
 // data no longer lists leaves the roster; a new one joins unchecked, because inviting a member is the choice of the person.
 import { describe, expect, it } from "vitest";
-import { rosterFrom } from "./roster";
+import { reattachedChecks, rosterFrom } from "./roster";
 import type { AgentDefinition } from "./definitions";
 
 const def = (id: string, name = id.toUpperCase()): AgentDefinition => ({
@@ -31,5 +31,24 @@ describe("rosterFrom", () => {
 
   it("refuses duplicate definition identifiers, with the text of the rule", () => {
     expect(() => rosterFrom([def("a"), def("a")], [])).toThrow("agent definition identifiers must be unique: a");
+  });
+});
+
+// A room tab without a state (docs/spec/room.md#restart): the members whose stored session core.sessions lists with this room as
+// owner are checked, so the room reattaches to its own sessions; every other member stays unchecked.
+describe("reattachedChecks", () => {
+  it("checks the definitions whose stored session is an owned open session", async () => {
+    const stored: Record<string, string> = { a: "s-1", b: "s-gone", c: "s-3" };
+    const checks = await reattachedChecks(
+      [def("a"), def("b"), def("c"), def("d")],
+      async (id) => stored[id] ?? null,
+      new Set(["s-1", "s-3", "s-other"]),
+    );
+    expect(checks).toEqual([
+      { id: "a", name: "", checked: true },
+      { id: "b", name: "", checked: false },
+      { id: "c", name: "", checked: true },
+      { id: "d", name: "", checked: false },
+    ]);
   });
 });

@@ -21,3 +21,18 @@ export function rosterFrom(definitions: AgentDefinition[], previous: RosterEntry
     .map((definition) => ({ id: definition.id, name: definition.name, checked: false }));
   return [...kept, ...added];
 }
+
+// The checks of a room tab without a state (docs/spec/room.md#restart): a definition whose stored session is one of the owned open
+// sessions of the room is checked, so the room reattaches to it; every other definition is unchecked. The names come from rosterFrom.
+export async function reattachedChecks(
+  definitions: AgentDefinition[],
+  storedSession: (id: string) => Promise<string | null>,
+  owned: ReadonlySet<string>,
+): Promise<RosterEntry[]> {
+  const entries: RosterEntry[] = [];
+  for (const definition of definitions) {
+    const session = await storedSession(definition.id);
+    entries.push({ id: definition.id, name: "", checked: session !== null && owned.has(session) });
+  }
+  return entries;
+}

@@ -27,7 +27,7 @@ import { shareRecord } from "./room/record";
 import { createProtocolInjector } from "./room/protocol";
 import { parseRoomState, type RoomState as RoomTabState } from "./room/room-state";
 import { ownedSessionIds } from "./room/session-channel";
-import { rosterFrom, type RosterEntry } from "./room/roster";
+import { reattachedChecks, rosterFrom, type RosterEntry } from "./room/roster";
 import { measuredCardSize } from "./room/card-size";
 import { createRoomOperations } from "./room/operations";
 import { createMacroStore } from "./tower/macro";
@@ -324,11 +324,19 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
 
   // The definitions are the stored data of the agents plugin (C17): read with runtime.data.get {key, plugin: "agents"} (core F1075), and
   // read again on each data change. The roster follows them; a stored value of another form is reported through the room error path.
+  let unsaved = saved === null;
   const agentData: AgentDataGet = (key) => bridge!.calls.request("runtime.data.get", { key, plugin: AGENTS_PLUGIN });
   const refreshDefinitions = (): void => {
     readAgentDefinitions(agentData)
-      .then((next) => {
+      .then(async (next) => {
         definitions = next;
+        // A room tab without a state checks the members whose stored session core.sessions lists with this room as owner, so it
+        // reattaches to its own sessions (docs/spec/room.md#restart).
+        if (unsaved) {
+          unsaved = false;
+          await sessionsReady;
+          seed = await reattachedChecks(definitions, async (id) => (await sessions.get(id))?.sessionId ?? null, openSessionIds);
+        }
         roster.splice(0, roster.length, ...rosterFrom(definitions, roster.length === 0 ? seed : roster));
         renderTabs();
         refreshReported();
