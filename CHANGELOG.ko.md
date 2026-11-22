@@ -2,6 +2,7 @@
 
 ## 미출시
 
+- C37: 방 header는 좁은 card에서 줄바꿈한다. Roster tab은 최소 120 point를 유지하고, button은 한 줄을 유지하며, transport status는 ellipsis로 줄고 전체 text를 tooltip으로 보인다(`docs/spec/room.md#header`).
 - C36: Control tower button은 선언된 command `tower.set {open}`을 실행하며, 이 command가 modal을 열고 닫는다(`docs/spec/room.md#commands`). Tower는 자기 click handler를 갖지 않는다.
 - C32: `plugin.json`의 description은 152자로, core가 설치할 때 검사하는 1~200자 안에 든다. v0.0.2는 이를 넘었다. `src/manifest-rules.test.ts`가 길이 규칙을 고정한다.
 - C31: `engines.soksak`은 `^0.0.47`이고, dependency `@soksak/plugin-agents`는 `>=0.0.1`이며, version은 0.0.3이다.
