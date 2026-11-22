@@ -21,7 +21,7 @@ import { HEADER_CSS, createRoomHeader } from "./room/header";
 import { readAgentDefinitions, toMemberDefinition, type AgentDataGet, type AgentDefinition } from "./room/definitions";
 import { createMemberSessionStore } from "./room/session-store";
 import { serialRunner, summonAndArrange, type TriggerDeps } from "./room/trigger";
-import { relayInMode, type RelayPorts } from "./room/room-relay";
+import { conversationTurnsOf, relayInMode, type RelayPorts } from "./room/room-relay";
 import { mentionedMembers } from "./room/mention";
 import { shareRecord } from "./room/record";
 import { createRoomRecord, withdrawnOnFailure } from "./room/room-record";
@@ -179,6 +179,8 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   if (modeSetting !== "facil" && modeSetting !== "turn" && modeSetting !== "simul") {
     throw new Error(`settings.kibitzDefault must be facil, turn or simul, got ${JSON.stringify(modeSetting)}`);
   }
+  // The largest number of turns that answers start for one message (docs/spec/room.md#conversation).
+  const conversationTurns = conversationTurnsOf(settings.conversationTurns);
   // The state of this room tab, which core keeps per tab across a restart (docs/spec/room.md#restart).
   const saved = parseRoomState(await bridge!.calls.request("tab.state.read", null));
   let mode: RoomMode = saved?.mode ?? modeSetting;
@@ -231,7 +233,12 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   send.textContent = t("sendBtn", lang);
   send.disabled = true;
   send.title = transport.reason;
-  composer.append(input, send);
+  // The stop button ends the conversation of the relayed message; it is enabled only while a message is relayed.
+  const stop = document.createElement("button");
+  stop.type = "button";
+  stop.textContent = t("stopBtn", lang);
+  stop.disabled = true;
+  composer.append(input, send, stop);
   let busy = false;
   // Sets the transport state and the composer. A status subscriber receives each new value.
   const setTransport = (ready: boolean): void => {
@@ -490,16 +497,15 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   // A message runs message.send from the send button and from Enter without Shift in the input (docs/spec/room.md#commands).
   // The relay resolves with the answer of each member in relay order.
   // A relay that fails before any answer withdraws the line of the owner from the record (docs/spec/room.md#room-record).
-  const relayMessage = (text: string): Promise<{ id: string; text: string }[]> =>
+  const relayMessage = (text: string, stopped: () => boolean): Promise<{ id: string; text: string }[]> =>
     withdrawnOnFailure(record, async () => {
       const taught = await taughtMembers(openMembers());
       if (taught.length === 0) throw new Error("no member has the room protocol");
-      const answers = await relayInMode(relayPorts, mode, taught, text, record);
-      // A mention narrowed the receivers: the other members receive the record lines that they have not received and answer nothing
-      // that the room shows (docs/spec/room.md#shared-record).
-      const mentioned = mentionedMembers(text, taught);
-      if (mentioned.length > 0) {
-        const others = taught.filter((entry) => !mentioned.includes(entry));
+      const answers = await relayInMode(relayPorts, mode, taught, text, record, { limit: conversationTurns, stopped });
+      // A mention narrowed the receivers: after the conversation the members that took no turn of it receive the record lines that they
+      // have not received and answer nothing that the room shows (docs/spec/room.md#shared-record).
+      if (mentionedMembers(text, taught).length > 0) {
+        const others = taught.filter((entry) => !answers.some((answer) => answer.id === entry.id));
         await shareRecord(relayPorts, record, others, speakerName, report);
       }
       return answers;
@@ -526,6 +532,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
       // A relay in progress keeps the tab loaded: an unload would end the page that waits for the turns.
       bridge!.calls.request("tab.keep", { reason: "busy", on: value }).catch((error: unknown) => report("tab keep", String((error as Error)?.message ?? error)));
       send.disabled = value || transport.state !== "ready";
+      stop.disabled = !value;
     },
     relay: relayMessage,
     failed: (reason) => report("room relay", reason),
@@ -534,6 +541,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   // a second time; without failed, the binder would pass the rejection to unhandledrejection of the document.
   const shownBySend = (): void => {};
   bound(expose.bind(send, `${EXPOSE}.message.send`, () => ({ text: input.value }), { failed: shownBySend }), "message.send");
+  bound(expose.bind(stop, `${EXPOSE}.conversation.stop`, {}, { failed: failed("conversation.stop") }), "conversation.stop");
   // Enter without Shift sends; the newline that it would insert is prevented. Enter during an IME composition commits the text.
   const sendKey = (event: KeyboardEvent): boolean => event.key === "Enter" && !event.shiftKey && !event.isComposing;
   input.addEventListener("keydown", (event) => {
@@ -559,6 +567,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   const tabTargets = (): object[] => [...tabsEl.querySelectorAll<HTMLElement>(".st-tab")];
   const elements: Record<string, ElementTarget> = {
     [`${EXPOSE}.send`]: send,
+    [`${EXPOSE}.stop`]: stop,
     [`${EXPOSE}.input`]: input,
     [`${EXPOSE}.tab`]: tabTargets,
     [`${EXPOSE}.mode`]: kib,

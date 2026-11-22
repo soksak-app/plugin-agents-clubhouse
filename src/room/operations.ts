@@ -19,7 +19,8 @@ export interface OperationDeps {
   // Shows the accepted text in the conversation and clears the input.
   accept: (text: string) => void;
   busy: (value: boolean) => void;
-  relay: (text: string) => Promise<{ id: string; text: string }[]>;
+  // Relays the text; `stopped` tells whether the owner stopped the conversation of this relay (docs/spec/room.md#conversation).
+  relay: (text: string, stopped: () => boolean) => Promise<{ id: string; text: string }[]>;
   // Shows a refusal or a failed relay of message.send through the error display of the window (docs/spec/room.md#commands).
   failed: (reason: string) => void;
 }
@@ -38,6 +39,8 @@ function entryOf(roster: RosterEntry[], id: string): RosterEntry {
 
 export function createRoomOperations(deps: OperationDeps): Record<string, (params: any) => Promise<any>> {
   let relaying = false;
+  // Whether conversation.stop ended the conversation of the current relay.
+  let stopped = false;
   return {
     [`${P}.member.set`]: async (params) => {
       const id = idOf(params);
@@ -76,6 +79,12 @@ export function createRoomOperations(deps: OperationDeps): Record<string, (param
       }
       return { mode };
     },
+    // conversation.stop ends the relay after the turns that have started; a second call changes nothing.
+    [`${P}.conversation.stop`]: async () => {
+      if (!relaying) throw new Error("the room is relaying no message");
+      stopped = true;
+      return { stopped: true };
+    },
     // message.send reports each refusal and failure itself, so a command call that no element started shows it in the room too.
     [`${P}.message.send`]: async (params) => {
       try {
@@ -93,10 +102,11 @@ export function createRoomOperations(deps: OperationDeps): Record<string, (param
     if (relaying) throw new Error("the room is relaying a message");
     if (deps.openMembers() === 0) throw new Error("no member session is open: check a member of the roster");
     relaying = true;
+    stopped = false;
     deps.busy(true);
     try {
       deps.accept(text);
-      return { answers: await deps.relay(text) };
+      return { answers: await deps.relay(text, () => stopped) };
     } finally {
       relaying = false;
       deps.busy(false);

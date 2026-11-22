@@ -56,6 +56,12 @@ describe("roomProtocolLine", () => {
     }
   });
 
+  it("states that a mention passes the next turn to the mentioned member (docs/spec/room.md#conversation)", () => {
+    expect(roomProtocolLine("Claude", [], "room-1")).toContain(
+      "A mention @<name> of another member in your answer passes the next turn of the room to that member, so mention a member only when you want it to answer.",
+    );
+  });
+
   it("states the answer command with the room surface, the turn token, the MCP form and the shell form (docs/spec/room.md#answer)", () => {
     const line = roomProtocolLine("Claude", [], "room-1");
     for (const part of [

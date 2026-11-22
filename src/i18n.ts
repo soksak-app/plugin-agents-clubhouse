@@ -10,6 +10,10 @@ const strings = {
     en: "Send",
     ko: "전송",
   },
+  stopBtn: {
+    en: "Stop",
+    ko: "중지",
+  },
   statusIdle: {
     en: "Idle",
     ko: "대기",

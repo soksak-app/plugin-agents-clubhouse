@@ -94,28 +94,83 @@ async function relayToMember(ports: RelayPorts, member: RelayMember, record: Roo
   }
 }
 
-// Relays to each member in order and appends each answer to the record when it arrives, so the next member receives it with the
-// message. A failed turn rejects with the member and the reason, and the members after it receive nothing.
-async function relayInTurn(ports: RelayPorts, members: RelayMember[], record: RoomRecord): Promise<MemberAnswer[]> {
+// The bound of the conversation of one message (docs/spec/room.md#conversation): the largest number of turns that answers start, and
+// whether the owner stopped the conversation.
+export interface ConversationBound {
+  limit: number;
+  stopped(): boolean;
+}
+
+const LIMIT_MAX = 64;
+
+// Reads the plugin setting conversationTurns, an integer from 0 to 64, and refuses any other value.
+export function conversationTurnsOf(value: unknown): number {
+  if (!Number.isInteger(value) || (value as number) < 0 || (value as number) > LIMIT_MAX) {
+    throw new Error(`settings.conversationTurns must be an integer from 0 to ${LIMIT_MAX}, got ${JSON.stringify(value)}`);
+  }
+  return value as number;
+}
+
+interface Turn {
+  member: NamedRelayMember;
+  // Whether an answer started the turn; those turns count toward the limit.
+  byAnswer: boolean;
+}
+
+// Queues a turn for each member that the answer of the speaker mentions, in the order of its first mention. A mention of the speaker
+// and a member that already waits for a turn of the relay add no turn.
+function queueMentions(queue: Turn[], text: string, speaker: NamedRelayMember, members: NamedRelayMember[]): void {
+  const others = members.filter((member) => member !== speaker);
+  for (const member of mentionedMembers(text, others)) {
+    if (!queue.some((turn) => turn.member === member)) queue.push({ member, byAnswer: true });
+  }
+}
+
+// Runs the waiting turns one after another and appends each answer to the record when it arrives, so the next member receives it. The
+// mentions of each answer queue further turns. A stop of the owner or the limit ends the relay before a waiting turn, with a record line
+// of the room. A failed turn rejects with the member and the reason, and the turns after it do not run.
+async function runTurns(
+  ports: RelayPorts,
+  queue: Turn[],
+  members: NamedRelayMember[],
+  record: RoomRecord,
+  bound: ConversationBound,
+): Promise<MemberAnswer[]> {
   const answers: MemberAnswer[] = [];
-  for (const member of members) {
-    const answer = await relayToMember(ports, member, record);
-    record.append(member.id, answer.text);
+  let started = 0;
+  while (queue.length > 0) {
+    if (bound.stopped()) {
+      record.append("clubhouse", "the conversation ended: the owner stopped it");
+      break;
+    }
+    if (queue[0].byAnswer && started >= bound.limit) {
+      record.append("clubhouse", `the conversation ended: it reached the limit of ${bound.limit} member turns`);
+      break;
+    }
+    const turn = queue.shift()!;
+    if (turn.byAnswer) started += 1;
+    const answer = await relayToMember(ports, turn.member, record);
+    record.append(turn.member.id, answer.text);
     answers.push(answer);
+    queueMentions(queue, answer.text, turn.member, members);
   }
   return answers;
 }
 
+const turnsOf = (members: NamedRelayMember[]): Turn[] => members.map((member) => ({ member, byAnswer: false }));
+
 // Relays the last message of the owner in the record by the mode of the room (docs/spec/room.md#modes). A message that mentions members
 // goes only to them in mention order: one after another in turn and facil, at the same time in simul. Without a mention, turn relays to
 // each member in roster order, facil to the first member whose session is idle, and simul to every member at the same time. Each member
-// receives the record lines that it has not received (docs/spec/room.md#room-record), and each answer is appended to the record.
+// receives the record lines that it has not received (docs/spec/room.md#room-record), and each answer is appended to the record. The
+// answers that mention members start the turns of the conversation within the bound (docs/spec/room.md#conversation).
 export async function relayInMode(
   ports: RelayPorts,
   mode: RoomMode,
   members: NamedRelayMember[],
   message: string,
   record: RoomRecord,
+  bound: ConversationBound,
 ): Promise<MemberAnswer[]> {
   const mentioned = mentionedMembers(message, members);
   if (mode === "simul") {
@@ -125,12 +180,15 @@ export async function relayInMode(
     for (const [index, result] of results.entries()) if (result.status === "fulfilled") record.append(targets[index].id, result.value.text);
     const failed = results.find((result): result is PromiseRejectedResult => result.status === "rejected");
     if (failed) throw failed.reason;
-    return results.map((result) => (result as PromiseFulfilledResult<MemberAnswer>).value);
+    const answers = results.map((result) => (result as PromiseFulfilledResult<MemberAnswer>).value);
+    const queue: Turn[] = [];
+    for (const [index, answer] of answers.entries()) queueMentions(queue, answer.text, targets[index], members);
+    return [...answers, ...(await runTurns(ports, queue, members, record, bound))];
   }
-  if (mentioned.length > 0) return relayInTurn(ports, mentioned, record);
-  if (mode === "turn") return relayInTurn(ports, members, record);
+  if (mentioned.length > 0) return runTurns(ports, turnsOf(mentioned), members, record, bound);
+  if (mode === "turn") return runTurns(ports, turnsOf(members), members, record, bound);
   const sessions = ports.sessions();
   const idle = members.find((member) => sessionProgram(sessions, member.session) === "idle");
   if (!idle) throw new Error("no member is idle");
-  return relayInTurn(ports, [idle], record);
+  return runTurns(ports, turnsOf([idle]), members, record, bound);
 }

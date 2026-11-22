@@ -112,3 +112,32 @@ describe("message.send", () => {
     expect(r.log).toEqual(["busy true", "accept hi", "busy false", "failed member b: turn failed"]);
   });
 });
+
+describe("conversation.stop (docs/spec/room.md#conversation)", () => {
+  it("refuses a stop without a relay", async () => {
+    const r = room();
+    await expect(r.commands[`${P}.conversation.stop`]({})).rejects.toThrow("the room is relaying no message");
+  });
+
+  it("tells the running relay to stop, idempotently, and a later send starts unstopped", async () => {
+    let finish: () => void = () => {};
+    const seen: (() => boolean)[] = [];
+    const r = room({
+      relay: (_text, stopped) => {
+        seen.push(stopped);
+        return new Promise((resolve) => (finish = () => resolve([])));
+      },
+    });
+    const first = r.commands[`${P}.message.send`]({ text: "one" });
+    expect(seen[0]()).toBe(false);
+    expect(await r.commands[`${P}.conversation.stop`]({})).toEqual({ stopped: true });
+    expect(await r.commands[`${P}.conversation.stop`]({})).toEqual({ stopped: true });
+    expect(seen[0]()).toBe(true);
+    finish();
+    await first;
+    const second = r.commands[`${P}.message.send`]({ text: "two" });
+    expect(seen[1]()).toBe(false);
+    finish();
+    await second;
+  });
+});

@@ -3,7 +3,7 @@
 // (docs/spec/room.md#answer). The room port double answers with the declared shapes and moves a session through idle, working and idle
 // as core would; the member of a session runs the answer command during its turn, before its program reports idle.
 import { describe, expect, it } from "vitest";
-import { relayInMode, type RelayPorts } from "./room-relay";
+import { conversationTurnsOf, relayInMode, type ConversationBound, type RelayPorts } from "./room-relay";
 import { createRoomRecord, withdrawnOnFailure, type RoomRecord } from "./room-record";
 import { createAnswerChannel } from "./answer";
 import { createConversationStatus } from "./conversation-status";
@@ -12,7 +12,7 @@ interface FakeSession { session: string; program: { state: "idle" | "working" | 
 
 function fakeCore(
   initial: FakeSession[],
-  options: { stuckOn?: string; vanishOn?: string; manual?: boolean; replies?: Record<string, string | null> } = {},
+  options: { stuckOn?: string; vanishOn?: string; manual?: boolean; replies?: Record<string, string | null>; script?: Record<string, string[]> } = {},
 ) {
   let sessions: FakeSession[] = initial.map((entry) => ({ ...entry }));
   const listeners = new Set<(value: unknown) => void>();
@@ -31,7 +31,8 @@ function fakeCore(
   };
   // The member runs the answer command, unless its reply is null, and then its program reports idle.
   const finish = (session: string) => {
-    const reply = options.replies && session in options.replies ? options.replies[session] : `answer of ${session}`;
+    const scripted = options.script?.[session]?.shift();
+    const reply = scripted ?? (options.replies && session in options.replies ? options.replies[session] : `answer of ${session}`);
     if (reply !== null) answers.deliver({ turn: turns.get(session)!, text: reply });
     setState(session, "idle");
   };
@@ -72,6 +73,9 @@ function fakeCore(
   return { ports, submitted, submits, finish, status };
 }
 
+// A conversation bound that never ends a relay early.
+const OPEN: ConversationBound = { limit: 8, stopped: () => false };
+
 const IDLE = (session: string): FakeSession => ({ session, program: { state: "idle" } });
 
 const MEMBERS = [{ id: "reviewer", name: "Claude", session: "s-1" }, { id: "writer", name: "Codex", session: "s-2" }];
@@ -88,20 +92,20 @@ function roomRecord(...messages: string[]): RoomRecord {
 // Accepts the message as message.send does, then relays it.
 function send(core: { ports: RelayPorts }, mode: "turn" | "facil" | "simul", members: typeof THREE, record: RoomRecord, message: string) {
   record.append("owner", message);
-  return withdrawnOnFailure(record, () => relayInMode(core.ports, mode, members, message, record));
+  return withdrawnOnFailure(record, () => relayInMode(core.ports, mode, members, message, record, OPEN));
 }
 
 describe("relayInMode one member at a time", () => {
   it("answers a reply of 451 lines, much taller than the member tab, whole and unchanged", async () => {
     const reply = Array.from({ length: 451 }, (_, index) => `row ${index}`).join("\n");
     const core = fakeCore([IDLE("s-1")], { replies: { "s-1": reply } });
-    const answers = await relayInMode(core.ports, "turn", [MEMBERS[0]], "hello", roomRecord("hello"));
+    const answers = await relayInMode(core.ports, "turn", [MEMBERS[0]], "hello", roomRecord("hello"), OPEN);
     expect(answers).toEqual([{ id: "reviewer", text: reply }]);
   });
 
   it("fails the turn of a member whose program reports idle without an answer, and the members after it receive nothing", async () => {
     const core = fakeCore([IDLE("s-1"), IDLE("s-2")], { replies: { "s-1": null } });
-    await expect(relayInMode(core.ports, "turn", MEMBERS, "hi", roomRecord("hi"))).rejects.toThrow(
+    await expect(relayInMode(core.ports, "turn", MEMBERS, "hi", roomRecord("hi"), OPEN)).rejects.toThrow(
       "member reviewer: the member ended its turn without an answer: it ran no soksak-plugin-agents-clubhouse.answer",
     );
     expect(core.submitted.map((entry) => entry.session)).toEqual(["s-1"]);
@@ -109,25 +113,25 @@ describe("relayInMode one member at a time", () => {
 
   it("closes the turn after the answer, so a later answer of the same session is refused", async () => {
     const core = fakeCore([IDLE("s-1")]);
-    await relayInMode(core.ports, "turn", [MEMBERS[0]], "hi", roomRecord("hi"));
+    await relayInMode(core.ports, "turn", [MEMBERS[0]], "hi", roomRecord("hi"), OPEN);
     expect(() => core.ports.answers.deliver({ turn: "t-1", text: "again" })).toThrow("turn t-1 is not an open turn of this room");
   });
 
   it("refuses a member that is working, with the member named, and submits nothing to it", async () => {
     const core = fakeCore([{ session: "s-1", program: { state: "working" } }]);
-    await expect(relayInMode(core.ports, "turn", [MEMBERS[0]], "hi", roomRecord("hi"))).rejects.toThrow("member reviewer: member is working");
+    await expect(relayInMode(core.ports, "turn", [MEMBERS[0]], "hi", roomRecord("hi"), OPEN)).rejects.toThrow("member reviewer: member is working");
     expect(core.submitted).toEqual([]);
   });
 
   it("fails with the reason when the session leaves core.sessions during its turn", async () => {
     const core = fakeCore([IDLE("s-1")], { vanishOn: "s-1" });
-    await expect(relayInMode(core.ports, "turn", [MEMBERS[0]], "hi", roomRecord("hi"))).rejects.toThrow("session s-1 is not open");
+    await expect(relayInMode(core.ports, "turn", [MEMBERS[0]], "hi", roomRecord("hi"), OPEN)).rejects.toThrow("session s-1 is not open");
   });
 
   it("rejects with the member and the refusal of core when a submit is refused", async () => {
     const core = fakeCore([IDLE("s-1")]);
     core.ports.commands.execute = async () => { throw new Error("core.session.submit text must not contain CR or LF"); };
-    await expect(relayInMode(core.ports, "turn", [MEMBERS[0]], "hi", roomRecord("hi"))).rejects.toThrow(
+    await expect(relayInMode(core.ports, "turn", [MEMBERS[0]], "hi", roomRecord("hi"), OPEN)).rejects.toThrow(
       "member reviewer: core.session.submit text must not contain CR or LF",
     );
   });
@@ -136,7 +140,7 @@ describe("relayInMode one member at a time", () => {
 describe("relayInMode waiting (docs/spec/room.md#conversation-status)", () => {
   it("names each member at the answer step from its submit until its answer arrives", async () => {
     const core = fakeCore([IDLE("s-1"), IDLE("s-2")], { manual: true });
-    const relay = relayInMode(core.ports, "simul", MEMBERS, "hi", roomRecord("hi"));
+    const relay = relayInMode(core.ports, "simul", MEMBERS, "hi", roomRecord("hi"), OPEN);
     await core.submits(2);
     expect(core.status.read().waiting).toEqual([
       { member: "reviewer", session: "s-1", step: "answer", program: "working" },
@@ -153,7 +157,7 @@ describe("relayInMode waiting (docs/spec/room.md#conversation-status)", () => {
 
   it("ends the wait of a failed turn", async () => {
     const core = fakeCore([IDLE("s-1")], { replies: { "s-1": null } });
-    await expect(relayInMode(core.ports, "turn", [MEMBERS[0]], "hi", roomRecord("hi"))).rejects.toThrow("member reviewer");
+    await expect(relayInMode(core.ports, "turn", [MEMBERS[0]], "hi", roomRecord("hi"), OPEN)).rejects.toThrow("member reviewer");
     expect(core.status.read().waiting).toEqual([]);
   });
 });
@@ -161,7 +165,7 @@ describe("relayInMode waiting (docs/spec/room.md#conversation-status)", () => {
 describe("relayInMode (docs/spec/room.md#modes)", () => {
   it("turn: relays to each member one after another in roster order, labeled with the owner, with the earlier answers", async () => {
     const core = fakeCore([IDLE("s-1"), IDLE("s-2")]);
-    const answers = await relayInMode(core.ports, "turn", MEMBERS, "hello", roomRecord("hello"));
+    const answers = await relayInMode(core.ports, "turn", MEMBERS, "hello", roomRecord("hello"), OPEN);
     expect(core.submitted).toEqual([
       { session: "s-1", text: "[@owner] hello | [@clubhouse] turn t-1" },
       { session: "s-2", text: "[@owner] hello | [@Claude] answer of s-1 | [@clubhouse] turn t-2" },
@@ -171,7 +175,7 @@ describe("relayInMode (docs/spec/room.md#modes)", () => {
 
   it("turn: a mention selects only the mentioned members in mention order", async () => {
     const core = fakeCore([IDLE("s-1"), IDLE("s-2")]);
-    await relayInMode(core.ports, "turn", MEMBERS, "@codex first, then @claude", roomRecord("@codex first, then @claude"));
+    await relayInMode(core.ports, "turn", MEMBERS, "@codex first, then @claude", roomRecord("@codex first, then @claude"), OPEN);
     expect(core.submitted).toEqual([
       { session: "s-2", text: "[@owner] @codex first, then @claude | [@clubhouse] turn t-1" },
       { session: "s-1", text: "[@owner] @codex first, then @claude | [@Codex] answer of s-2 | [@clubhouse] turn t-2" },
@@ -180,32 +184,32 @@ describe("relayInMode (docs/spec/room.md#modes)", () => {
 
   it("turn: an earlier answer of several lines reaches the next member as one line", async () => {
     const core = fakeCore([IDLE("s-1"), IDLE("s-2")], { replies: { "s-1": "one\ntwo" } });
-    await relayInMode(core.ports, "turn", MEMBERS, "hello", roomRecord("hello"));
+    await relayInMode(core.ports, "turn", MEMBERS, "hello", roomRecord("hello"), OPEN);
     expect(core.submitted[1]).toEqual({ session: "s-2", text: "[@owner] hello | [@Claude] one two | [@clubhouse] turn t-2" });
   });
 
   it("facil: relays to the first idle member in roster order only", async () => {
     const core = fakeCore([{ session: "s-1", program: { state: "working" } }, IDLE("s-2")]);
-    const answers = await relayInMode(core.ports, "facil", MEMBERS, "who takes this", roomRecord("who takes this"));
+    const answers = await relayInMode(core.ports, "facil", MEMBERS, "who takes this", roomRecord("who takes this"), OPEN);
     expect(core.submitted).toEqual([{ session: "s-2", text: "[@owner] who takes this | [@clubhouse] turn t-1" }]);
     expect(answers.map((answer) => answer.id)).toEqual(["writer"]);
   });
 
   it("facil: a mention names the member that receives the message", async () => {
     const core = fakeCore([IDLE("s-1"), IDLE("s-2")]);
-    await relayInMode(core.ports, "facil", MEMBERS, "@Codex please", roomRecord("@Codex please"));
+    await relayInMode(core.ports, "facil", MEMBERS, "@Codex please", roomRecord("@Codex please"), OPEN);
     expect(core.submitted.map((entry) => entry.session)).toEqual(["s-2"]);
   });
 
   it("facil: refuses the send when no member is idle", async () => {
     const core = fakeCore([{ session: "s-1", program: { state: "working" } }, { session: "s-2", program: null }]);
-    await expect(relayInMode(core.ports, "facil", MEMBERS, "hi", roomRecord("hi"))).rejects.toThrow("no member is idle");
+    await expect(relayInMode(core.ports, "facil", MEMBERS, "hi", roomRecord("hi"), OPEN)).rejects.toThrow("no member is idle");
     expect(core.submitted).toEqual([]);
   });
 
   it("simul: submits to every member before any turn ends and keeps roster order in the answers", async () => {
     const core = fakeCore([IDLE("s-1"), IDLE("s-2")], { manual: true });
-    const relay = relayInMode(core.ports, "simul", MEMBERS, "all at once", roomRecord("all at once"));
+    const relay = relayInMode(core.ports, "simul", MEMBERS, "all at once", roomRecord("all at once"), OPEN);
     await core.submits(2);
     expect(core.submitted.map((entry) => entry.session)).toEqual(["s-1", "s-2"]);
     core.finish("s-2");
@@ -217,7 +221,7 @@ describe("relayInMode (docs/spec/room.md#modes)", () => {
 
   it("simul: lets the other turns end and rejects with the first failure in member order", async () => {
     const core = fakeCore([{ session: "s-1", program: { state: "working" } }, IDLE("s-2")]);
-    await expect(relayInMode(core.ports, "simul", MEMBERS, "hi", roomRecord("hi"))).rejects.toThrow("member reviewer: member is working");
+    await expect(relayInMode(core.ports, "simul", MEMBERS, "hi", roomRecord("hi"), OPEN)).rejects.toThrow("member reviewer: member is working");
     expect(core.submitted.map((entry) => entry.session)).toEqual(["s-2"]);
   });
 });
@@ -273,5 +277,102 @@ describe("the room record across turns (docs/spec/room.md#room-record)", () => {
     const record = roomRecord();
     await expect(send(core, "turn", MEMBERS, record, "hello")).rejects.toThrow("member writer");
     expect(record.lines).toEqual([{ speaker: "owner", text: "hello" }, { speaker: "reviewer", text: "answer of s-1" }]);
+  });
+});
+
+describe("the conversation of the members (docs/spec/room.md#conversation)", () => {
+  it("relays to each member that an answer mentions, in mention order, with the lines it has not received, until no answer mentions", async () => {
+    const core = fakeCore([IDLE("s-1"), IDLE("s-2"), IDLE("s-3")], {
+      script: { "s-1": ["@Codex and @tester, your view?", "agreed"], "s-2": ["@Claude I disagree"], "s-3": ["fine"] },
+    });
+    const record = roomRecord();
+    const answers = await send(core, "turn", THREE, record, "@claude start");
+    expect(answers).toEqual([
+      { id: "reviewer", text: "@Codex and @tester, your view?" },
+      { id: "writer", text: "@Claude I disagree" },
+      { id: "tester", text: "fine" },
+      { id: "reviewer", text: "agreed" },
+    ]);
+    expect(core.submitted.map((entry) => entry.text)).toEqual([
+      "[@owner] @claude start | [@clubhouse] turn t-1",
+      "[@owner] @claude start | [@Claude] @Codex and @tester, your view? | [@clubhouse] turn t-2",
+      "[@owner] @claude start | [@Claude] @Codex and @tester, your view? | [@Codex] @Claude I disagree | [@clubhouse] turn t-3",
+      "[@Codex] @Claude I disagree | [@Tester] fine | [@clubhouse] turn t-4",
+    ]);
+  });
+
+  it("ignores a mention of the speaker itself and of a name outside the members of the relay", async () => {
+    const core = fakeCore([IDLE("s-1"), IDLE("s-2")], { script: { "s-1": ["@claude thinks, @nobody knows, @Tester is away"] } });
+    const answers = await send(core, "turn", MEMBERS, roomRecord(), "@claude go");
+    expect(answers.map((answer) => answer.id)).toEqual(["reviewer"]);
+    expect(core.submitted).toHaveLength(1);
+  });
+
+  it("queues no second turn for a member that already waits for a turn of the relay", async () => {
+    const core = fakeCore([IDLE("s-1"), IDLE("s-2")], { script: { "s-1": ["@codex your turn"] } });
+    const answers = await send(core, "turn", MEMBERS, roomRecord(), "everyone");
+    expect(answers.map((answer) => answer.id)).toEqual(["reviewer", "writer"]);
+  });
+
+  it("ends the relay at the limit of member turns and records that the limit ended it", async () => {
+    const core = fakeCore([IDLE("s-1"), IDLE("s-2")], {
+      script: { "s-1": ["@codex 1", "@codex 3", "@codex 5"], "s-2": ["@claude 2", "@claude 4"] },
+    });
+    const record = roomRecord();
+    record.append("owner", "@claude ping");
+    const answers = await withdrawnOnFailure(record, () =>
+      relayInMode(core.ports, "facil", MEMBERS, "@claude ping", record, { limit: 2, stopped: () => false }),
+    );
+    expect(answers.map((answer) => answer.text)).toEqual(["@codex 1", "@claude 2", "@codex 3"]);
+    expect(record.lines.at(-1)).toEqual({ speaker: "clubhouse", text: "the conversation ended: it reached the limit of 2 member turns" });
+    expect(core.status.read().waiting).toEqual([]);
+  });
+
+  it("starts no member turn with the limit 0 and records the limit", async () => {
+    const core = fakeCore([IDLE("s-1"), IDLE("s-2")], { script: { "s-1": ["@codex next"] } });
+    const record = roomRecord("@claude hi");
+    const answers = await relayInMode(core.ports, "turn", MEMBERS, "@claude hi", record, { limit: 0, stopped: () => false });
+    expect(answers.map((answer) => answer.id)).toEqual(["reviewer"]);
+    expect(record.lines.at(-1)?.speaker).toBe("clubhouse");
+  });
+
+  it("ends the relay after the current turn when the owner stops it, records the stop, and resolves with the answers", async () => {
+    let stopped = false;
+    const core = fakeCore([IDLE("s-1"), IDLE("s-2")], { script: { "s-1": ["@codex next"] } });
+    const record = roomRecord("@claude hi");
+    const relay = relayInMode(core.ports, "turn", MEMBERS, "@claude hi", record, { limit: 8, stopped: () => stopped });
+    await core.submits(1);
+    stopped = true;
+    const answers = await relay;
+    expect(answers.map((answer) => answer.id)).toEqual(["reviewer"]);
+    expect(core.submitted).toHaveLength(1);
+    expect(record.lines.at(-1)).toEqual({ speaker: "clubhouse", text: "the conversation ended: the owner stopped it" });
+    expect(core.status.read().waiting).toEqual([]);
+  });
+
+  it("records no end line when the conversation ended by itself", async () => {
+    const core = fakeCore([IDLE("s-1")]);
+    const record = roomRecord("hi");
+    await relayInMode(core.ports, "turn", [MEMBERS[0]], "hi", record, { limit: 0, stopped: () => false });
+    expect(record.lines.map((line) => line.speaker)).toEqual(["owner", "reviewer"]);
+  });
+
+  it("simul: reads the mentions of the answers after every turn, in member order, and runs those turns one after another", async () => {
+    const core = fakeCore([IDLE("s-1"), IDLE("s-2"), IDLE("s-3")], {
+      script: { "s-1": ["@tester check", "ok"], "s-2": ["@claude see", "unused"], "s-3": ["checked"] },
+    });
+    const answers = await send(core, "simul", THREE, roomRecord(), "all");
+    expect(answers.map((answer) => answer.id)).toEqual(["reviewer", "writer", "tester", "tester", "reviewer"]);
+    expect(core.submitted.slice(3).map((entry) => entry.session)).toEqual(["s-3", "s-1"]);
+  });
+});
+
+describe("conversationTurnsOf", () => {
+  it("accepts an integer from 0 to 64 and refuses any other value with the setting named", () => {
+    expect(conversationTurnsOf(0)).toBe(0);
+    expect(conversationTurnsOf(64)).toBe(64);
+    for (const value of [65, -1, 2.5, "8", undefined]) {
+      expect(() => conversationTurnsOf(value)).toThrow(`settings.conversationTurns must be an integer from 0 to 64, got ${JSON.stringify(value)}`);
+    }
   });
 });

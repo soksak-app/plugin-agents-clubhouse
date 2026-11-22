@@ -2,6 +2,7 @@
 
 ## 미출시
 
+- C62: Relay의 다른 member를 mention하는 answer는 그 member마다 같은 `message.send` relay의 turn을 mention 순서로 setting `conversationTurns`(0에서 64, 기본값 8)까지 준다. 한도와 새 command `conversation.stop` 및 그 중지 button은 `[@clubhouse]` record line으로 relay를 끝내고, protocol line은 mention이 다음 turn을 넘긴다고 알린다(`docs/spec/room.md#conversation`).
 - C61: 버전은 0.0.14이며 C39를 출시한다.
 - C39: Arrangement의 각 member tab entry는 `{plugin, params: {session, title}}`이며, 방이 member에 보이는 이름을 terminal plugin 0.0.53의 tab title로 준다. Control character 없는 1~256자 밖의 이름은 layout command 전에 거부된다(`docs/spec/room.md#arrangement`).
 - C60: 버전은 0.0.13이며 C52와 C59를 출시한다.
