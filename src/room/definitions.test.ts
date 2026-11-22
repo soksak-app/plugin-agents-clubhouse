@@ -66,10 +66,11 @@ describe("readAgentDefinitions", () => {
 });
 
 describe("toMemberDefinition", () => {
-  it("gives the start values of the terminal session: program, arguments, directory and role", async () => {
+  it("gives the name and the start values of the terminal session: program, arguments, directory and role", async () => {
     const [definition] = await readAgentDefinitions(storeOf({ definitions: { reviewer: DEFINITIONS.reviewer }, accounts: ACCOUNTS }).get);
     expect(toMemberDefinition(definition!)).toEqual({
       id: "reviewer",
+      name: "Reviewer",
       plugin: "terminal",
       params: { program: "claude", args: ["--verbose"], directory: "/work/project", role: "reviewer" },
       cwd: "/work/project",

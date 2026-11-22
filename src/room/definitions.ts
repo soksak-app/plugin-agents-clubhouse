@@ -70,6 +70,7 @@ export async function readAgentDefinitions(get: AgentDataGet): Promise<AgentDefi
 export function toMemberDefinition(definition: AgentDefinition): MemberDefinition {
   return {
     id: definition.id,
+    name: definition.name,
     plugin: definition.plugin,
     params: { program: definition.program, args: [...definition.args], directory: definition.cwd, role: definition.role },
     cwd: definition.cwd,

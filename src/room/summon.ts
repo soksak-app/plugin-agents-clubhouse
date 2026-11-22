@@ -11,6 +11,8 @@ import type { MemberSessionStore } from "./session-store";
 
 export interface MemberDefinition {
   id: string;
+  // The name that the room shows for the member; it is the title of the member tab.
+  name: string;
   // The plugin whose sessions open the member (core.session.open {plugin}). Refused by core while it declares no sessions.
   plugin: string;
   // Passed unchanged to the plugin's sidecar as the params of the session.

@@ -25,8 +25,8 @@ const FIXTURE_PLUGIN = "fixture-terminal";
 
 // Two definitions that name the fixture plugin.
 const DEFINITIONS: MemberDefinition[] = [
-  { id: "alpha", plugin: FIXTURE_PLUGIN, params: { program: "alpha-cli", args: [] }, cwd: "/work/app" },
-  { id: "beta", plugin: FIXTURE_PLUGIN, params: { program: "beta-cli", args: ["--fast"] }, cwd: "/work/app" },
+  { id: "alpha", name: "Alpha", plugin: FIXTURE_PLUGIN, params: { program: "alpha-cli", args: [] }, cwd: "/work/app" },
+  { id: "beta", name: "Beta", plugin: FIXTURE_PLUGIN, params: { program: "beta-cli", args: ["--fast"] }, cwd: "/work/app" },
 ];
 
 const SIZE = { width: 400, height: 300, scale: 2 };

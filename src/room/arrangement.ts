@@ -8,10 +8,22 @@ export const ROOM_PLUGIN = "soksak-plugin-agents-clubhouse";
 const GROUP_NAME = "Room";
 
 // A member is the owned session of C3. Its card shows the session through its params (core docs/spec/plugins.md#owned-sessions),
-// so the card attaches to the running session and starts no process.
+// so the card attaches to the running session and starts no process. The params also carry the name of the member as the title of its
+// tab (terminal plugin docs/spec/tab-title.md), so the tab shows the name that the room shows.
 export interface Member {
   plugin: string;
   session: string;
+  title: string;
+}
+
+// The text rule of tab.title: 1 to 256 characters without control characters (U+0000-U+001F, U+007F-U+009F).
+function isTabTitle(text: string): boolean {
+  const length = [...text].length;
+  return length >= 1 && length <= 256 && !/[\u0000-\u001f\u007f-\u009f]/.test(text);
+}
+
+function memberParams(member: Member): { session: string; title: string } {
+  return { session: member.session, title: member.title };
 }
 
 export type ArrangementState = { state: "idle" } | { state: "group" } | { state: "tabs"; reason: string } | { state: "error"; reason: string };
@@ -31,7 +43,12 @@ export interface ArrangementPort {
 export function arrangementTree(members: Member[]): Record<string, unknown> {
   if (members.length === 0) throw new Error("arrangement needs at least one member");
   if (members.some((m) => m.session === "")) throw new Error("arrangement member needs a session");
-  const memberCards = members.map((m) => ({ tabs: [{ plugin: m.plugin, params: { session: m.session } }] }));
+  for (const m of members) {
+    if (!isTabTitle(m.title)) {
+      throw new Error(`arrangement member ${m.session}: the tab title must be a text of 1 to 256 characters without control characters`);
+    }
+  }
+  const memberCards = members.map((m) => ({ tabs: [{ plugin: m.plugin, params: memberParams(m) }] }));
   const memberPart = memberCards.length === 1 ? memberCards[0] : { direction: "column", children: memberCards };
   return {
     group: { name: GROUP_NAME },
@@ -68,7 +85,7 @@ export async function arrangeMembers(
     }
     const reason = String(plan.reason);
     for (const member of members) {
-      await port.commands.execute("core.layout.open", { card: "current", plugin: member.plugin, params: { session: member.session } });
+      await port.commands.execute("core.layout.open", { card: "current", plugin: member.plugin, params: memberParams(member) });
     }
     status.set({ state: "tabs", reason });
     return { state: "tabs", reason };

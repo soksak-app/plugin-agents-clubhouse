@@ -47,8 +47,8 @@ function fakeRoom(options: { feasible?: boolean; refuseOpen?: string } = {}) {
 }
 
 const DEFINITIONS: MemberDefinition[] = [
-  { id: "reviewer", plugin: "terminal", params: { program: "claude", args: [], directory: "/a", role: "reviewer" }, cwd: "/a" },
-  { id: "writer", plugin: "terminal", params: { program: "codex", args: [], directory: "/b", role: "writer" }, cwd: "/b" },
+  { id: "reviewer", name: "harness", plugin: "terminal", params: { program: "claude", args: [], directory: "/a", role: "reviewer" }, cwd: "/a" },
+  { id: "writer", name: "manager-lead", plugin: "terminal", params: { program: "codex", args: [], directory: "/b", role: "writer" }, cwd: "/b" },
 ];
 
 function deps(room: ReturnType<typeof fakeRoom>["room"]) {
@@ -77,6 +77,9 @@ describe("summonAndArrange", () => {
     expect(opens[0]!.params).toMatchObject({ plugin: "terminal", size: SIZE });
     const apply = fake.calls.find((call) => call.name === "core.layout.apply");
     expect(apply).toBeDefined();
+    // Each member tab carries the definition name as its title (terminal plugin docs/spec/tab-title.md).
+    const memberTabs = (apply!.params.tree as any).tree.children[1].children.map((card: any) => card.tabs[0].params);
+    expect(memberTabs).toEqual([{ session: "s-1", title: "harness" }, { session: "s-2", title: "manager-lead" }]);
     expect(d.status.read()).toEqual({ state: "group" });
   });
 
@@ -85,7 +88,7 @@ describe("summonAndArrange", () => {
     const d = deps(fake.room);
     expect(await summonAndArrange(d, DEFINITIONS, ["reviewer"])).toEqual({ state: "tabs", reason: "no room" });
     const tabs = fake.calls.filter((call) => call.name === "core.layout.open");
-    expect(tabs).toEqual([{ name: "core.layout.open", params: { card: "current", plugin: "terminal", params: { session: "s-1" } } }]);
+    expect(tabs).toEqual([{ name: "core.layout.open", params: { card: "current", plugin: "terminal", params: { session: "s-1", title: "harness" } } }]);
   });
 
   it("with no checked member, summons nothing and leaves the arrangement idle", async () => {

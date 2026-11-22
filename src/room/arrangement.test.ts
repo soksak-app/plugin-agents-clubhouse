@@ -8,8 +8,8 @@ import { ROOM_PLUGIN, arrangeMembers, arrangementTree, createArrangementStatus, 
 const FIXTURE_PLUGIN = "fixture-terminal";
 
 const members: Member[] = [
-  { plugin: FIXTURE_PLUGIN, session: "s-claude" },
-  { plugin: FIXTURE_PLUGIN, session: "s-codex" },
+  { plugin: FIXTURE_PLUGIN, session: "s-claude", title: "harness" },
+  { plugin: FIXTURE_PLUGIN, session: "s-codex", title: "manager-lead" },
 ];
 
 function port(plan: unknown, options: { applyRejects?: boolean; planRejects?: boolean } = {}) {
@@ -53,8 +53,8 @@ describe("arrangementTree", () => {
           {
             direction: "column",
             children: [
-              { tabs: [{ plugin: FIXTURE_PLUGIN, params: { session: "s-claude" } }] },
-              { tabs: [{ plugin: FIXTURE_PLUGIN, params: { session: "s-codex" } }] },
+              { tabs: [{ plugin: FIXTURE_PLUGIN, params: { session: "s-claude", title: "harness" } }] },
+              { tabs: [{ plugin: FIXTURE_PLUGIN, params: { session: "s-codex", title: "manager-lead" } }] },
             ],
           },
         ],
@@ -64,7 +64,7 @@ describe("arrangementTree", () => {
 
   it("uses one member card directly when there is a single member", () => {
     const tree = arrangementTree([members[0]]) as { tree: { children: unknown[] } };
-    expect(tree.tree.children[1]).toEqual({ tabs: [{ plugin: FIXTURE_PLUGIN, params: { session: "s-claude" } }] });
+    expect(tree.tree.children[1]).toEqual({ tabs: [{ plugin: FIXTURE_PLUGIN, params: { session: "s-claude", title: "harness" } }] });
   });
 
   it("refuses an empty member list at the boundary", () => {
@@ -72,7 +72,27 @@ describe("arrangementTree", () => {
   });
 
   it("refuses a member without a session, because its card would start a second process", () => {
-    expect(() => arrangementTree([{ plugin: FIXTURE_PLUGIN, session: "" }])).toThrow("arrangement member needs a session");
+    expect(() => arrangementTree([{ plugin: FIXTURE_PLUGIN, session: "", title: "harness" }])).toThrow("arrangement member needs a session");
+  });
+
+  // The title of a member tab follows the text rule of tab.title (terminal plugin docs/spec/tab-title.md): 1 to 256 characters
+  // without control characters. The room refuses another name before it sends a layout command.
+  it.each([
+    ["an empty name", ""],
+    ["a name of 257 characters", "a".repeat(257)],
+    ["a name with a line feed", "harness\nlead"],
+    ["a name with a C1 control character", "harness\u0085"],
+  ])("refuses %s as the title of a member tab", (_label, title) => {
+    expect(() => arrangementTree([{ plugin: FIXTURE_PLUGIN, session: "s-claude", title }])).toThrow(
+      "arrangement member s-claude: the tab title must be a text of 1 to 256 characters without control characters",
+    );
+  });
+
+  it("accepts a name of 256 characters counted as code points", () => {
+    const title = "가".repeat(255) + "\u{1F600}";
+    expect(arrangementTree([{ plugin: FIXTURE_PLUGIN, session: "s-claude", title }]).tree).toMatchObject({
+      children: [{}, { tabs: [{ params: { session: "s-claude", title } }] }],
+    });
   });
 });
 
@@ -97,8 +117,8 @@ describe("arrangeMembers", () => {
       "core.layout.open",
       "core.layout.open",
     ]);
-    expect(calls[1][1]).toEqual({ card: "current", plugin: FIXTURE_PLUGIN, params: { session: "s-claude" } });
-    expect(calls[2][1]).toEqual({ card: "current", plugin: FIXTURE_PLUGIN, params: { session: "s-codex" } });
+    expect(calls[1][1]).toEqual({ card: "current", plugin: FIXTURE_PLUGIN, params: { session: "s-claude", title: "harness" } });
+    expect(calls[2][1]).toEqual({ card: "current", plugin: FIXTURE_PLUGIN, params: { session: "s-codex", title: "manager-lead" } });
     expect(status.read()).toEqual({ state: "tabs", reason: infeasible.reason });
   });
 

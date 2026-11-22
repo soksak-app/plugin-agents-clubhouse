@@ -24,7 +24,7 @@ export async function summonAndArrange(
   const members: Member[] = summoned.map((member) => {
     const definition = definitions.find((entry) => entry.id === member.id);
     if (definition === undefined) throw new Error(`summoned member ${member.id} has no definition`);
-    return { plugin: definition.plugin, session: member.session };
+    return { plugin: definition.plugin, session: member.session, title: definition.name };
   });
   if (members.length === 0) {
     deps.status.set({ state: "idle" });
