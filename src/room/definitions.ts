@@ -1,7 +1,8 @@
-// The agent definitions of the room (core F1074, agents A13). The room reads the status agents.definitions of the agents plugin, which
-// lists each definition as {id, name, account, plugin, program, args, role, cwd} with program and args resolved from the account. The
-// room holds no plugin identifier in its code: plugin comes from each definition. A value of another form is refused with an explicit
-// error that names the status, and nothing is converted.
+// The agent definitions of the room, read from the stored project data of the agents plugin (agents docs/spec/definitions.md): the key
+// definitions holds each definition with {name, account, plugin, role, cwd}, and the key accounts holds each account with {id, cli, args,
+// env}. Program and args are not stored: they are the cli and args of the account of the definition, resolved here with the rule of the
+// agents plugin. The room names no plugin in its code; plugin comes from each definition. A stored value of another form is refused with
+// an explicit error that names the agents project data and the key.
 import type { MemberDefinition } from "./summon";
 
 export interface AgentDefinition {
@@ -15,24 +16,53 @@ export interface AgentDefinition {
   cwd: string;
 }
 
-const MEMBERS = ["id", "name", "account", "plugin", "program", "args", "role", "cwd"];
-const WHERE = "agents.definitions status";
+// Reads the key of the agents plugin through get; the room passes the read of runtime.data.get with plugin agents (F1075).
+export type AgentDataGet = (key: string) => Promise<unknown>;
 
-// Throws with the text of the rule when the value is not a list of definitions with exactly the declared members.
-export function parseAgentDefinitions(value: unknown): AgentDefinition[] {
-  if (!Array.isArray(value)) throw new Error(`${WHERE}: the value is not a list of definitions`);
-  value.forEach((entry: unknown, index) => {
-    const record = entry !== null && typeof entry === "object" && !Array.isArray(entry) ? (entry as Record<string, unknown>) : null;
-    const keys = record === null ? [] : Object.keys(record).sort();
-    const expected = [...MEMBERS].sort();
-    const shaped = keys.length === expected.length && keys.every((key, i) => key === expected[i]);
-    const texts = record !== null && ["id", "name", "account", "plugin", "program", "role", "cwd"].every((key) => typeof record[key] === "string");
-    const argsText = record !== null && Array.isArray(record.args) && record.args.every((arg) => typeof arg === "string");
-    if (!shaped || !texts || !argsText) {
-      throw new Error(`${WHERE}: definition ${index} must have the members id, name, account, plugin, program, args, role and cwd`);
+const WHERE = "agents project data";
+const DEFINITION_MEMBERS = ["account", "cwd", "name", "plugin", "role"];
+const ACCOUNT_MEMBERS = ["args", "cli", "env", "id"];
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function sameMembers(record: Record<string, unknown>, members: string[]): boolean {
+  const keys = Object.keys(record).sort();
+  return keys.length === members.length && keys.every((key, i) => key === members[i]);
+}
+
+// Reads the definitions and the accounts, and resolves each definition with the program and arguments of its account, in the code
+// point order of its identifier. An absent key reads as no definitions and no accounts.
+export async function readAgentDefinitions(get: AgentDataGet): Promise<AgentDefinition[]> {
+  const stored = (await get("definitions")) ?? {};
+  const accounts = (await get("accounts")) ?? [];
+  if (!isRecord(stored)) throw new Error(`${WHERE} definitions: the value is not an object of definition identifier to {name, account, plugin, role, cwd}`);
+  if (!Array.isArray(accounts)) throw new Error(`${WHERE} accounts: the value is not a list of accounts`);
+  accounts.forEach((account, index) => {
+    if (!isRecord(account) || !sameMembers(account, ACCOUNT_MEMBERS)) {
+      throw new Error(`${WHERE} accounts: account ${index} must have the members id, cli, args and env only`);
     }
   });
-  return value as AgentDefinition[];
+  const definitions = Object.keys(stored).sort().map((id) => {
+    const record = stored[id];
+    if (!isRecord(record) || !sameMembers(record, DEFINITION_MEMBERS) || !DEFINITION_MEMBERS.every((key) => typeof record[key] === "string")) {
+      throw new Error(`${WHERE} definitions: definition ${id} must have the members account, cwd, name, plugin and role`);
+    }
+    const account = (accounts as Record<string, unknown>[]).find((entry) => entry.id === record.account);
+    if (account === undefined) throw new Error(`${WHERE}: definition ${id} uses account ${String(record.account)} that is not defined`);
+    return {
+      id,
+      name: record.name as string,
+      account: record.account as string,
+      plugin: record.plugin as string,
+      program: account.cli as string,
+      args: [...(account.args as string[])],
+      role: record.role as string,
+      cwd: record.cwd as string,
+    };
+  });
+  return definitions;
 }
 
 // The member of the room for a definition: the session opens with the terminal's start values of the definition (program, arguments,

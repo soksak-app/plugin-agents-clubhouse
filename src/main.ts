@@ -17,7 +17,7 @@ import type { RoomPort } from "./room/port";
 import { createTrace } from "./tower/trace";
 import { createRoomReport } from "./room/report";
 import { createArrangementStatus } from "./room/arrangement";
-import { parseAgentDefinitions, toMemberDefinition, type AgentDefinition } from "./room/definitions";
+import { readAgentDefinitions, toMemberDefinition, type AgentDataGet, type AgentDefinition } from "./room/definitions";
 import { createMemberSessionStore } from "./room/session-store";
 import { serialRunner, summonAndArrange, type TriggerDeps } from "./room/trigger";
 import { relayToMembers, type RelayPorts } from "./room/room-relay";
@@ -32,6 +32,8 @@ const MODES: { id: RoomMode; key: "modeFacil" | "modeTurn" | "modeSimul" }[] = [
   { id: "simul", key: "modeSimul" },
 ];
 const EXPOSE = "soksak-plugin-agents-clubhouse";
+// The plugin whose stored definitions and accounts the room reads (agents docs/spec/definitions.md, dependencies in plugin.json).
+const AGENTS_PLUGIN = "agents";
 
 const CSS = `
 .st{position:absolute;inset:0;display:flex;flex-direction:column;background:var(--bg,#1e1e1e);color:var(--fg,#ddd);font:13px system-ui,-apple-system,sans-serif;overflow:hidden}
@@ -289,16 +291,6 @@ function buildRoom({ settings, collections }: RoomContext): RoomHandlers {
   renderTabs();
   renderMode();
 
-  // Each change of the status agents.definitions replaces the roster, and a value of another form is reported as an error.
-  Promise.resolve(bridge!.runtime.status.watch("agents.definitions", (value: unknown) => {
-    try {
-      definitions = parseAgentDefinitions(value);
-      roster.splice(0, roster.length, ...rosterFrom(definitions, roster));
-      renderTabs();
-    } catch (error) {
-      report("agents.definitions", String((error as Error)?.message ?? error));
-    }
-  })).catch((error: unknown) => report("agents.definitions", `status watch: ${String((error as Error)?.message ?? error)}`));
   // The member sessions of the room: the owned session of each checked definition, while core.sessions lists it as open (C3).
   const sessions = createMemberSessionStore(collections);
   if (sessions === undefined) throw new Error("the room needs project data for its member sessions");
@@ -317,6 +309,22 @@ function buildRoom({ settings, collections }: RoomContext): RoomHandlers {
   const refreshReported = (): void => {
     refreshMembers().catch((error: unknown) => report("room members", String((error as Error)?.message ?? error)));
   };
+
+  // The definitions are the stored data of the agents plugin (C17): read with runtime.data.get {key, plugin: "agents"} (core F1075), and
+  // read again on each data change. The roster follows them; a stored value of another form is reported through the room error path.
+  const agentData: AgentDataGet = (key) => bridge!.calls.request("runtime.data.get", { key, plugin: AGENTS_PLUGIN });
+  const refreshDefinitions = (): void => {
+    readAgentDefinitions(agentData)
+      .then((next) => {
+        definitions = next;
+        roster.splice(0, roster.length, ...rosterFrom(definitions, roster));
+        renderTabs();
+        refreshReported();
+      })
+      .catch((error: unknown) => report("agents.definitions", String((error as Error)?.message ?? error)));
+  };
+  bridge!.runtime.data.on(() => refreshDefinitions());
+  refreshDefinitions();
 
   // The value of core.sessions, which the relay reads, and the listeners that the relay watches it with.
   let sessionsValue: unknown = [];
