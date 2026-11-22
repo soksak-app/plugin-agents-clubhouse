@@ -57,3 +57,4 @@
 - [o] C51 — P0: C49와 C50으로 0.0.9를 출시한다. `package.json`이 0.0.9를 선언하고, main의 release run이 v0.0.9를 게시한다.
 - [ ] C52 — P1: 방 대화에 status가 있다. 입력: 방 대화는 owner와 member의 항목 `{speaker, text}`를 보여 주지만 `plugin.json`의 어떤 선언된 status도 이를 담지 않으므로, 호출자는 그려진 page에서만 대화를 읽는다. 기대: 선언된 status가 page가 보여 주는 대화 항목을 담고, `docs/spec/room.md`가 이를 명시한다.
 - [o] C53 — P0: 실패한 relay가 방에 보인다. 입력: command로 호출한 `message.send`가 `member harness-harness: the screen shows no reply row: no row starts with the reply marker`로 reject했지만, send button과 input의 binding만 실패를 보고했으므로 방은 아무것도 보이지 않았다. 기대: `message.send`가 element와 command 호출 모두에서 각 거부와 실패한 relay를 error display로 `error: room relay: <reason>`으로 보고하고, binding은 두 번 보고하지 않는다(`docs/spec/room.md#commands`). Red/Green: `src/room/operations.test.ts`의 두 test가 operation의 `failed` 보고 없이 실패했고 통과한다.
+- [o] C54 — P0: C47과 C53으로 0.0.10을 출시한다. `package.json`이 0.0.10을 선언하고, main의 release run이 v0.0.10을 게시한다.
