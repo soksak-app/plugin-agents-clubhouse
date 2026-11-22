@@ -69,7 +69,7 @@ describe("relayToMembers", () => {
     const core = fakeCore([IDLE("s-1")], { screens: { "s-1": rows } });
     const answers = await relayToMembers(core.ports, [{ id: "harness-harness", session: "s-1" }], "hello");
     expect(answers).toEqual([
-      { id: "harness-harness", text: "승민선배, 저는 harness고 코드 변경을 꼼꼼히 확인하고\n커밋하는 일을 잘하는데요, 아직 앞에서 말한 사람이\n없어서 덧붙일 말은 없어요." },
+      { id: "harness-harness", text: "여러분들, 저는 harness고 코드 변경을 꼼꼼히 확인하고\n커밋하는 일을 잘하는데요, 아직 앞에서 말한 사람이\n없어서 덧붙일 말은 없어요." },
     ]);
   });
 

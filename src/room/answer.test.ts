@@ -10,7 +10,7 @@ const screen = (id: string): string[] => fixture.screens.find((entry) => entry.i
 describe("answerText", () => {
   it("takes only the reply rows of a screen, without the status line, the separators and the prompt", () => {
     expect(answerText(screen("harness-harness"))).toBe(
-      "승민선배, 저는 harness고 코드 변경을 꼼꼼히 확인하고\n커밋하는 일을 잘하는데요, 아직 앞에서 말한 사람이\n없어서 덧붙일 말은 없어요.",
+      "여러분들, 저는 harness고 코드 변경을 꼼꼼히 확인하고\n커밋하는 일을 잘하는데요, 아직 앞에서 말한 사람이\n없어서 덧붙일 말은 없어요.",
     );
   });
 
