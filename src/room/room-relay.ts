@@ -69,6 +69,8 @@ export interface RelayPorts extends SessionCommandPort {
   watchSessions(listener: (value: unknown) => void): () => void;
   // Names a member whose turn the room waits for in the conversation status (docs/spec/room.md#conversation-status).
   waiting: BeginWaiting;
+  // Resolves when the last write of the tab state has completed, and rejects with its failure (docs/spec/room.md#restart).
+  persisted(): Promise<void>;
 }
 
 function messageOf(error: unknown): string {
@@ -131,6 +133,14 @@ async function relayToMember(
     turn = ports.answers.open(member.session, member.id, record.length(member.session));
   } catch (error) {
     throw new Error(`member ${member.id}: ${messageOf(error)}`);
+  }
+  // The tab state that holds the token is written before the line is submitted, so a reload of the page never leaves the member with a
+  // token that the next page cannot restore (docs/spec/room.md#restart).
+  try {
+    await ports.persisted();
+  } catch (error) {
+    turn.close();
+    throw new Error(`member ${member.id}: the tab state with its turn token was not written: ${messageOf(error)}`);
   }
   const end = `${roles === null ? "" : `${roles} | `}[@clubhouse] ${TURN_RULE} | [@clubhouse] turn ${turn.turn}`;
   let submittedAt = 0;

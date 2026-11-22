@@ -74,6 +74,7 @@ function fakeCore(
     // Replaced below by the submit queue over these ports, so a test that replaces execute changes the submits too.
     lines: null as never,
     surface: "room-1",
+    persisted: () => Promise.resolve(),
     sessions: () => sessions.map((entry) => ({ ...entry })),
     watchSessions: (listener) => {
       listeners.add(listener);
@@ -707,6 +708,30 @@ describe("a relay with a leader (docs/spec/room.md#leader)", () => {
     core.answer("s-1", "settled", "ok");
     await core.submits(3);
     core.answer("s-l", "settled", "end");
+    await relay;
+  });
+});
+
+// A reload of the room page before the tab state that holds a new token is written (C91-1): the member must never hold a token that
+// the room cannot restore, so the room submits the turn line only after that write completed.
+describe("the token is written before its turn line", () => {
+  it("submits the turn line only after the tab state write of its token completed", async () => {
+    const core = fakeCore([IDLE("s-1")], { manual: true });
+    let release: () => void = () => {};
+    const tokensAtWrite: number[] = [];
+    core.ports.persisted = () => {
+      tokensAtWrite.push(core.ports.answers.tokens().length);
+      return new Promise<void>((resolve) => (release = resolve));
+    };
+    const record = roomRecord("go");
+    core.bound.record = record;
+    const relay = relayInMode(core.ports, "turn", [MEMBERS[0]], "go", record, OPEN);
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(core.submitted).toHaveLength(0);
+    expect(tokensAtWrite).toEqual([1]);
+    release();
+    await core.submits(1);
+    core.answer("s-1", "settled");
     await relay;
   });
 });

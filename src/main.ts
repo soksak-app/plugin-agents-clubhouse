@@ -223,6 +223,8 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   // The member sessions that this room opened, and the sessions that received the room protocol.
   const roomSessions = new Set<string>(saved?.sessions ?? []);
   const taughtSessions = new Set<string>(saved?.protocolSessions ?? []);
+  // The last write of the tab state, which a turn line waits for (docs/spec/room.md#restart).
+  let lastWrite: Promise<void> = Promise.resolve();
   const persist = (): void => {
     const value: RoomTabState = {
       roster: roster.map((entry) => ({ id: entry.id, checked: entry.checked, role: entry.role, leader: entry.leader })),
@@ -241,9 +243,12 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
       json = serializedRoomState(value);
     } catch (error) {
       report("room tab state", String((error as Error)?.message ?? error));
+      lastWrite = Promise.reject(error);
+      lastWrite.catch(() => {});
       return;
     }
-    bridge!.calls.request("tab.state.write", JSON.parse(json)).catch((error: unknown) => report("room tab state", String((error as Error)?.message ?? error)));
+    lastWrite = bridge!.calls.request("tab.state.write", JSON.parse(json)).then(() => undefined);
+    lastWrite.catch((error: unknown) => report("room tab state", String((error as Error)?.message ?? error)));
   };
   // The roster lists the agent definitions of the agents plugin (C13); it is empty until the status arrives.
   const roster: RosterEntry[] = [];
@@ -562,6 +567,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
     answers,
     lines,
     surface,
+    persisted: () => lastWrite,
     sessions: () => sessionsValue,
     waiting: (member, step) => conversationStatus.waiting(member, step),
     watchSessions: (listener) => {
