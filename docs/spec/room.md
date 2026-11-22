@@ -47,9 +47,17 @@ The mode of the room (`facil`, `turn`, `simul`) decides who receives a message w
 - `facil`: one member, the first member in roster order whose session is `idle`. When no member is `idle`, the send is refused with `no member is idle`. Mentioned members receive the message one after another.
 - `simul`: each member at the same time. The room submits the message to every member before any turn ends, and resolves when every turn has ended; the answers keep roster order (or mention order).
 
-When members receive a message one after another (`turn`, and mentioned members in `turn` and `facil`), each member receives the message together with the answers of the members before it, so that it reads what was said before its turn: the line is `[@owner] <message>`, followed for each earlier member in relay order by ` | [@<name>] <answer>`, with each line break inside an answer replaced by a space, because `core.session.submit` refuses CR and LF. In `simul` every member receives `[@owner] <message>` alone, because no turn has ended when the room submits it. Each line ends with ` | [@clubhouse] turn <token>`, the token of the turn of its member ([answer](#answer)).
+Every member reads the whole room record ([room record](#room-record)): the line that a member receives at the start of its turn holds every record line that the member has not received yet, in record order, followed by ` | [@clubhouse] turn <token>`, the token of the turn of its member ([answer](#answer)). When members receive a message one after another (`turn`, and mentioned members in `turn` and `facil`), the answers of the members before it in this relay are record lines, so each member reads what was said before its turn. In `simul` the room submits to every member before any turn ends, so each line ends at the message of the owner; the answers of that relay reach each member at its next turn.
 
-A failed turn rejects the relay with the member and the reason, and `message.send` reports it ([commands](#commands)). In `turn` and `facil` the members after it receive nothing; in `simul` the other turns run to their end, and the relay rejects with the first failure in member order.
+A failed turn rejects the relay with the member and the reason, and `message.send` reports it ([commands](#commands)). A relay that fails before any member answered withdraws the line of the owner from the room record and from the conversation; a relay that fails after an answer keeps the line of the owner and every answer that arrived ([room record](#room-record)). In `turn` and `facil` the members after it receive nothing; in `simul` the other turns run to their end, and the relay rejects with the first failure in member order.
+
+## Room record
+
+The room record is the conversation of the room: the line of each message of the owner and the answer of each member, in the order in which the room took them. The room appends the line of the owner when `message.send` accepts it, and each answer when it arrives; in `simul` the room appends the answers of a relay in member order after every turn has ended, also the answers of a relay in which another turn failed.
+
+The room delivers the record to each member session. For each session the room keeps the number of record lines that it delivered (`delivered` of the [tab state](#restart)), and at the start of each turn of the member it submits the record lines from that number to the end, each as `[@<speaker>] <text>` with each line break inside the text replaced by a space, joined with ` | `, because `core.session.submit` refuses CR and LF. A line that the member spoke itself is left out, because the member gave it. After an accepted submit the number is the length of the record at the moment the line was built. A session without a number has received no line, so a session that a later summon opens for a member receives the whole record at its first turn. The member therefore receives the answers of the members after it in a turn, of a `simul` relay and of earlier messages at its next turn, and every member reads the same record.
+
+A send that fails before any answer of its relay is in the record withdraws the line of the owner: the room removes it from the record and from the conversation, lowers each delivered number above the length of the record to that length, and `message.send` reports the failure through the error display ([commands](#commands)), which keeps the reason. The record holds no message that no member answered, so a repeated send after failures leaves one line of the owner. A send that fails after an answer keeps the line of the owner and the answers that arrived, because a member answered it.
 
 ## Answer
 
@@ -76,13 +84,14 @@ The answer comes through a declared room command whose call carries the token of
 
 ## Restart
 
-A restart of the application, an unload of the room tab and a restart of its view show the room as it was, without input. The room declares `surface.unload` `{format: 1, maxBytes: 1048576}` and writes the state of its tab through the tab state of its view (`tab.state.write`) at each change; core keeps it per tab across a restart (core `docs/spec/plugins.md#memory-saver`). The state is `{roster, mode, conversation, sessions, protocolSessions}`:
+A restart of the application, an unload of the room tab and a restart of its view show the room as it was, without input. The room declares `surface.unload` `{format: 1, maxBytes: 1048576}` and writes the state of its tab through the tab state of its view (`tab.state.write`) at each change; core keeps it per tab across a restart (core `docs/spec/plugins.md#memory-saver`). The state is `{roster, mode, conversation, sessions, protocolSessions, delivered}`:
 
 - `roster`: the entries `{id, checked}` in roster order. At start the first roster that the definitions give keeps this order and these checks; a definition that is not in it joins unchecked at the end, and an entry without a definition leaves.
 - `mode`: the conversation mode; the setting `kibitzDefault` gives the mode only of a room tab without a state.
 - `conversation`: the entries `{speaker, text}` that the conversation shows, `speaker` being `owner` or the identifier of a member and `text` the message or the [answer](#answer) of the member, so the conversation shows the same answers after a restart.
 - `sessions`: the member sessions that this room opened.
 - `protocolSessions`: the sessions that received the [room protocol](#room-protocol) with the answer command; a session in it receives no protocol line again.
+- `delivered`: an object that maps a member session to the number of [room record](#room-record) lines that the room delivered to it, an integer from 0 to the length of `conversation`.
 
 The reader accepts only this form and refuses any other value with `room tab state: <field> ...` naming the field and what it found, and a field outside this form, such as the earlier `taught`, with `room tab state: unknown field <field>`; a tab without a state reads `null`. A refused write is reported as `error: room tab state: <reason>`.
 
@@ -94,10 +103,8 @@ While a message is relayed the room reports `tab.keep {reason: "busy", on: true}
 
 ## Shared record
 
-When a mention narrowed the receivers of a message and every mentioned member has answered, the room submits the record of that exchange to each other member with an open session, in roster order. The text is:
+When a mention narrowed the receivers of a message and every mentioned member has answered, the room submits the record lines that each other member with an open session has not received ([room record](#room-record)), in roster order. The text is:
 
-`답은 하지말고 알고있어. [@owner]와 [@<member1>], [@<member2>]의 대화기록이다. 답하지말고 참고해.` followed by the record, one entry per line: `[@owner] <message>`, then `[@<member>] <answer>` for each mentioned member in mention order. An answer is the text the conversation shows for that member.
-
-`core.session.submit` refuses CR and LF, so the room joins the parts of the text with ` | ` in place of each line break, and replaces each line break inside a message or an answer with a space.
+`답은 하지말고 알고있어. [@owner]와 [@<member1>], [@<member2>]의 대화기록이다. 답하지말고 참고해.` followed by those record lines, as the room record forms them; the names are the members that speak in those lines, in the order of their first line. An accepted submit sets the delivered number of the member to the length of the record, so its next turn does not repeat those lines.
 
 The room waits for no turn of these members and shows nothing of their output. A member whose session is not `idle` receives no record; the room reports `error: room record: member <id> is <state>: record not sent` (`<state>` is `without a program state` when the session reports none), and a refused submit is reported with its reason.

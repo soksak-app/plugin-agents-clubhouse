@@ -2,6 +2,7 @@
 
 ## 미출시
 
+- C57: 모든 member는 모든 mode의 각 turn 시작과 공유 기록에서 그 session이 받지 않은 모든 room record 줄을 받는다. Tab state는 session마다 전달한 수를 `delivered`에 보관하고, 답이 나오기 전에 실패한 relay는 owner의 줄을 거둔다(`docs/spec/room.md#room-record`).
 - C56: 버전은 0.0.11이며 C55를 출시한다.
 - C55: Member는 전달된 줄 끝의 token에 대해 선언된 command `soksak-plugin-agents-clubhouse.answer {turn, text}`로 답을 전한다. 답이 도착하면 turn이 끝나고, 답 없이 idle이 된 program은 turn을 실패시키며, tab state는 `taught` 대신 `protocolSessions`를 쓰고, 방은 화면에서 답을 읽지 않는다(`docs/spec/room.md#answer`).
 - C54: 버전은 0.0.10이며 C47과 C53을 출시한다.

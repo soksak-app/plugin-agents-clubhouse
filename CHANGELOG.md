@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- C57: Every member receives at the start of each turn, in every mode, and in the shared record, every room record line that its session has not received; the tab state keeps the delivered number of each session in `delivered`, and a relay that fails before any answer withdraws the line of the owner (`docs/spec/room.md#room-record`).
 - C56: The version is 0.0.11, which releases C55.
 - C55: A member delivers its answer with the declared command `soksak-plugin-agents-clubhouse.answer {turn, text}` for the token that ends its relayed line; the turn ends when the answer arrives, a program idle without an answer fails the turn, the tab state names `protocolSessions` in place of `taught`, and the room reads no answer from the screen (`docs/spec/room.md#answer`).
 - C54: The version is 0.0.10, which releases C47 and C53.

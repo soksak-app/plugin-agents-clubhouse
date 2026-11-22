@@ -13,10 +13,12 @@ export interface RoomState {
   sessions: string[];
   // The sessions that received the room protocol with the answer command (docs/spec/room.md#room-protocol).
   protocolSessions: string[];
+  // The number of room record lines that the room delivered to each member session (docs/spec/room.md#room-record).
+  delivered: Record<string, number>;
 }
 
 const MODES: readonly string[] = ["facil", "turn", "simul"];
-const FIELDS: readonly string[] = ["roster", "mode", "conversation", "sessions", "protocolSessions"];
+const FIELDS: readonly string[] = ["roster", "mode", "conversation", "sessions", "protocolSessions", "delivered"];
 
 const isText = (value: unknown): value is string => typeof value === "string" && value !== "";
 
@@ -40,11 +42,21 @@ export function parseRoomState(value: unknown): RoomState | null {
     const list = state[field];
     if (!Array.isArray(list) || !list.every(isText)) throw new Error(`room tab state: ${field} must be an array of session identifiers`);
   }
+  const delivered = state.delivered;
+  if (typeof delivered !== "object" || delivered === null || Array.isArray(delivered)) {
+    throw new Error(`room tab state: delivered must be an object of session counts, got ${JSON.stringify(delivered)}`);
+  }
+  for (const [session, count] of Object.entries(delivered)) {
+    if (session === "" || !Number.isInteger(count) || (count as number) < 0 || (count as number) > conversation.length) {
+      throw new Error(`room tab state: delivered ${session} must be an integer from 0 to ${conversation.length}, got ${JSON.stringify(count)}`);
+    }
+  }
   return {
     roster: roster.map((entry) => ({ id: entry.id, checked: entry.checked })),
     mode: state.mode as RoomMode,
     conversation: conversation.map((entry) => ({ speaker: entry.speaker, text: entry.text })),
     sessions: [...(state.sessions as string[])],
     protocolSessions: [...(state.protocolSessions as string[])],
+    delivered: { ...(delivered as Record<string, number>) },
   };
 }

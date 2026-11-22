@@ -1,5 +1,5 @@
 // The state of a room tab (docs/spec/room.md#restart): the roster order and checks, the mode, the conversation, the sessions that the
-// room opened and the sessions that received the room protocol, written through the tab state of the view and read back at start.
+// room opened, the sessions that received the room protocol and the delivered numbers of the room record, written through the tab state of the view and read back at start.
 import { describe, expect, it } from "vitest";
 import { parseRoomState, type RoomState } from "./room-state";
 
@@ -12,9 +12,15 @@ const state: RoomState = {
   ],
   sessions: ["owned-1"],
   protocolSessions: ["owned-1"],
+  delivered: { "owned-1": 2 },
 };
 
 describe("parseRoomState", () => {
+  it("refuses a state without the delivered numbers of the room record", () => {
+    const { delivered: _current, ...rest } = state;
+    expect(() => parseRoomState(rest)).toThrow("room tab state: delivered must be an object of session counts, got undefined");
+  });
+
   it("reads null as a room without a stored state", () => {
     expect(parseRoomState(null)).toBeNull();
   });
@@ -30,6 +36,10 @@ describe("parseRoomState", () => {
     expect(() => parseRoomState({ ...state, protocolSessions: [3] })).toThrow(
       "room tab state: protocolSessions must be an array of session identifiers",
     );
+    expect(() => parseRoomState({ ...state, delivered: { "owned-1": 3 } })).toThrow(
+      "room tab state: delivered owned-1 must be an integer from 0 to 2, got 3",
+    );
+    expect(() => parseRoomState({ ...state, delivered: [] })).toThrow("room tab state: delivered must be an object of session counts, got []");
     expect(() => parseRoomState([])).toThrow("room tab state must be an object, got []");
   });
 

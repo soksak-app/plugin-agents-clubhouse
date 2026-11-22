@@ -24,6 +24,7 @@ import { serialRunner, summonAndArrange, type TriggerDeps } from "./room/trigger
 import { relayInMode, type RelayPorts } from "./room/room-relay";
 import { mentionedMembers } from "./room/mention";
 import { shareRecord } from "./room/record";
+import { createRoomRecord, withdrawnOnFailure } from "./room/room-record";
 import { createProtocolInjector } from "./room/protocol";
 import { parseRoomState, type RoomState as RoomTabState } from "./room/room-state";
 import { ownedSessionIds } from "./room/session-channel";
@@ -193,6 +194,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
       conversation,
       sessions: [...roomSessions],
       protocolSessions: [...taughtSessions],
+      delivered: record.delivered(),
     };
     bridge!.calls.request("tab.state.write", value).catch((error: unknown) => report("room tab state", String((error as Error)?.message ?? error)));
   };
@@ -340,6 +342,8 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
         }
         roster.splice(0, roster.length, ...rosterFrom(definitions, roster.length === 0 ? seed : roster));
         renderTabs();
+        // The conversation names each member by its roster name.
+        showConversation();
         refreshReported();
         // At start the checked members of the saved state are summoned: a member with an open session of this room is reattached,
         // and only a member without one opens a session (docs/spec/room.md#restart).
@@ -419,18 +423,21 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
       return () => void sessionListeners.delete(listener);
     },
   };
-  // The conversation names the owner or a member by its identifier and shows the roster name of the member.
-  const showMessage = (speaker: string, text: string): void => {
-    const who = speaker === "owner" ? (lang === "ko" ? "나" : "You") : (roster.find((entry) => entry.id === speaker)?.name ?? speaker);
-    msgs.append(elText("div", `${who}: ${text}`, "st-msg"));
+  // The conversation shows the room record: it names the owner or a member by its identifier and shows the roster name of the member.
+  const memberName = (speaker: string): string => roster.find((entry) => entry.id === speaker)?.name || speaker;
+  const showConversation = (): void => {
+    msgs.replaceChildren(
+      ...conversation.map((entry) => elText("div", `${entry.speaker === "owner" ? (lang === "ko" ? "나" : "You") : memberName(entry.speaker)}: ${entry.text}`, "st-msg")),
+    );
     msgs.scrollTop = msgs.scrollHeight;
   };
-  const appendMessage = (speaker: string, text: string): void => {
-    conversation.push({ speaker, text });
-    showMessage(speaker, text);
+  // Each member receives the record lines that it has not received at the start of its turn (docs/spec/room.md#room-record).
+  const speakerName = (speaker: string): string => (speaker === "owner" ? "owner" : memberName(speaker));
+  const record = createRoomRecord(conversation, saved?.delivered ?? {}, speakerName, () => {
+    showConversation();
     persist();
-  };
-  for (const entry of conversation) showMessage(entry.speaker, entry.text);
+  });
+  showConversation();
   // Each member session receives the room protocol once, after it first reports idle and before its first relayed message
   // (docs/spec/room.md#room-protocol). The injector reports each refusal itself and resolves with the outcome of each member.
   const protocol = createProtocolInjector(relayPorts, report, {
@@ -458,25 +465,21 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   };
   // A message runs message.send from the send button and from Enter without Shift in the input (docs/spec/room.md#commands).
   // The relay resolves with the answer of each member in relay order.
-  const relayMessage = async (text: string): Promise<{ id: string; text: string }[]> => {
-    const targets = openMembers();
-    const taught = await taughtMembers(targets);
-    if (taught.length === 0) throw new Error("no member has the room protocol");
-    const answers = await relayInMode(relayPorts, mode, taught, text);
-    const shown = answers.map((answer) => {
-      const member = targets.find((entry) => entry.id === answer.id)!;
-      appendMessage(member.id, answer.text);
-      return { member, text: answer.text };
+  // A relay that fails before any answer withdraws the line of the owner from the record (docs/spec/room.md#room-record).
+  const relayMessage = (text: string): Promise<{ id: string; text: string }[]> =>
+    withdrawnOnFailure(record, async () => {
+      const taught = await taughtMembers(openMembers());
+      if (taught.length === 0) throw new Error("no member has the room protocol");
+      const answers = await relayInMode(relayPorts, mode, taught, text, record);
+      // A mention narrowed the receivers: the other members receive the record lines that they have not received and answer nothing
+      // that the room shows (docs/spec/room.md#shared-record).
+      const mentioned = mentionedMembers(text, taught);
+      if (mentioned.length > 0) {
+        const others = taught.filter((entry) => !mentioned.includes(entry));
+        await shareRecord(relayPorts, record, others, speakerName, report);
+      }
+      return answers;
     });
-    // A mention narrowed the receivers: the other members receive the record of the exchange and answer nothing that the room
-    // shows (docs/spec/room.md#shared-record).
-    const mentioned = mentionedMembers(text, taught);
-    if (mentioned.length > 0) {
-      const others = taught.filter((entry) => !mentioned.includes(entry));
-      await shareRecord(relayPorts, { message: text, answers: shown }, others, report);
-    }
-    return shown.map((one) => ({ id: one.member.id, text: one.text }));
-  };
   const operations = createRoomOperations({
     roster,
     mode: () => mode,
@@ -492,7 +495,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
     openMembers: () => openMembers().length,
     accept: (text) => {
       input.value = "";
-      appendMessage("owner", text);
+      record.append("owner", text);
     },
     busy: (value) => {
       busy = value;

@@ -47,9 +47,17 @@ Mention은 `@` 뒤의 member 이름이나 identifier이며 대소문자를 구�
 - `facil`: member 하나, 즉 roster 순서에서 session이 `idle`인 첫 member가 받는다. `idle`인 member가 없으면 send는 `no member is idle`로 거부된다. Mention된 member들은 차례로 받는다.
 - `simul`: 모든 member가 동시에 받는다. 방은 어떤 turn이 끝나기 전에 모든 member에게 submit하고, 모든 turn이 끝나면 resolve한다. 답은 roster 순서(또는 mention 순서)를 지킨다.
 
-Member들이 메시지를 차례로 받을 때(`turn`, 그리고 `turn`과 `facil`에서 mention된 member) 각 member는 자기 turn 전에 나온 말을 읽도록 메시지와 함께 앞 member들의 답을 받는다. 줄은 `[@owner] <message>`이고, relay 순서로 앞의 각 member마다 ` | [@<name>] <answer>`가 뒤따른다. `core.session.submit`이 CR과 LF를 거부하므로 답 안의 각 줄바꿈은 공백으로 바뀐다. `simul`에서는 방이 submit할 때 끝난 turn이 없으므로 모든 member가 `[@owner] <message>`만 받는다. 각 줄은 그 member의 turn token인 ` | [@clubhouse] turn <token>`으로 끝난다([답](#answer)).
+모든 member는 room record 전체를 읽는다([room record](#room-record)). Member가 자기 turn 시작에 받는 줄은 그 member가 아직 받지 않은 모든 record 줄을 record 순서로 담고, 그 member의 turn token인 ` | [@clubhouse] turn <token>`으로 끝난다([답](#answer)). Member들이 메시지를 차례로 받을 때(`turn`, 그리고 `turn`과 `facil`에서 mention된 member) 이번 relay에서 앞 member들의 답은 record 줄이므로, 각 member는 자기 turn 전에 나온 말을 읽는다. `simul`에서는 방이 어떤 turn이 끝나기 전에 모든 member에게 submit하므로 각 줄은 owner의 메시지에서 끝나고, 그 relay의 답은 각 member의 다음 turn에 전달된다.
 
-실패한 turn은 member와 이유로 relay를 reject하고, `message.send`가 그것을 보고한다([command](#command)). `turn`과 `facil`에서는 그 뒤의 member가 아무것도 받지 않는다. `simul`에서는 다른 turn이 끝까지 진행되고, relay는 member 순서로 첫 실패로 reject한다.
+실패한 turn은 member와 이유로 relay를 reject하고, `message.send`가 그것을 보고한다([command](#command)). 어떤 member도 답하기 전에 실패한 relay는 owner의 줄을 room record와 대화에서 거둔다. 답이 나온 뒤에 실패한 relay는 owner의 줄과 도착한 모든 답을 유지한다([room record](#room-record)). `turn`과 `facil`에서는 그 뒤의 member가 아무것도 받지 않는다. `simul`에서는 다른 turn이 끝까지 진행되고, relay는 member 순서로 첫 실패로 reject한다.
+
+## Room record
+
+Room record는 방의 대화다. Owner의 각 메시지 줄과 각 member의 답을 방이 받은 순서로 담는다. 방은 `message.send`가 owner의 줄을 받아들일 때 그 줄을, 각 답이 도착할 때 그 답을 덧붙인다. `simul`에서는 모든 turn이 끝난 뒤 그 relay의 답을 member 순서로 덧붙이며, 다른 turn이 실패한 relay의 답도 덧붙인다.
+
+방은 record를 각 member session에 전달한다. 방은 session마다 전달한 record 줄의 수(`delivered`, [tab state](#restart))를 보관하고, member의 각 turn 시작에 그 수부터 끝까지의 record 줄을 submit한다. 각 줄은 `[@<speaker>] <text>`이고 text 안의 줄바꿈은 공백으로 바뀌며, `core.session.submit`이 CR과 LF를 거부하므로 ` | `로 이어진다. Member 자신이 말한 줄은 그 member가 준 것이므로 빠진다. 받아들여진 submit 뒤에 그 수는 줄을 만든 순간의 record 길이가 된다. 수가 없는 session은 받은 줄이 없으므로, 나중 summon이 member에게 여는 session은 첫 turn에 record 전체를 받는다. 따라서 member는 turn에서 자기 뒤 member들의 답, `simul` relay의 답, 앞 메시지들의 답을 다음 turn에 받고, 모든 member가 같은 record를 읽는다.
+
+Relay의 답이 record에 하나도 없을 때 실패한 send는 owner의 줄을 거둔다. 방은 그 줄을 record와 대화에서 지우고, record 길이를 넘는 delivered 수를 그 길이로 낮추며, `message.send`는 실패를 error display로 보고하므로([command](#command)) 이유는 남는다. Record에는 어떤 member도 답하지 않은 메시지가 없으므로, 실패 뒤 다시 보낸 send는 owner의 줄 하나만 남긴다. 답이 나온 뒤에 실패한 send는 member가 답했으므로 owner의 줄과 도착한 답을 유지한다.
 
 ## Answer
 
@@ -76,13 +84,14 @@ Member는 화면이 아니라 선언된 command `soksak-plugin-agents-clubhouse.
 
 ## Restart
 
-Application의 restart, 방 tab의 unload, view의 restart 뒤에도 방은 입력 없이 이전과 같은 상태를 보여 준다. 방은 `surface.unload` `{format: 1, maxBytes: 1048576}`을 선언하고, 바뀔 때마다 view의 tab state(`tab.state.write`)로 tab의 상태를 쓴다. Core는 이를 tab마다 restart 너머로 보관한다(core `docs/spec/plugins.md#memory-saver`). 상태는 `{roster, mode, conversation, sessions, protocolSessions}`다.
+Application의 restart, 방 tab의 unload, view의 restart 뒤에도 방은 입력 없이 이전과 같은 상태를 보여 준다. 방은 `surface.unload` `{format: 1, maxBytes: 1048576}`을 선언하고, 바뀔 때마다 view의 tab state(`tab.state.write`)로 tab의 상태를 쓴다. Core는 이를 tab마다 restart 너머로 보관한다(core `docs/spec/plugins.md#memory-saver`). 상태는 `{roster, mode, conversation, sessions, protocolSessions, delivered}`다.
 
 - `roster`: roster 순서의 entry `{id, checked}`. 시작할 때 definition이 주는 첫 roster는 이 순서와 check를 지킨다. 여기에 없는 definition은 끝에 체크되지 않은 채로 들어오고, definition이 없는 entry는 빠진다.
 - `mode`: 대화 mode. 설정 `kibitzDefault`는 상태가 없는 방 tab의 mode만 정한다.
 - `conversation`: 대화가 보여 주는 entry `{speaker, text}`. `speaker`는 `owner` 또는 member의 identifier이고 `text`는 메시지 또는 member의 [답](#answer)이므로, restart 뒤에도 대화는 같은 답을 보여 준다.
 - `sessions`: 이 방이 연 member session.
 - `protocolSessions`: 답 command가 든 [room protocol](#room-protocol)을 받은 session. 여기에 있는 session은 protocol 줄을 다시 받지 않는다.
+- `delivered`: member session을 방이 그 session에 전달한 [room record](#room-record) 줄의 수로 잇는 object. 수는 0부터 `conversation` 길이까지의 정수다.
 
 Reader는 이 형식만 받으며, 다른 값은 field와 찾은 것을 밝히는 `room tab state: <field> ...`로, 이전 `taught`처럼 이 형식 밖의 field는 `room tab state: unknown field <field>`로 거부한다. 상태가 없는 tab은 `null`을 읽는다. 거부된 쓰기는 `error: room tab state: <reason>`으로 보고된다.
 
@@ -94,10 +103,8 @@ Reader는 이 형식만 받으며, 다른 값은 field와 찾은 것을 밝히�
 
 ## 공유 기록
 
-Mention이 메시지를 받는 member를 좁혔고 mention된 모든 member가 답하면, 방은 그 대화 기록을 session이 열린 나머지 member마다 roster 순서로 submit한다. Text는 다음과 같다.
+Mention이 메시지를 받는 member를 좁혔고 mention된 모든 member가 답하면, 방은 session이 열린 나머지 member마다 roster 순서로 그 member가 받지 않은 record 줄을 submit한다([room record](#room-record)). Text는 다음과 같다.
 
-`답은 하지말고 알고있어. [@owner]와 [@<member1>], [@<member2>]의 대화기록이다. 답하지말고 참고해.` 뒤에 기록이 줄마다 하나씩 온다. `[@owner] <message>`, 그다음 mention 순서로 mention된 member마다 `[@<member>] <answer>`. Answer는 대화가 그 member에 대해 보여 주는 text다.
-
-`core.session.submit`은 CR과 LF를 거부하므로, 방은 text의 각 줄 바꿈 자리를 ` | `로 잇고, 메시지나 답 안의 줄 바꿈은 공백으로 바꾼다.
+`답은 하지말고 알고있어. [@owner]와 [@<member1>], [@<member2>]의 대화기록이다. 답하지말고 참고해.` 뒤에 room record가 만드는 그 record 줄이 온다. 이름은 그 줄에서 말하는 member들이며 첫 줄의 순서를 따른다. 받아들여진 submit은 그 member의 delivered 수를 record 길이로 정하므로, 다음 turn은 그 줄을 되풀이하지 않는다.
 
 방은 이 member들의 turn을 기다리지 않고 그 출력을 보여 주지 않는다. Session이 `idle`이 아닌 member는 기록을 받지 않는다. 방은 `error: room record: member <id> is <state>: record not sent`를 보고하고(session이 상태를 보고하지 않으면 `<state>`는 `without a program state`다), 거부된 submit은 그 이유와 함께 보고한다.
