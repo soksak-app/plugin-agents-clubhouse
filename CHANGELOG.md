@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- C31: `engines.soksak` is `^0.0.47`, and the version is 0.0.3.
 - C29: The version is 0.0.2, which releases C18 to C28.
 - C28: README and the description of `plugin.json` state the speaker labels, the room protocol and the shared record.
 - C27: The protocol step resolves with its outcome instead of rejecting, and the room relays only to the members whose protocol turn ended; no promise of it is discarded.

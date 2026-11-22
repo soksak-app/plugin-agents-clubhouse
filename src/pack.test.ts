@@ -6,12 +6,19 @@ import { describe, expect, it } from "vitest";
 
 const root = process.cwd();
 const read = (path: string) => readFileSync(join(root, path), "utf8");
-const pkg = JSON.parse(read("package.json")) as { files: string[]; dependencies?: Record<string, string>; devDependencies: Record<string, string> };
+const pkg = JSON.parse(read("package.json")) as { engines?: Record<string, string>; files: string[]; dependencies?: Record<string, string>; devDependencies: Record<string, string> };
 const manifest = JSON.parse(read("plugin.json")) as {
   dependencies?: Record<string, string>;
   surface: { composition: { kind: string; page: string } };
   exposes: { commands: { name: string }[]; element: { name: string }[]; status: { name: string }[] };
 };
+
+describe("core range", () => {
+  // The room uses the owned session input, read and program state and runtime.data.get {plugin}, which core 0.0.47 provides.
+  it("declares engines.soksak ^0.0.47", () => {
+    expect(pkg.engines).toEqual({ soksak: "^0.0.47" });
+  });
+});
 
 describe("release files", () => {
   it("lists the view page and its bundle in the files of package.json", () => {
