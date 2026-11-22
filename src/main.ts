@@ -20,6 +20,7 @@ import { createArrangementStatus } from "./room/arrangement";
 import { parseAgentDefinitions, toMemberDefinition, type AgentDefinition } from "./room/definitions";
 import { createMemberSessionStore } from "./room/session-store";
 import { serialRunner, summonAndArrange, type TriggerDeps } from "./room/trigger";
+import { relayToMembers, type RelayPorts } from "./room/room-relay";
 import { rosterFrom, type RosterEntry } from "./room/roster";
 import { createMacroStore } from "./tower/macro";
 import { setupTower } from "./tower/header";
@@ -180,7 +181,9 @@ function buildRoom({ settings, collections }: RoomContext): RoomHandlers {
   // The ids of the sessions that core.sessions lists as open, and the summons that run one after the other (C3, C4).
   const openSessionIds = new Set<string>();
   const runTrigger = serialRunner();
-  const transport = { state: "unavailable" as const, reason: t("transportUnavailable", lang) };
+  // The transport is ready while a checked member has an open session; the composer takes a message only then (C5).
+  const transport: { state: "unavailable" | "ready"; reason: string } = { state: "unavailable", reason: t("transportUnavailable", lang) };
+  const transportListeners = new Set<(value: { state: "unavailable" | "ready"; reason: string }) => void>();
   const arrangement = createArrangementStatus();
   const state = (): RoomState => ({
     mode,
@@ -213,6 +216,18 @@ function buildRoom({ settings, collections }: RoomContext): RoomHandlers {
   send.disabled = true;
   send.title = transport.reason;
   composer.append(input, send);
+  let busy = false;
+  // Sets the transport state and the composer. A status subscriber receives each new value.
+  const setTransport = (ready: boolean): void => {
+    transport.state = ready ? "ready" : "unavailable";
+    transport.reason = t(ready ? "transportReady" : "transportUnavailable", lang);
+    statusEl.textContent = transport.reason;
+    input.disabled = !ready;
+    input.title = transport.reason;
+    send.disabled = !ready || busy;
+    send.title = transport.reason;
+    for (const listener of [...transportListeners]) listener({ ...transport });
+  };
   root.append(bar, msgs, composer);
   document.head.append(style);
   document.body.style.cssText = "margin:0;height:100%";
@@ -284,14 +299,38 @@ function buildRoom({ settings, collections }: RoomContext): RoomHandlers {
       report("agents.definitions", String((error as Error)?.message ?? error));
     }
   })).catch((error: unknown) => report("agents.definitions", `status watch: ${String((error as Error)?.message ?? error)}`));
+  // The member sessions of the room: the owned session of each checked definition, while core.sessions lists it as open (C3).
+  const sessions = createMemberSessionStore(collections);
+  if (sessions === undefined) throw new Error("the room needs project data for its member sessions");
+  let memberSessions = new Map<string, string>();
+  const refreshMembers = async (): Promise<void> => {
+    const checked = new Set(roster.filter((entry) => entry.checked).map((entry) => entry.id));
+    const next = new Map<string, string>();
+    for (const definition of definitions) {
+      if (!checked.has(definition.id)) continue;
+      const stored = await sessions.get(definition.id);
+      if (stored !== null && openSessionIds.has(stored.sessionId)) next.set(definition.id, stored.sessionId);
+    }
+    memberSessions = next;
+    setTransport(next.size > 0);
+  };
+  const refreshReported = (): void => {
+    refreshMembers().catch((error: unknown) => report("room members", String((error as Error)?.message ?? error)));
+  };
+
+  // The value of core.sessions, which the relay reads, and the listeners that the relay watches it with.
+  let sessionsValue: unknown = [];
+  const sessionListeners = new Set<(value: unknown) => void>();
   Promise.resolve(bridge!.runtime.status.watch("core.sessions", (value: unknown) => {
     openSessionIds.clear();
     if (Array.isArray(value)) for (const entry of value) openSessionIds.add(String((entry as { session?: unknown }).session));
+    sessionsValue = value;
+    for (const listener of [...sessionListeners]) listener(value);
+    refreshReported();
   })).catch((error: unknown) => report("core.sessions", `status watch: ${String((error as Error)?.message ?? error)}`));
 
-  // A check of the roster summons the checked members and arranges the opened ones (C3-1, C4). Each run waits for the previous one.
-  const sessions = createMemberSessionStore(collections);
-  if (sessions === undefined) throw new Error("the room needs project data for its member sessions");
+  // A check of the roster summons the checked members and arranges the opened ones (C3-1, C4). Each run waits for the previous one,
+  // and the member sessions are read again after it.
   const trigger: TriggerDeps = {
     summon: { room, sessions, now: () => Date.now(), openSessions: async () => [...openSessionIds] },
     arrange: { commands: room.commands, report },
@@ -300,9 +339,53 @@ function buildRoom({ settings, collections }: RoomContext): RoomHandlers {
   };
   const summon = (): void => {
     const checked = roster.filter((entry) => entry.checked).map((entry) => entry.id);
-    runTrigger(() => summonAndArrange(trigger, definitions.map(toMemberDefinition), checked)).catch((error: unknown) =>
-      report("room summon", String((error as Error)?.message ?? error)));
+    runTrigger(() => summonAndArrange(trigger, definitions.map(toMemberDefinition), checked))
+      .then(refreshMembers)
+      .catch((error: unknown) => report("room summon", String((error as Error)?.message ?? error)));
   };
+
+  // A message goes to each checked member whose session is open, one member after the other (C5). The answers are the screens of the
+  // members after their turns, shown as text in the conversation.
+  const relayPorts: RelayPorts = {
+    commands: room.commands,
+    sessions: () => sessionsValue,
+    watchSessions: (listener) => {
+      sessionListeners.add(listener);
+      return () => void sessionListeners.delete(listener);
+    },
+  };
+  const appendMessage = (who: string, text: string): void => {
+    msgs.append(elText("div", `${who}: ${text}`, "st-msg"));
+    msgs.scrollTop = msgs.scrollHeight;
+  };
+  send.addEventListener("click", () => {
+    const text = input.value.trim();
+    if (text === "" || busy) return;
+    const targets = roster
+      .filter((entry) => entry.checked && memberSessions.has(entry.id))
+      .map((entry) => ({ id: entry.id, session: memberSessions.get(entry.id)! }));
+    if (targets.length === 0) {
+      report("room relay", "no member session is open: check a member of the roster");
+      return;
+    }
+    busy = true;
+    send.disabled = true;
+    input.value = "";
+    appendMessage(lang === "ko" ? "나" : "You", text);
+    relayToMembers(relayPorts, targets, text)
+      .then((answers) => {
+        for (const answer of answers) {
+          const name = roster.find((entry) => entry.id === answer.id)?.name ?? answer.id;
+          const last = answer.rows.map((row) => row.trimEnd()).reduce((end, row, index) => (row === "" ? end : index + 1), 0);
+          appendMessage(name, answer.rows.slice(0, last).join("\n"));
+        }
+      })
+      .catch((error: unknown) => report("room relay", String((error as Error)?.message ?? error)))
+      .finally(() => {
+        busy = false;
+        send.disabled = transport.state !== "ready";
+      });
+  });
 
   // The trace and the macros of the tower are project data of the room, kept per project root.
   const trace = createTrace(collections, { sessionId: sessionIdOf(), report });
@@ -326,7 +409,13 @@ function buildRoom({ settings, collections }: RoomContext): RoomHandlers {
         read: () => arrangement.read(),
         subscribe: (listener) => arrangement.subscribe(listener).dispose,
       },
-      [`${EXPOSE}.transport`]: { read: () => ({ ...transport }), subscribe: () => () => {} },
+      [`${EXPOSE}.transport`]: {
+        read: () => ({ ...transport }),
+        subscribe: (listener) => {
+          transportListeners.add(listener);
+          return () => void transportListeners.delete(listener);
+        },
+      },
     },
   };
 }
