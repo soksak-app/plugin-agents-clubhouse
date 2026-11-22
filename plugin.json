@@ -126,6 +126,18 @@
         }
       },
       {
+        "name": "soksak-plugin-agents-clubhouse.view",
+        "description": "The follow mode of the conversation view: following while the view is at the bottom and follows new entries, and unseen, the number of entries below the viewport that have not been visible since the person scrolled up.",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "following": { "type": "boolean" },
+            "unseen": { "type": "integer", "minimum": 0 }
+          },
+          "required": ["following", "unseen"]
+        }
+      },
+      {
         "name": "soksak-plugin-agents-clubhouse.transport",
         "description": "Whether the room can reach its members, with the reason when it cannot. The room has no member transport until the owned sessions and the terminal relay are in place, so its state is unavailable.",
         "schema": {
@@ -258,6 +270,16 @@
           "type": "object",
           "properties": { "stopped": { "type": "boolean" } },
           "required": ["stopped"]
+        }
+      },
+      {
+        "name": "soksak-plugin-agents-clubhouse.conversation.scroll.bottom",
+        "description": "Scroll the conversation view to its last entry and follow new entries again; the unseen count becomes 0. Calling it at the bottom changes nothing.",
+        "params": { "type": "object", "properties": {} },
+        "result": {
+          "type": "object",
+          "properties": { "following": { "type": "boolean" }, "unseen": { "type": "integer" } },
+          "required": ["following", "unseen"]
         }
       },
       {
@@ -457,6 +479,10 @@
       {
         "name": "soksak-plugin-agents-clubhouse.stop",
         "description": "Stop button: runs conversation.stop, which ends the conversation after the turns that have started and the record waits. Enabled only while a message is relayed or a record wait is open."
+      },
+      {
+        "name": "soksak-plugin-agents-clubhouse.pill",
+        "description": "New-entry pill: shown in reading mode while entries below the viewport are unseen, with their number; a click runs conversation.scroll.bottom."
       },
       {
         "name": "soksak-plugin-agents-clubhouse.input",

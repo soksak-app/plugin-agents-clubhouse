@@ -10,9 +10,11 @@ export type NoteKind = "report" | "claim" | "release";
 
 export type ViewItem =
   | { kind: "divider"; round: number }
-  | { kind: "system"; text: string }
+  | { kind: "system"; text: string; index: number }
   | {
       kind: "bubble";
+      // The index of the record entry.
+      index: number;
       side: "right" | "left";
       speaker: string;
       // The place of the member in the roster, null for the owner and for a speaker outside the roster.
@@ -32,13 +34,13 @@ export function conversationView(entries: readonly StatusEntry[], roster: readon
   const held = new Map<string, Bubble["notes"]>();
   let round = 0;
   let spoken = new Set<string>();
-  for (const entry of entries) {
+  for (const [index, entry] of entries.entries()) {
     if (entry.speaker === "clubhouse") {
-      items.push({ kind: "system", text: entry.text });
+      items.push({ kind: "system", text: entry.text, index });
       continue;
     }
     if (entry.speaker === "owner") {
-      items.push({ kind: "bubble", side: "right", speaker: "owner", color: null, text: entry.text, sections: entry.sections, elapsedMs: null, notes: [] });
+      items.push({ kind: "bubble", index, side: "right", speaker: "owner", color: null, text: entry.text, sections: entry.sections, elapsedMs: null, notes: [] });
       round = 0;
       spoken = new Set();
       continue;
@@ -59,6 +61,7 @@ export function conversationView(entries: readonly StatusEntry[], roster: readon
     const place = roster.indexOf(entry.speaker);
     const bubble: Bubble = {
       kind: "bubble",
+      index,
       side: "left",
       speaker: entry.speaker,
       color: place < 0 ? null : place,
@@ -75,7 +78,7 @@ export function conversationView(entries: readonly StatusEntry[], roster: readon
   for (const [speaker, notes] of held) {
     const bubble = last.get(speaker);
     if (bubble) bubble.notes.push(...notes);
-    else for (const note of notes) items.push({ kind: "system", text: `${speaker} (${note.kind}) ${note.text}` });
+    else for (const note of notes) items.push({ kind: "system", text: `${speaker} (${note.kind}) ${note.text}`, index: entries.length - 1 });
   }
   return items;
 }

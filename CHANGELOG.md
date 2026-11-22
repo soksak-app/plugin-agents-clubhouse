@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- C74: The conversation view follows new entries only at the bottom; in reading mode the scroll stays, the pill shows the unseen entries below the viewport and runs `conversation.scroll.bottom`, and the status `view` carries `{following, unseen}` (`docs/spec/room.md#follow-mode`).
 - C71: The conversation view draws speech bubbles with the name, the role and a roster color, room lines as system lines, reports, claims and releases as notes, sections as blocks and a divider per round; each entry keeps `at` and an answer `elapsedMs`, which the bubble shows, and a waiting member shows a counter on the display frames (`docs/spec/room.md#conversation-view`, `docs/spec/room.md#timing`).
 - C73: The room starts each member CLI with the arguments of the isolation table, `claude: ["--setting-sources", "project,local"]`, so a member reads no personal instructions of the person; the transport status names each member that is not isolated in `notIsolated`, and an isolated member gets the shell forms only (`docs/spec/room.md#isolation`).
 - C72: The protocol line is short and imperative and, with each turn line, tells the member to say everything through the room, to put a message to the owner in `@owner:` and to write nothing else in its terminal; the shell form of each command comes first (`docs/spec/room.md#room-protocol`).

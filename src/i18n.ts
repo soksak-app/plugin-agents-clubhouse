@@ -134,6 +134,10 @@ const strings = {
     en: "Connected: messages go to the checked members with an open session.",
     ko: "연결됨: 메시지는 열린 세션이 있는 체크된 멤버에게 갑니다.",
   },
+  unseen: {
+    en: "{count} new ↓",
+    ko: "새 대화 {count}개 ↓",
+  },
   round: {
     en: "round {round}",
     ko: "{round}번째 round",

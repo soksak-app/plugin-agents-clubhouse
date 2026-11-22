@@ -17,10 +17,10 @@ describe("conversationView", () => {
   it("draws owner bubbles on the right, member bubbles on the left with the color of their roster place, and room lines as system lines", () => {
     const view = conversationView([entry("owner", "build it"), entry("b", "plan", 12400), entry("clubhouse", "the conversation settled")], ["a", "b"]);
     expect(view).toEqual([
-      { kind: "bubble", side: "right", speaker: "owner", color: null, text: "build it", sections: [], elapsedMs: null, notes: [] },
+      { kind: "bubble", index: 0, side: "right", speaker: "owner", color: null, text: "build it", sections: [], elapsedMs: null, notes: [] },
       { kind: "divider", round: 1 },
-      { kind: "bubble", side: "left", speaker: "b", color: 1, text: "plan", sections: [], elapsedMs: 12400, notes: [] },
-      { kind: "system", text: "the conversation settled" },
+      { kind: "bubble", index: 1, side: "left", speaker: "b", color: 1, text: "plan", sections: [], elapsedMs: 12400, notes: [] },
+      { kind: "system", text: "the conversation settled", index: 2 },
     ]);
   });
 

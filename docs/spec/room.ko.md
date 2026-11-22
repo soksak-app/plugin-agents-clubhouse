@@ -119,6 +119,10 @@ Relay가 없고 closing delivery의 기다림도 열려 있지 않으면, pendin
 
 Room view는 각 record 항목을 말풍선으로 그린다. Owner의 말풍선은 오른쪽, member의 말풍선은 왼쪽에 놓이고, 화자의 이름과 role이 말풍선 위에 온다. 각 member는 roster 자리를 6으로 나눈 나머지에 해당하는 자기 말풍선 색을 가지므로, roster 순서가 같은 동안 색은 바뀌지 않는다. Owner 말풍선은 core theme의 accent token을 쓰고, member 색은 theme의 card token에 hue를 섞는다. 방의 줄(`clubhouse`)은 가운데 정렬된 system 줄이다. Member의 report, claim, release([work reports](#work-reports))는 member가 그것을 준 turn의 답 말풍선 아래, 답이 뒤따르지 않으면 마지막 말풍선 아래의 짧은 note다. 답의 section([section](#sections))은 말풍선 안에서 addressee를 머리로 단 별도 block이다. Owner의 줄 뒤 첫 답 앞과, 그 줄 이후 이미 답한 member의 답 앞에는 round 번호를 단 구분선이 오므로 [settling](#settling)의 각 round가 눈에 보이게 나뉜다.
 
+## Follow mode
+
+대화 view는 bottom에 있을 때만, 즉 마지막 항목이 4 point 안에서 모두 보일 때만 새 항목을 따라간다. 따라가는 동안 새 항목이 있는 각 draw는 마지막 항목으로 scroll한다. 사람이 위로 scroll하면 view는 reading mode다. Draw는 scroll 위치를 유지하고 새 항목은 그 아래에 쌓인다. Reading mode에서는 card 아래쪽의 pill이 사람이 위로 scroll한 뒤 아직 보이지 않은 viewport 아래 항목의 수를 `새 대화 3개 ↓`처럼 보여 준다. View의 IntersectionObserver가 모두 보이게 된 각 항목을 알리므로 그 항목이 scroll되어 보이면 수가 줄고, 방은 timer를 쓰지 않는다. Scroll로 bottom에 이르면 수가 0이 되고 pill이 사라지며 다시 따라간다. Pill은 선언된 element `pill`이며 선언된 command `conversation.scroll.bottom`을 실행한다. 이 command는 마지막 항목으로 scroll하고 다시 따라간다. 선언된 status `soksak-plugin-agents-clubhouse.view`는 `{following, unseen}`을 가진다.
+
 ## Timing
 
 각 record 항목은 방이 그것을 받은 시각 `at`을 epoch millisecond로 가지고, member의 답은 turn 줄의 submit이 받아들여진 때부터 답이 도착할 때까지의 millisecond인 `elapsedMs`를 가진다. 다른 항목의 `elapsedMs`는 null이다. Tab state와 [conversation status](#conversation-status)의 항목은 두 field를 모두 가지고, tab state의 reader는 두 field가 없는 항목을 `room tab state: conversation must be an array of {speaker, text, at, elapsedMs}`로 거부한다. 방이 시각을 기록하기 전에 받은 항목은 `at: null`, `elapsedMs: null`이며 view는 시각 없이 보여 준다. 답의 말풍선은 시간을 소수 한 자리의 초로, 예를 들어 `12.4초`로 보여 준다. 기다리는 member([conversation status](#conversation-status))는 방이 그 member를 기다리기 시작한 뒤의 시간을 보여 준다. View는 이 counter를 `requestAnimationFrame`으로 window의 display frame마다 진행하므로 window를 보여 주는 display의 refresh rate를 따르고, 기다리는 member가 없으면 멈춘다.

@@ -20,6 +20,7 @@ import { createArrangementStatus } from "./room/arrangement";
 import { HEADER_CSS, createRoomHeader } from "./room/header";
 import { memberLaunch } from "./room/isolation";
 import { conversationView, elapsedLabel } from "./room/bubbles";
+import { createFollow, type FollowState } from "./room/follow";
 import { readAgentDefinitions, toMemberDefinition, type AgentDataGet, type AgentDefinition } from "./room/definitions";
 import { createMemberSessionStore } from "./room/session-store";
 import { serialRunner, summonAndArrange, type TriggerDeps } from "./room/trigger";
@@ -71,6 +72,9 @@ const CSS = `
 .st-term:hover{opacity:.85}
 .st-crown:hover{opacity:.7}
 .st-crown.on{opacity:1;filter:none}
+.st-msgs-box{position:relative;flex:1;min-height:0;display:flex;flex-direction:column}
+.st-pill{position:absolute;left:50%;bottom:10px;transform:translateX(-50%);padding:3px 12px;border-radius:999px;border:1px solid rgba(127,127,127,.35);background:var(--card,#2a2a2a);color:var(--fg,#ddd);font-size:11.5px;cursor:pointer}
+.st-pill[hidden]{display:none}
 .st-msgs{flex:1;min-height:0;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:10px}
 .st-row{display:flex;flex-direction:column;gap:3px;max-width:88%}
 .st-row.user{align-self:flex-end;align-items:flex-end}
@@ -261,6 +265,32 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   const header = createRoomHeader(manifest.name, t("towerTitle", lang), transport.reason);
   const { bar, tabs: tabsEl, kib, tower: towerButton } = header;
   const msgs = el("div", "st-msgs");
+  // The view follows new entries only at the bottom; in reading mode the pill counts the unseen entries (docs/spec/room.md#follow-mode).
+  const msgsBox = el("div", "st-msgs-box");
+  const pill = el("button", "st-pill") as HTMLButtonElement;
+  pill.hidden = true;
+  msgsBox.append(msgs, pill);
+  // The threshold in points within which the last entry counts as fully visible.
+  const BOTTOM_POINTS = 4;
+  const viewListeners = new Set<(value: FollowState) => void>();
+  const follow = createFollow({
+    atBottom: () => msgs.scrollHeight - msgs.scrollTop - msgs.clientHeight <= BOTTOM_POINTS,
+    scrollToBottom: () => void (msgs.scrollTop = msgs.scrollHeight),
+    changed: (value) => {
+      pill.hidden = value.following || value.unseen === 0;
+      pill.textContent = tp("unseen", lang, { count: String(value.unseen) });
+      for (const listener of [...viewListeners]) listener({ ...value });
+    },
+  });
+  msgs.addEventListener("scroll", () => follow.scrolled());
+  // The observer reports each unseen entry that scrolls into view; it observes only entries of the record, keyed by data-index.
+  const seen = new IntersectionObserver(
+    (records) => {
+      for (const entry of records) if (entry.isIntersecting) follow.visible(Number((entry.target as HTMLElement).dataset.index));
+    },
+    { root: msgs, threshold: 1 },
+  );
+  let drawnEntries = 0;
   const composer = el("div", "st-in");
   const input = document.createElement("textarea");
   input.placeholder = t("placeholder", lang);
@@ -292,7 +322,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
     send.title = transport.reason;
     for (const listener of [...transportListeners]) listener({ ...transport });
   };
-  root.append(bar, msgs, composer);
+  root.append(bar, msgsBox, composer);
   document.head.append(style);
   document.body.style.cssText = "margin:0;height:100%";
   document.body.replaceChildren(root);
@@ -523,7 +553,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
     // Each entry is a bubble, a room line or a round divider (docs/spec/room.md#conversation-view).
     const rows = conversationView(value.entries, roster.map((entry) => entry.id)).map((item) => {
       if (item.kind === "divider") return elText("div", tp("round", lang, { round: String(item.round) }), "st-round");
-      if (item.kind === "system") return elText("div", item.text, "st-system");
+      if (item.kind === "system") return indexed(elText("div", item.text, "st-system"), item.index);
       const owner = item.side === "right";
       const row = el("div", `st-row ${owner ? "user" : "assistant"}`);
       if (item.color !== null) row.dataset.color = String(item.color % MEMBER_COLORS);
@@ -543,7 +573,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
       }
       row.append(who, bubble);
       for (const note of item.notes) row.append(elText("div", `${note.kind} · ${note.text}`, `st-note st-note-${note.kind}`));
-      return row;
+      return indexed(row, item.index);
     });
     // A waiting member shows the time since the room began to wait for it, which the display frames of the window advance.
     const waitRows = value.waiting.map((wait) => {
@@ -556,9 +586,25 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
     });
     const keys = new Set(waitRows.map((line) => line.dataset.key!));
     for (const key of [...waitStarts.keys()]) if (!keys.has(key)) waitStarts.delete(key);
+    // A draw keeps the scroll position; the follow mode decides whether the view moves to the new entries.
+    const top = msgs.scrollTop;
     msgs.replaceChildren(...rows, ...waitRows);
+    msgs.scrollTop = top;
     tickWaits();
-    msgs.scrollTop = msgs.scrollHeight;
+    seen.disconnect();
+    const added: number[] = [];
+    for (const row of rows) {
+      const index = Number(row.dataset.index);
+      if (row.dataset.index === undefined) continue;
+      if (index >= drawnEntries) added.push(index);
+      seen.observe(row);
+    }
+    drawnEntries = value.entries.length;
+    follow.added(added);
+  };
+  const indexed = (row: HTMLElement, index: number): HTMLElement => {
+    row.dataset.index = String(index);
+    return row;
   };
   // The live counter of the waiting members runs on the display frames of the window through requestAnimationFrame, so it follows the
   // refresh rate of the display that shows the window and stops when no member is waited for (AGENTS.md, refresh rate).
@@ -691,6 +737,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   // a second time; without failed, the binder would pass the rejection to unhandledrejection of the document.
   const shownBySend = (): void => {};
   bound(expose.bind(send, `${EXPOSE}.message.send`, () => ({ text: input.value }), { failed: shownBySend }), "message.send");
+  bound(expose.bind(pill, `${EXPOSE}.conversation.scroll.bottom`, {}, { failed: failed("conversation.scroll.bottom") }), "conversation.scroll.bottom");
   bound(expose.bind(stop, `${EXPOSE}.conversation.stop`, {}, { failed: failed("conversation.stop") }), "conversation.stop");
   // Enter without Shift sends; the newline that it would insert is prevented. Enter during an IME composition commits the text.
   const sendKey = (event: KeyboardEvent): boolean => event.key === "Enter" && !event.shiftKey && !event.isComposing;
@@ -718,6 +765,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   const elements: Record<string, ElementTarget> = {
     [`${EXPOSE}.send`]: send,
     [`${EXPOSE}.stop`]: stop,
+    [`${EXPOSE}.pill`]: pill,
     [`${EXPOSE}.input`]: input,
     [`${EXPOSE}.tab`]: tabTargets,
     [`${EXPOSE}.role`]: () => [...tabsEl.querySelectorAll<HTMLElement>(".st-role")],
@@ -733,6 +781,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
       [REPORT_COMMAND]: async (params: unknown) => work!.reportCommand(params),
       [CLAIM_COMMAND]: async (params: unknown) => work!.claim(params),
       [RELEASE_COMMAND]: async (params: unknown) => work!.release(params),
+      [`${EXPOSE}.conversation.scroll.bottom`]: async () => follow.bottom(),
     },
     elements,
     statuses: {
@@ -743,6 +792,13 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
       [`${EXPOSE}.conversation`]: {
         read: () => conversationStatus.read(),
         subscribe: (listener) => conversationStatus.subscribe(listener),
+      },
+      [`${EXPOSE}.view`]: {
+        read: () => follow.state(),
+        subscribe: (listener) => {
+          viewListeners.add(listener);
+          return () => void viewListeners.delete(listener);
+        },
       },
       [`${EXPOSE}.transport`]: {
         read: () => ({ ...transport }),
