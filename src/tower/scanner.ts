@@ -248,6 +248,7 @@ function looksDecodable(blob: string): boolean {
     if (typeof g.atob === "function") decoded = g.atob(blob);
     else if (g.Buffer) decoded = g.Buffer.from(blob, "base64").toString("utf8");
   } catch {
+    // atob rejects text that is not base64: such a run is no encoded payload (expected absence). The other scan rules still read it.
     return false;
   }
   if (!decoded) return false;
@@ -263,11 +264,14 @@ function stepToText(s: PlanStep): string {
   const parts = [s.axis, s.name];
   if (s.address) parts.push(s.address);
   if (s.params) {
+    let text: string;
     try {
-      parts.push(JSON.stringify(s.params));
-    } catch {
-      /* 직렬화 불가 params 는 건너뜀 */
+      text = JSON.stringify(s.params);
+    } catch (error) {
+      // Skipping the params would leave them unscanned, so the scan refuses the input.
+      throw new Error(`step params cannot be serialized for the scan: ${String((error as Error)?.message ?? error)}`);
     }
+    parts.push(text);
   }
   return parts.join(" ");
 }

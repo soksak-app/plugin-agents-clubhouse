@@ -132,6 +132,7 @@ addEventListener("unhandledrejection", (event) => report("rejection", String(eve
 const live = new Map<string, Set<(payload: unknown) => void>>();
 const room: RoomPort = {
   commands: { execute: (name, params) => bridge!.calls.request(name, params) },
+  report,
   declaredCommands: () => manifest.exposes.commands.map((c) => ({ name: c.name, description: c.description })),
   live: {
     on(topic, listener) {
@@ -145,7 +146,13 @@ const room: RoomPort = {
   },
   onTheme(listener) {
     const theme = bridge!.runtime.theme(() => listener());
-    return { dispose: () => void theme.dispose.then((off) => off()) };
+    return {
+      dispose: () =>
+        void theme.dispose.then(
+          (off) => off(),
+          (error: unknown) => report("theme listener", String((error as Error)?.message ?? error)),
+        ),
+    };
   },
 };
 
@@ -272,7 +279,7 @@ function buildRoom({ settings, collections }: RoomContext): RoomHandlers {
   renderMode();
 
   // The trace and the macros of the tower are project data of the room, kept per project root.
-  const trace = createTrace(collections, { sessionId: sessionIdOf() });
+  const trace = createTrace(collections, { sessionId: sessionIdOf(), report });
   const macros = createMacroStore(collections, { sessionId: sessionIdOf() });
   const tower = setupTower(room, towerButton, t("towerTitle", lang), () => lang, trace, macros);
   addEventListener("pagehide", () => tower.dispose());

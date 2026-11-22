@@ -38,6 +38,7 @@ const CATALOG = [
 function fakeApp(catalog: string[] = CATALOG) {
   const executed: Array<{ name: string; params: any }> = [];
   const room = {
+    report: () => undefined,
     commands: {
       execute: vi.fn(async (name: string, params: any) => {
         if (name === "state.commands") return { ok: true, commands: catalog.map((c) => ({ name: c, description: c })) };
@@ -102,7 +103,7 @@ function deps(
   over: Partial<ExecutorDeps> = {},
 ): { d: ExecutorDeps; executed: Array<{ name: string; params: any }>; trace: TraceSink; macros: MacroSink; room: any } {
   const { room, executed } = over.room ? { room: over.room, executed: [] as any[] } : fakeApp();
-  const trace = createTrace(fakeData(store), { sessionId: "s1", now: clock() });
+  const trace = createTrace(fakeData(store), { sessionId: "s1", now: clock(), report: () => undefined });
   const macros = createMacroStore(fakeData(store), { sessionId: "s1", now: clock() });
   const d: ExecutorDeps = { room, confirmGate: async (issue) => issue(), trace, macros, ...over };
   return { d, executed, trace, macros, room };
@@ -266,7 +267,7 @@ describe("(5) re-validation — 저장된 step 의 command 가 라이브 도메�
     const store = newStore();
     // 저장 시점 — view.close 가 카탈로그에 있다.
     const full = fakeApp(CATALOG);
-    const trace1 = createTrace(fakeData(store), { sessionId: "s1", now: clock() });
+    const trace1 = createTrace(fakeData(store), { sessionId: "s1", now: clock(), report: () => undefined });
     const macros1 = createMacroStore(fakeData(store), { sessionId: "s1", now: clock() });
     const exSave = createExecutor({ room: full.room, confirmGate: async (i) => i(), trace: trace1, macros: macros1 });
     const steps: PlanStep[] = [{ axis: "command", name: "view.close", params: { view: "v9" } }];

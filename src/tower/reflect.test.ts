@@ -33,6 +33,7 @@ const CATALOG = [
 function fakeApp(over: Record<string, (p: any) => any> = {}) {
   const executed: Array<{ name: string; params: any }> = [];
   const room = {
+    report: () => undefined,
     commands: {
       execute: vi.fn(async (name: string, params: any) => {
         if (over[name]) return over[name](params);
@@ -331,7 +332,7 @@ describe("(M8-6) danger 게이트 — 재계획된 destructive step 도 confirm 
 describe("(M8-7) trace 기록 — 재계획 반복 + escalation 이 영속된다", () => {
   it("각 재계획이 새 plan 레코드로 세션에 링크되고 escalation 이 outcome 으로 기록된다", async () => {
     const store = newStore();
-    const trace: TraceSink = createTrace(fakeData(store), { sessionId: "s1", now: clock() });
+    const trace: TraceSink = createTrace(fakeData(store), { sessionId: "s1", now: clock(), report: () => undefined });
     const { planner } = scriptedPlanner([
       JSON.stringify([{ axis: "command", name: "panel.resize", params: { split: "bad" } }]),
     ]);
@@ -357,7 +358,7 @@ describe("(M8-7) trace 기록 — 재계획 반복 + escalation 이 영속된다
 
   it("성공 시 — 마지막(성공) plan 의 outcome=committed, 그 전(실패) plan 들도 기록된다", async () => {
     const store = newStore();
-    const trace: TraceSink = createTrace(fakeData(store), { sessionId: "s1", now: clock() });
+    const trace: TraceSink = createTrace(fakeData(store), { sessionId: "s1", now: clock(), report: () => undefined });
     const { planner } = scriptedPlanner([
       JSON.stringify([{ axis: "command", name: "panel.resize", params: { split: "bad" } }]),
       JSON.stringify([{ axis: "command", name: "theme.apply", params: { name: "Cupertino" } }]),

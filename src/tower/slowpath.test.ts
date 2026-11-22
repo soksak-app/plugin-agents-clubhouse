@@ -31,6 +31,7 @@ const CATALOG = [
 function fakeApp(over: Record<string, (p: any) => any> = {}) {
   const executed: Array<{ name: string; params: any }> = [];
   const room = {
+    report: () => undefined,
     commands: {
       execute: vi.fn(async (name: string, params: any) => {
         if (over[name]) return over[name](params);

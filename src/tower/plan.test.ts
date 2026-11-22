@@ -277,3 +277,13 @@ describe("터미널 닫기 예시 — soksak-spec-plugin-terminal 계약 발견�
     expect(paramsOut).toEqual({ panel: "gB" });
   });
 });
+
+describe("C9 — a candidate that is not JSON is skipped for the next candidate", () => {
+  it("parsePlan skips a fenced candidate that is not JSON and reads the balanced array", () => {
+    const text = '```json\nnot json\n```\nthen [{"axis":"status","name":"x"}]';
+    expect(parsePlan(text)).toEqual([{ axis: "status", name: "x" }]);
+  });
+  it("parsePlan returns null when no candidate is a JSON array", () => {
+    expect(parsePlan("no array here")).toBeNull();
+  });
+});

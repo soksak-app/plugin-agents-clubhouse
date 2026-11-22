@@ -13,6 +13,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   createExecutor,
   __unsafeDispatchForNopTest,
+  randomToken,
   type ExecutorDeps,
 } from "./executor";
 
@@ -20,6 +21,7 @@ import {
 function fakeApp() {
   const executed: Array<{ name: string; params: any }> = [];
   const room = {
+    report: () => undefined,
     commands: {
       execute: vi.fn(async (name: string, params: any) => {
         // 검증·상태조회 read 명령은 fixture 응답.
@@ -193,8 +195,57 @@ describe("C8 — a refused status.query fails the plan instead of planning witho
           return app.room.commands.execute(name, params);
         }),
       },
+      report: () => undefined,
     };
     const ex = createExecutor(deps({ room }).d);
     await expect(ex.runPlan([])).rejects.toThrow("status.query refused by the room");
+  });
+});
+
+describe("C9 — errors are reported or rethrown, never swallowed", () => {
+  it("randomToken needs crypto.getRandomValues and has no Math.random fallback", () => {
+    expect(randomToken()).toMatch(/^[0-9a-f]{32}$/);
+    vi.stubGlobal("crypto", undefined);
+    try {
+      expect(() => randomToken()).toThrow(/getRandomValues/);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("a failed theme capture is reported with its where, and the plan still runs", async () => {
+    const app = fakeApp();
+    const report = vi.fn();
+    const room = {
+      commands: {
+        execute: vi.fn(async (name: string, params: any) => {
+          if (name === "theme.list") throw new Error("theme list refused");
+          if (name === "status.query") return { ok: true, statuses: [] };
+          return app.room.commands.execute(name, params);
+        }),
+      },
+      report,
+    };
+    const ex = createExecutor(deps({ room }).d);
+    const out = await ex.runPlan([{ axis: "command", name: "panel.close", params: {} }]);
+    expect(out.ok).toBe(true);
+    expect(app.executed.map((e) => e.name)).toContain("panel.close");
+    expect(report).toHaveBeenCalledWith("tower rollback snapshot", "theme list refused");
+  });
+
+  it("a confirm gate that throws rejects its own run and does not block the next confirm", async () => {
+    let calls = 0;
+    const ex = createExecutor(
+      deps({
+        confirmGate: async (issue) => {
+          calls += 1;
+          if (calls === 1) throw new Error("gate broke");
+          return issue();
+        },
+      }).d,
+    );
+    const [first, second] = await Promise.allSettled([ex.runCommand("panel.close", {}), ex.runCommand("view.close", {})]);
+    expect(first.status).toBe("rejected");
+    expect(second.status).toBe("fulfilled");
   });
 });

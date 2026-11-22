@@ -72,6 +72,7 @@ function fakeApp(over: Record<string, (p: any) => any> = {}) {
   const executed: Array<{ name: string; params: any }> = [];
   const state = { themeName: "Cupertino", themeMode: "dark", sizes: { s1: [0.6, 0.4] as number[] } };
   const room = {
+    report: () => undefined,
     commands: {
       execute: vi.fn(async (name: string, params: any) => {
         if (over[name]) {
@@ -270,7 +271,7 @@ describe("(2) rollback trace — restored/unrestorable 가 plan 레코드에 정
   it("묶음 실패 rollback 후 tower.trace 의 plan 레코드에 rollback{reason, restored, unrestorable} 기록", async () => {
     const store: FakeStore = { rows: new Map(), seq: 0 };
     let t = 1000;
-    const trace = createTrace(fakeData(store), { sessionId: "sess-m9", now: () => ++t });
+    const trace = createTrace(fakeData(store), { sessionId: "sess-m9", now: () => ++t, report: () => undefined });
     // step1 = theme.apply(invertible 성공), step2 = panel.close(성공·non-invertible), step3 = view.close(실패).
     //   → step3 실패. rollback: theme.apply inverse 복원(restored), panel.close 는 unrestorable(정직).
     const { d } = deps(

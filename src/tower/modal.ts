@@ -348,8 +348,23 @@ function makeDraggable(ov: HTMLElement, handle: HTMLElement): () => void {
   return () => handle.removeEventListener("pointerdown", onDown);
 }
 
+// The parameter text of a plan step is one JSON object. Any other text, including invalid JSON, gives null: the editor keeps
+// the earlier value and tells the person (the catch is the validation of the input, not a dropped error).
+export function parseParamsObject(text: string): Record<string, unknown> | null {
+  let value: unknown;
+  try {
+    value = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  return value as Record<string, unknown>;
+}
+
 export function createTowerModal(deps: TowerModalDeps): TowerModal {
   const { room, lang, onChange } = deps;
+  // A rejected action is reported through the declared error path of the room, with the place of the action as where.
+  const failed = (where: string) => (error: unknown) => room.report(where, String((error as Error)?.message ?? error));
   ensureStyle();
   let ov: HTMLElement | null = null;
   let undrag: (() => void) | null = null;
@@ -455,8 +470,9 @@ export function createTowerModal(deps: TowerModalDeps): TowerModal {
   const emit = () => {
     try {
       onChange?.();
-    } catch {
-      // 구독자 실패 격리.
+    } catch (error) {
+      // A failing listener does not stop the others; its error is reported.
+      room.report("tower modal listener", String((error as Error)?.message ?? error));
     }
   };
 
@@ -492,7 +508,7 @@ export function createTowerModal(deps: TowerModalDeps): TowerModal {
       // 클릭 = executor.runCommand(이 command 자체). danger 면 confirm 게이트 경유(executor 가 판정·게이트).
       //   파라미터 없는 fast-path — 필수 파라미터 command 는 코어가 INVALID_PARAMS 로 거부(그 거부가 진실).
       row.addEventListener("click", () => {
-        void executor.runCommand(c.name).then((r) => reportOutcome(c.name, r));
+        void executor.runCommand(c.name).then((r) => reportOutcome(c.name, r), failed("tower modal palette"));
       });
       wrap.appendChild(row);
     }
@@ -504,8 +520,9 @@ export function createTowerModal(deps: TowerModalDeps): TowerModal {
   async function fetchMacros(): Promise<void> {
     try {
       macroCache = deps.macros ? await executor.listMacros() : [];
-    } catch {
-      macroCache = []; // 거부/오류 — 빈 매크로(가짜 행 0).
+    } catch (error) {
+      macroCache = []; // 거부/오류 — 빈 매크로(가짜 행 0). The failure is reported.
+      room.report("tower modal macros", String((error as Error)?.message ?? error));
     }
     renderMacros();
   }
@@ -538,12 +555,12 @@ export function createTowerModal(deps: TowerModalDeps): TowerModal {
       del.dataset.node = `tower/macro/${m.name}/forget`; // RULE 8
       del.addEventListener("click", (e) => {
         e.stopPropagation();
-        void executor.forgetMacro(m.name).then(() => fetchMacros());
+        void executor.forgetMacro(m.name).then(() => fetchMacros(), failed("tower modal macro forget"));
       });
       row.append(del);
       // 클릭 = runMacro(0 planner fast-path). danger step 은 executor confirm 게이트 그대로(우회 0).
       row.addEventListener("click", () => {
-        void executor.runMacro(m.name).then((r) => reportOutcome(m.name, { ok: r.ok, code: (r as any).code }));
+        void executor.runMacro(m.name).then((r) => reportOutcome(m.name, { ok: r.ok, code: (r as any).code }), failed("tower modal macro run"));
       });
       wrap.appendChild(row);
     }
@@ -562,7 +579,7 @@ export function createTowerModal(deps: TowerModalDeps): TowerModal {
       if (nlInput) nlInput.value = "";
       clearPlanPreview();
       renderPalette();
-      void executor.runExample(exIdx).then((r) => reportOutcome(`"${raw}"`, r));
+      void executor.runExample(exIdx).then((r) => reportOutcome(`"${raw}"`, r), failed("tower modal example"));
       return;
     }
     // 팔레트 command 이름 EXACT 매치(예: "theme.apply").
@@ -571,7 +588,7 @@ export function createTowerModal(deps: TowerModalDeps): TowerModal {
       if (nlInput) nlInput.value = "";
       clearPlanPreview();
       renderPalette();
-      void executor.runCommand(cmd.name).then((r) => reportOutcome(cmd.name, r));
+      void executor.runCommand(cmd.name).then((r) => reportOutcome(cmd.name, r), failed("tower modal palette"));
       return;
     }
     // 1b) 매크로 EXACT 매치(M11) — 입력이 저장된 매크로 이름 또는 원 trigger(NL) 와 정확매치면 그 매크로
@@ -729,12 +746,8 @@ export function createTowerModal(deps: TowerModalDeps): TowerModal {
       pin.dataset.node = `tower/plan/step/${i}/params`; // RULE 8 — 인라인 파라미터 필드 노출
       pin.title = tr("towerPlanStepParams");
       const commitParam = () => {
-        let parsed: Record<string, unknown>;
-        try {
-          const v = JSON.parse(pin.value);
-          if (!v || typeof v !== "object" || Array.isArray(v)) throw new Error("not-object");
-          parsed = v as Record<string, unknown>;
-        } catch {
+        const parsed = parseParamsObject(pin.value);
+        if (parsed === null) {
           pin.classList.add("bad"); // 잘못된 JSON — 이전 값 유지(편집 미반영).
           onLive({ kind: "start", who: "✦" });
           onLive({ kind: "end", text: tr("towerPlanBadJson") });
@@ -775,7 +788,7 @@ export function createTowerModal(deps: TowerModalDeps): TowerModal {
         if (nlInput) nlInput.value = "";
         renderPalette();
         reportOutcome(`"${nl}"`, r.ok ? { ok: true } : r);
-      });
+      }, failed("tower modal plan commit"));
     };
     run.addEventListener("click", doCommit);
     act.append(discard, run);
@@ -890,7 +903,7 @@ export function createTowerModal(deps: TowerModalDeps): TowerModal {
       ex.append(elText("span", "⏎", "tower-ex-go"));
       // 클릭 = executor.runExample(i) — text → 실 command + 라이브 파라미터 해소 → 실행. danger 면 게이트.
       ex.addEventListener("click", () => {
-        void executor.runExample(i).then((r) => reportOutcome(`"${text}"`, r));
+        void executor.runExample(i).then((r) => reportOutcome(`"${text}"`, r), failed("tower modal example"));
       });
       exs.appendChild(ex);
     });
@@ -990,8 +1003,9 @@ export function createTowerModal(deps: TowerModalDeps): TowerModal {
       for (const off of subs) {
         try {
           off.dispose();
-        } catch {
-          // 해지 실패 격리.
+        } catch (error) {
+          // A failing dispose does not stop the other subscriptions; its error is reported.
+          room.report("tower modal subscription", String((error as Error)?.message ?? error));
         }
       }
       subs = [];
@@ -1015,8 +1029,8 @@ export function createTowerModal(deps: TowerModalDeps): TowerModal {
       for (const off of subs) {
         try {
           off.dispose();
-        } catch {
-          /* 격리 */
+        } catch (error) {
+          room.report("tower modal subscription", String((error as Error)?.message ?? error));
         }
       }
       subs = [];

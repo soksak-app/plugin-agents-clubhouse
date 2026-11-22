@@ -192,7 +192,7 @@ export function parsePlan(text: string): PlanStep[] | null {
       const v = JSON.parse(s);
       if (Array.isArray(v)) return v as PlanStep[];
     } catch {
-      // 다음 후보 시도
+      // Not JSON: the next candidate is tried. When none is an array, parsePlan returns null and the caller reports PLAN_PARSE_FAILED.
     }
   }
   return null;

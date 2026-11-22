@@ -274,7 +274,7 @@ export interface ConfirmInfo {
 }
 
 export interface ExecutorDeps {
-  room: Pick<RoomPort, "commands">; // the room port (src/room/port.ts): commands.execute runs a core or own command through the view.
+  room: Pick<RoomPort, "commands" | "report">; // the room port (src/room/port.ts): commands.execute runs a core or own command through the view.
   confirmGate: ConfirmGate;
   lang?: () => string;
   planner?: Planner; // slow-path planning 턴 seam(room transport 가 주입(C3·C5)). 없으면 NO_PLANNER.
@@ -311,19 +311,14 @@ function isForbiddenChrome(address: string): boolean {
   return /(^|\/)tower\/confirm(\/|$)/.test(address) || /(^|\/)modal\/confirm-close(\/|$)/.test(address);
 }
 
-// 16바이트 랜덤 토큰(게이트 1회분). crypto 우선, 없으면 Math.random 폴백(테스트/노드 환경).
-function randomToken(): string {
-  try {
-    const g: any = globalThis as any;
-    if (g.crypto?.getRandomValues) {
-      const b = new Uint8Array(16);
-      g.crypto.getRandomValues(b);
-      return Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");
-    }
-  } catch {
-    /* 폴백 */
-  }
-  return `t${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`;
+// 16바이트 랜덤 토큰(게이트 1회분). crypto.getRandomValues 만 쓴다. 없으면 명시적 오류: Math.random 폴백은
+//   예측 가능한 토큰이 되어 confirm 게이트를 우회할 수 있다.
+export function randomToken(): string {
+  const g: any = globalThis as any;
+  if (!g.crypto?.getRandomValues) throw new Error("confirm tokens need crypto.getRandomValues");
+  const b = new Uint8Array(16);
+  g.crypto.getRandomValues(b);
+  return Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");
 }
 
 // 디스패치 실패 → 다음 planning 턴의 correction 블록(M8 되먹임, 순수). buildPlanSystemPrompt 가 이 문자열을
@@ -453,7 +448,7 @@ export function createExecutor(deps: ExecutorDeps): TowerExecutor {
   function enqueueConfirm(issue: () => string, info: ConfirmInfo): Promise<string | null> {
     // 새 confirm 을 현재 tail 뒤에 잇는다. tail 이 끝날 때까지 confirmGate 는 호출조차 안 된다(동시 0).
     const run = confirmTail.then(() => confirmGate(issue, info));
-    // tail 전진 — 이 confirm 이 끝나야(성공/실패 무관) 다음이 시작. catch 로 큐 막힘 0(거부도 통과).
+    // tail 전진 — 이 confirm 이 끝나야(성공/실패 무관) 다음이 시작. 거부는 run 으로 호출자에게 전달되므로 여기서는 전진만 한다(큐 막힘 0).
     confirmTail = run.then(
       () => undefined,
       () => undefined,
@@ -631,16 +626,18 @@ export function createExecutor(deps: ExecutorDeps): TowerExecutor {
         snap.theme = { name: th.current };
         if (typeof th.mode === "string") snap.theme.mode = th.mode;
       }
-    } catch {
-      /* 테마 캡처 실패 → theme inverse 는 추측 금지(null). */
+    } catch (error) {
+      // The theme inverse stays null: it is not guessed.
+      room.report("tower rollback snapshot", String((error as Error)?.message ?? error));
     }
     try {
       const tree: any = await exec("state.tree");
       const sizes: Record<string, number[]> = {};
       collectSplitSizes(tree?.tree, sizes); // state.tree 의 모든 split.id → 현재 sizes.
       if (Object.keys(sizes).length) snap.sizes = sizes;
-    } catch {
-      /* 레이아웃 캡처 실패 → resize inverse 는 추측 금지(null). */
+    } catch (error) {
+      // The resize inverse stays null: it is not guessed.
+      room.report("tower rollback snapshot", String((error as Error)?.message ?? error));
     }
     return snap;
   }

@@ -15,4 +15,6 @@ export interface RoomPort {
   };
   // Calls the listener when the theme of the view changes.
   onTheme(listener: () => void): { dispose(): void };
+  // Writes an error of the room to the application log through the declared error path, as `error: <where>: <text>`.
+  report(where: string, text: string): void;
 }

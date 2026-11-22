@@ -131,6 +131,8 @@ export interface TraceSink {
 export interface TraceOptions {
   sessionId: string; // 현재 세션 식별자(창/세션 네임스페이스). 같은 ns 안에서 세션별 history 분리.
   now?: () => number; // 시계 주입(테스트 결정성). 기본 Date.now.
+  // 영속 실패 보고 — 실행은 막지 않고, 실패한 기록만 error: <where>: <text> 로 남긴다.
+  report: (where: string, text: string) => void;
 }
 
 // 컬렉션 define(멱등) — 조회·정렬에 쓰는 인덱스만. 1회 호출(begin 첫 호출 시 lazy, 또는 외부 ensure).
@@ -204,8 +206,9 @@ export function createTrace(data: DataApi, opts: TraceOptions): TraceSink {
       if (rec.danger !== undefined) stepDoc.danger = rec.danger;
       try {
         await data.put(STEPS, stepDoc);
-      } catch {
-        // 영속 실패가 실행을 막지 않는다(부수효과) — 다음 step 진행. trace 누락만 발생(가용성 우선).
+      } catch (error) {
+        // 영속 실패가 실행을 막지 않는다(부수효과) — 다음 step 진행. 실패한 기록은 보고된다.
+        opts.report("tower trace step", String((error as Error)?.message ?? error));
       }
     };
 
@@ -213,8 +216,9 @@ export function createTrace(data: DataApi, opts: TraceOptions): TraceSink {
       rollback = rec; // 현재 plan 1건만(cap). finish 가 plan 레코드에 합쳐 영속한다.
       try {
         await data.put(PLANS, { ...doc, rollback }, { id: planId });
-      } catch {
-        // 영속 실패가 실행/복원을 막지 않는다(부수효과) — trace 누락만(가용성 우선).
+      } catch (error) {
+        // 영속 실패가 실행/복원을 막지 않는다(부수효과) — 실패한 기록은 보고된다.
+        opts.report("tower trace rollback", String((error as Error)?.message ?? error));
       }
     };
 
@@ -223,8 +227,9 @@ export function createTrace(data: DataApi, opts: TraceOptions): TraceSink {
         const fin: Record<string, unknown> = { ...doc, outcome, finishedAt: now() };
         if (rollback) fin.rollback = rollback; // M9 — rollback 기록을 종결 갱신에도 보존.
         await data.put(PLANS, fin, { id: planId });
-      } catch {
-        /* 종결 갱신 실패는 무해 — running 으로 남아도 step 으로 사후 판별 가능 */
+      } catch (error) {
+        // The plan stays running; its step records still show what ran. The failure is reported.
+        opts.report("tower trace plan", String((error as Error)?.message ?? error));
       }
     };
 

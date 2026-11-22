@@ -35,6 +35,7 @@ const CATALOG = [
 function fakeApp(over: Record<string, (p: any) => any> = {}) {
   const executed: Array<{ name: string; params: any }> = [];
   const room = {
+    report: () => undefined,
     commands: {
       execute: vi.fn(async (name: string, params: any) => {
         if (over[name]) return over[name](params);
@@ -315,7 +316,7 @@ describe("inter-agent propagation — distributeAndRun 에서 전파 0", () => {
 describe("trace — scanner verdict + taint + forced-gate 결정 honest 영속", () => {
   it("flagged plan refuse 는 실행 0이라 trace plan 미생성(정직 — 시작도 안 함)", async () => {
     const { data, store } = fakeData();
-    const { d } = deps({ trace: createTrace(data, { sessionId: "s" }) });
+    const { d } = deps({ trace: createTrace(data, { sessionId: "s", report: () => undefined }) });
     const ex = createExecutor(d);
     const res = await ex.planAndRun("close", {
       injectPlan: [{ axis: "command", name: "panel.close", params: { panel: "g3" } }],
@@ -330,7 +331,7 @@ describe("trace — scanner verdict + taint + forced-gate 결정 honest 영속",
 
   it("tainted destructive 의 forced-gate deny 는 plan 레코드에 tainted:true + step denied 로 영속", async () => {
     const { data } = fakeData();
-    const sink = createTrace(data, { sessionId: "s" });
+    const sink = createTrace(data, { sessionId: "s", report: () => undefined });
     const { d } = deps({ trace: sink });
     const ex = createExecutor(d);
     const res = await ex.planAndRun("close", {
@@ -351,7 +352,7 @@ describe("trace — scanner verdict + taint + forced-gate 결정 honest 영속",
 
   it("clean+tainted 의 honest 통과 — scanFlags 빈 요약", async () => {
     const { data } = fakeData();
-    const sink = createTrace(data, { sessionId: "s" });
+    const sink = createTrace(data, { sessionId: "s", report: () => undefined });
     const { d, executed } = deps({ trace: sink });
     const ex = createExecutor(d);
     const res = await ex.planAndRun("theme", {

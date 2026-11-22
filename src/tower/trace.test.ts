@@ -80,6 +80,7 @@ const CATALOG = [
 function fakeApp() {
   const executed: Array<{ name: string; params: any }> = [];
   const room = {
+    report: () => undefined,
     commands: {
       execute: vi.fn(async (name: string, params: any) => {
         if (name === "state.commands") return { ok: true, commands: CATALOG.map((c) => ({ name: c, description: c })) };
@@ -113,7 +114,7 @@ function deps(
 describe("(1) commit 된 plan → plan + steps + outcome 영속", () => {
   it("주입 plan 을 commit 하면 plan 레코드·step 레코드·outcome=committed 가 저장된다", async () => {
     const store = newStore();
-    const trace = createTrace(fakeData(store), { sessionId: "s1", now: clock() });
+    const trace = createTrace(fakeData(store), { sessionId: "s1", now: clock(), report: () => undefined });
     const { d } = deps(trace);
     const ex = createExecutor(d);
     const plan: PlanStep[] = [
@@ -139,7 +140,7 @@ describe("(1) commit 된 plan → plan + steps + outcome 영속", () => {
 describe("(2) dry-run-discarded plan → discarded, step 미실행 기록", () => {
   it("commit 하지 않고 버린 plan 은 discarded 로 남고 step 은 executed 로 안 남는다", async () => {
     const store = newStore();
-    const trace = createTrace(fakeData(store), { sessionId: "s1", now: clock() });
+    const trace = createTrace(fakeData(store), { sessionId: "s1", now: clock(), report: () => undefined });
     const { d, executed } = deps(trace);
     const ex = createExecutor(d);
     const plan: PlanStep[] = [{ axis: "command", name: "theme.apply", params: { name: "Cupertino" } }];
@@ -160,7 +161,7 @@ describe("(2) dry-run-discarded plan → discarded, step 미실행 기록", () =
 describe("(3) confirm 거부된 destructive step → 거부(미실행) 기록", () => {
   it("destructive step 이 confirm 거부되면 trace 에 denied 로 남고 실행되지 않는다", async () => {
     const store = newStore();
-    const trace = createTrace(fakeData(store), { sessionId: "s1", now: clock() });
+    const trace = createTrace(fakeData(store), { sessionId: "s1", now: clock(), report: () => undefined });
     const confirmGate = vi.fn(async () => null); // 거부
     const { d, executed } = deps(trace, { confirmGate });
     const ex = createExecutor(d);
@@ -182,7 +183,7 @@ describe("(3) confirm 거부된 destructive step → 거부(미실행) 기록", 
 describe("(4) 영속 — reload(새 trace 인스턴스)에서도 살아 있다", () => {
   it("commit 후 같은 store 의 새 trace 인스턴스가 plan·step 을 재조회한다(인메모리면 소실=RED)", async () => {
     const store = newStore();
-    const trace1 = createTrace(fakeData(store), { sessionId: "s1", now: clock() });
+    const trace1 = createTrace(fakeData(store), { sessionId: "s1", now: clock(), report: () => undefined });
     const { d } = deps(trace1);
     const ex = createExecutor(d);
     const plan: PlanStep[] = [
@@ -194,7 +195,7 @@ describe("(4) 영속 — reload(새 trace 인스턴스)에서도 살아 있다",
     await res.commit();
 
     // ── reload 모사 — 같은 store(디스크 동형), 완전히 새 trace 인스턴스로 재조회 ──
-    const trace2 = createTrace(fakeData(store), { sessionId: "s1", now: clock() });
+    const trace2 = createTrace(fakeData(store), { sessionId: "s1", now: clock(), report: () => undefined });
     const plans = await trace2.recentPlans({ limit: 10 });
     expect(plans).toHaveLength(1);
     expect(plans[0]).toMatchObject({ nl: "테마 적용", mode: "simul", outcome: "committed" });
@@ -206,7 +207,7 @@ describe("(4) 영속 — reload(새 trace 인스턴스)에서도 살아 있다",
 describe("(5) step 순서 + per-step result/status 충실", () => {
   it("seq 순서가 plan step 순서와 일치하고 각 step 의 axis/status 가 정확히 기록된다", async () => {
     const store = newStore();
-    const trace = createTrace(fakeData(store), { sessionId: "s1", now: clock() });
+    const trace = createTrace(fakeData(store), { sessionId: "s1", now: clock(), report: () => undefined });
     const { d } = deps(trace, {
       // status.query 가 dirty 를 반환하도록 — per-step result 가 그대로 보존되는지 단언.
     });
@@ -243,7 +244,7 @@ describe("(5) step 순서 + per-step result/status 충실", () => {
 describe("distributeAndRun 도 trace 에 plan·step·outcome 을 기록(M6 경로)", () => {
   it("simul 다중 plan commit → 각 plan + step 이 trace 에 남는다", async () => {
     const store = newStore();
-    const trace = createTrace(fakeData(store), { sessionId: "s1", now: clock() });
+    const trace = createTrace(fakeData(store), { sessionId: "s1", now: clock(), report: () => undefined });
     const { d } = deps(trace);
     const ex = createExecutor(d);
     // planFor 스텁 — 각 에이전트가 고정 plan 반환.
@@ -289,8 +290,30 @@ describe("C8 — a failed define reaches the caller and the next call defines ag
         if (defines === 1) throw new Error("define refused");
       },
     };
-    const trace = createTrace(data, { sessionId: "s1" });
+    const trace = createTrace(data, { sessionId: "s1", report: () => undefined });
     await expect(trace.begin({ nl: "x", mode: "facil" })).rejects.toThrow("define refused");
     await expect(trace.begin({ nl: "x", mode: "facil" })).resolves.toBeDefined();
+  });
+});
+
+describe("C9 — trace persistence failures are reported and do not stop the run", () => {
+  it("a failed step write and a failed finish are reported, and both calls resolve", async () => {
+    const store = newStore();
+    const base = fakeData(store);
+    const report = vi.fn();
+    const data: DataApi = {
+      ...base,
+      put: async (coll, doc, opts) => {
+        if (coll === STEPS) throw new Error("step write refused");
+        if (coll === PLANS && doc.outcome === "committed") throw new Error("finish write refused");
+        return base.put(coll, doc, opts);
+      },
+    };
+    const trace = createTrace(data, { sessionId: "s1", report });
+    const pt = await trace.begin({ nl: "x", mode: "facil" });
+    await expect(pt.recordStep({ step: { axis: "status", name: "x" }, outcome: { ok: true }, status: "done" } as any)).resolves.toBeUndefined();
+    await expect(pt.finish("committed")).resolves.toBeUndefined();
+    expect(report).toHaveBeenCalledWith("tower trace step", "step write refused");
+    expect(report).toHaveBeenCalledWith("tower trace plan", "finish write refused");
   });
 });

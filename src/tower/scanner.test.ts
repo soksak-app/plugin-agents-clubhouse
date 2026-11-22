@@ -198,3 +198,16 @@ describe("scanIncoming — 출처별 분해 + plan step 검사", () => {
     expect(r.bySource[0].source).toBe("agent:codex");
   });
 });
+
+describe("C9 — scan input is never skipped, and a blob that does not decode is no payload", () => {
+  it("refuses a step whose params cannot be serialized", () => {
+    const params: Record<string, unknown> = {};
+    params.self = params;
+    expect(() => scanIncoming({ steps: [{ axis: "command", name: "panel.close", params } as any] })).toThrow(/cannot be serialized/);
+  });
+
+  it("a base64-looking run that does not decode gives no encoded-payload flag", () => {
+    const r = scanIncoming({ steps: [{ axis: "command", name: "x", params: { blob: "A".repeat(45) } } as any] });
+    expect(r.flags.some((f) => f.kind === "encoded-payload")).toBe(false);
+  });
+});
