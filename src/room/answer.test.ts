@@ -97,3 +97,34 @@ describe("createAnswerChannel", () => {
     expect(channel.tokens().map((token) => token.turn)).toEqual(["t-1"]);
   });
 });
+
+// A reload of the room page (C91): the page ends while a member holds its turn token, and the next page reads the open tokens from the
+// tab state that the first page wrote at each change, so the answer after the reload is accepted and raises the delivered position.
+describe("an answer across a reload of the room page", () => {
+  it("accepts the answer of a token that the page before the reload opened, from the written tab state", async () => {
+    const { parseRoomState, serializedRoomState } = await import("./room-state");
+    const { createRoomRecord } = await import("./room-record");
+    const conversation = [{ speaker: "owner", text: "go", at: null, elapsedMs: null }];
+    let written = "";
+    const before = createAnswerChannel({ newTurn: counter(), delivered: () => {}, restoredAnswer: () => {}, changed: () => {
+      written = serializedRoomState({
+        roster: [], team: [], mode: "turn", conversation, sessions: ["s-1"], protocolSessions: ["s-1"],
+        addressed: { "s-1": [0] }, delivered: { "s-1": 0 }, sent: { "s-1": 1 }, turns: before.tokens(),
+      });
+    } });
+    before.open("s-1", "m", 1);
+    // The page reloads: nothing of the first page remains but the written tab state.
+    const saved = parseRoomState(JSON.parse(written))!;
+    const record = createRoomRecord([...saved.conversation], saved.delivered, (speaker) => speaker, () => {}, saved.sent, () => 0, saved.addressed);
+    const after = createAnswerChannel({
+      restored: saved.turns,
+      delivered: (session, count) => record.markDelivered(session, count),
+      restoredAnswer: (token, text) => record.append(token.member, text),
+      changed: () => {},
+    });
+    expect(after.deliver({ turn: "t-1", status: "settled", text: "done" })).toEqual({ turn: "t-1" });
+    expect(record.delivered()).toEqual({ "s-1": 1 });
+    expect(record.lines.at(-1)).toMatchObject({ speaker: "m", text: "done" });
+    expect(after.tokens()).toEqual([]);
+  });
+});

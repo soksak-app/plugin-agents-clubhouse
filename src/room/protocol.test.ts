@@ -252,3 +252,12 @@ describe("the team protocol", () => {
     expect(roomProtocolLine("Claude", [], "room-1")).not.toContain("leader");
   });
 });
+
+// A room command that fails, for example while the room page reloads, returns its error to the member (C91): the member runs it again.
+describe("a failed room command", () => {
+  it("tells the member to run a failed room command again with the same token", () => {
+    const line = roomProtocolLine("Claude", ["Codex"], "room-1");
+    expect(line).toContain("When a room command fails, run it again with the same token until it is accepted or refused as not open.");
+    expect(line.length).toBeLessThan(3500);
+  });
+});

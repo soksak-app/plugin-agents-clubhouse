@@ -65,6 +65,8 @@ export function roomProtocolLine(self: string, peers: string[], surface: string,
     "Your turn line holds every record line you have not seen; only your answer ends the turn, and each token takes one answer.",
     "Run each room command (answer, report, claim, release) as a command of its own in the foreground, never chained with ;, && or |.",
     "When a room command times out or goes to the background, report it with report and never say that it was sent.",
+    // A command that runs while the room page reloads reaches no page and fails with its error; the next page keeps the open token.
+    "When a room command fails, run it again with the same token until it is accepted or refused as not open.",
     "Answer continue while a question, a disagreement or work remains; settled only when your part is done and verified.",
     "Work rules: agree on the plan and the contracts before coding.",
     "Split development work of a turn into independent parts and delegate them to subagents with the Agent tool, run them in parallel and verify their results before you report; edit a trivial single file directly.",
