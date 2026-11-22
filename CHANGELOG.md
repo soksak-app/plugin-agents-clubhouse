@@ -10,3 +10,4 @@
 - C10: A destructive batch is refused before its first step when its rollback snapshot cannot be captured (`SNAPSHOT_FAILED`), and the failure is reported. Batches without a destructive step still run.
 - C11: A failed palette run, plan, or plan edit reports its code and reason through `room.report` (`error: <where>: <code>: <reason>`), not a generic phrase.
 - C3: Summoning opens each checked member as an owned session (`core.session.open`) and stores the member-to-session relation in project data; `plugin.json` declares `sessions` with the persistent sidecar it requires. The definitions source and the trigger are not wired yet, and the core commands are not implemented yet (C3 stays open).
+- C12: The room shows each failure through the window error display (`tab.error`), and records a refused display through `runtime.error`.

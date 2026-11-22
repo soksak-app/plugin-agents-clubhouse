@@ -15,6 +15,7 @@ import type { ElementTarget, RoomHandlers } from "./room/exposure";
 import { startRoomPage, type RoomContext } from "./room/page";
 import type { RoomPort } from "./room/port";
 import { createTrace } from "./tower/trace";
+import { createRoomReport } from "./room/report";
 import { createMacroStore } from "./tower/macro";
 import { setupTower } from "./tower/header";
 import { TOWER_LIVE_TOPIC } from "./tower/modal";
@@ -106,17 +107,11 @@ interface Tab {
   checked: boolean;
 }
 
-// The page bootstrap. Errors of the page and of its start go through the error record of the view (runtime.error), which
-// writes them to the application log; reports that come before the bridge exists wait for it.
-const pendingReports: [string, string][] = [];
+// The page bootstrap. Errors of the page and of its start go through the window error display (tab.error, src/room/report.ts),
+// which shows them and writes them to the application log; reports that come before the bridge exists wait for it.
+const roomReport = createRoomReport();
+const report = roomReport.report;
 let bridge: ViewBridge | null = null;
-function report(where: string, text: string): void {
-  if (bridge === null) {
-    pendingReports.push([where, text]);
-    return;
-  }
-  void bridge.runtime.error(where, text);
-}
 
 const handler = window.webkit.messageHandlers["sok-view"];
 bridge = createViewBridge({
@@ -125,7 +120,7 @@ bridge = createViewBridge({
     if (event.kind !== "open-calls") report("calls", JSON.stringify(event));
   },
 });
-for (const [where, text] of pendingReports.splice(0)) report(where, text);
+roomReport.attach(bridge);
 addEventListener("error", (event) => report("page", String(event.error?.message ?? event.message)));
 addEventListener("unhandledrejection", (event) => report("rejection", String(event.reason?.message ?? event.reason)));
 
