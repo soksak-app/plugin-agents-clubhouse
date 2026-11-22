@@ -35,21 +35,21 @@ socket/CLI/MCP 채널로 헤드리스 도달 가능했다(코어의 `docs/AI-CON
 
 ## 2. 무엇을 만들었나 (작업 내용)
 
-`feat/control-tower`의 11 커밋, 각각 RED→GREEN + 소켓/시각 검증:
+마일스톤, 각각 RED→GREEN 검증:
 
-| M | 커밋 | 내용 |
-|---|------|------|
-| M1 | `2bcfb32` | `ui:titlebar` 권한 + 플러그인이 코어 커맨드(`state.commands`, `ui.tree`)를 부를 수 있다는 계약 테스트. |
-| M2 | `06c800a` | 타이틀바 ✦ 액션(`registerHeaderAction`) + 빈 드래그 가능 560px 모달 셸(콘텐츠 탭 보존). |
-| M3 | `3a23698` | 모달 본문 — NL 바, 클릭 가능한 예시행, 라이브 명령 팔레트, 검색, 라이브 칸; 코어 토큰 기반 5테마 CSS. |
-| M4 | `fa3526a` | fast-path executor + `plan.ts` 검증; 예시/팔레트 → `app.commands.execute`; destructive → confirm 게이트. |
-| M5 | `7687d54` | slow-path 오케스트레이션 — NL → 엔진 → 3축 plan → executor, dry-run 미리보기 + 결과 피드백. |
-| M6 | `99cda8d` | 다중 에이전트 분배(모드별), 직렬 confirm 큐, 인터럽트. |
-| M7 | `a015845` | `app.data` 위 세션 / trace 영속(plan + step + outcome). |
-| M8 | `2931fe4` | 실행 후 reflection 루프(디스패치 → `status.query` 검증(폴링 아님) → 재계획) + max-steps / max-replan 가드 + escalation. |
-| M9 | `ab964ba` | 편집 가능 dry-run 미리보기(삭제 / 재정렬 / 파라미터 수정, 재검증) + 한정 정직 rollback(스냅샷 → invertible step만 역명령; non-invertible은 `unrestorable`로 보고). |
-| M10 | `5dfd067` | untrusted-content scanner(prompt-injection / homograph / pipe-to-interpreter / ANSI / zero-width / encoded) + taint 추적 → untrusted 컨텍스트 유래 destructive step은 confirm 게이트 강제; flagged plan은 거부. |
-| M11 | `87ab983` | 매크로 승격 — 반복 trusted NL→plan을 명명 fast-path로 승격 제안(`app.data` 영속), 실행 전마다 재검증; tainted plan은 승격 불가. |
+| M | 내용 |
+|---|------|
+| M1 | `ui:titlebar` 권한 + 플러그인이 코어 커맨드(`state.commands`, `ui.tree`)를 부를 수 있다는 계약 테스트. |
+| M2 | 타이틀바 ✦ 액션(`registerHeaderAction`) + 빈 드래그 가능 560px 모달 셸(콘텐츠 탭 보존). |
+| M3 | 모달 본문 — NL 바, 클릭 가능한 예시행, 라이브 명령 팔레트, 검색, 라이브 칸; 코어 토큰 기반 5테마 CSS. |
+| M4 | fast-path executor + `plan.ts` 검증; 예시/팔레트 → `app.commands.execute`; destructive → confirm 게이트. |
+| M5 | slow-path 오케스트레이션 — NL → 엔진 → 3축 plan → executor, dry-run 미리보기 + 결과 피드백. |
+| M6 | 다중 에이전트 분배(모드별), 직렬 confirm 큐, 인터럽트. |
+| M7 | `app.data` 위 세션 / trace 영속(plan + step + outcome). |
+| M8 | 실행 후 reflection 루프(디스패치 → `status.query` 검증(폴링 아님) → 재계획) + max-steps / max-replan 가드 + escalation. |
+| M9 | 편집 가능 dry-run 미리보기(삭제 / 재정렬 / 파라미터 수정, 재검증) + 한정 정직 rollback(스냅샷 → invertible step만 역명령; non-invertible은 `unrestorable`로 보고). |
+| M10 | untrusted-content scanner(prompt-injection / homograph / pipe-to-interpreter / ANSI / zero-width / encoded) + taint 추적 → untrusted 컨텍스트 유래 destructive step은 confirm 게이트 강제; flagged plan은 거부. |
+| M11 | 매크로 승격 — 반복 trusted NL→plan을 명명 fast-path로 승격 제안(`app.data` 영속), 실행 전마다 재검증; tainted plan은 승격 불가. |
 
 ---
 

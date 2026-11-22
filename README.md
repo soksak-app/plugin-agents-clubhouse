@@ -37,8 +37,8 @@ Permission request policy · default conversation mode (facilitator/sequential/s
 ## Development
 
 ```
-npm install
-npm run typecheck && npm run test && npm run build
+make install
+make test && make check && make build
 ```
 
 Pure logic (`conversation.ts`) is verified with vitest unit tests; integration is verified via exposed commands (`send`/`state`) + `window.snapshot` screen capture. `host-contract.test.ts` is the host chrome standards compliance gate.

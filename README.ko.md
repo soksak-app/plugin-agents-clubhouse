@@ -42,8 +42,8 @@ ACP(Agent Client Protocol) 기반, `soksak-plugin-agents-acp`(엔진) 의존.
 ## 개발
 
 ```
-npm install
-npm run typecheck && npm run test && npm run build
+make install
+make test && make check && make build
 ```
 
 순수 로직(`conversation.ts`)은 vitest 단위검증, 통합은 노출 커맨드(`send`/`state`) + `window.snapshot`

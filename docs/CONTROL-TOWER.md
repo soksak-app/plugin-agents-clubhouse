@@ -41,21 +41,21 @@ Design principles followed:
 
 ## 2. What was built (work content)
 
-11 commits on `feat/control-tower`, each RED→GREEN + socket/visual verified:
+Milestones, each verified RED→GREEN:
 
-| M | commit | delivers |
-|---|--------|----------|
-| M1 | `2bcfb32` | `ui:titlebar` permission + a contract test that the plugin can call core commands (`state.commands`, `ui.tree`). |
-| M2 | `06c800a` | titlebar ✦ action (`registerHeaderAction`) + an empty draggable 560px modal shell (content tab preserved). |
-| M3 | `3a23698` | the modal body — NL bar, clickable example rows, live command palette, search, live pane; 5-theme CSS via core tokens. |
-| M4 | `fa3526a` | fast-path executor + `plan.ts` validation; example/palette → `app.commands.execute`; destructive → confirm gate. |
-| M5 | `7687d54` | slow-path orchestration — NL → engine → 3-axis plan → executor, with a dry-run preview and result feedback. |
-| M6 | `99cda8d` | multi-agent distribution (per mode), a serial confirm queue, and interrupt. |
-| M7 | `a015845` | session / trace persistence over `app.data` (plans + steps + outcomes). |
-| M8 | `2931fe4` | post-execution reflection loop (dispatch → verify via `status.query`, not poll → re-plan) with max-steps / max-replan guards and escalation. |
-| M9 | `ab964ba` | editable dry-run preview (delete / reorder / edit-param, re-validated) + limited honest rollback (snapshot → inverse commands for invertible steps only; non-invertible reported as `unrestorable`). |
-| M10 | `5dfd067` | untrusted-content scanner (prompt-injection / homograph / pipe-to-interpreter / ANSI / zero-width / encoded) + taint tracking → a destructive step derived from untrusted context is forced through the confirm gate; flagged plans are refused. |
-| M11 | `87ab983` | macro promotion — a repeated trusted NL→plan is proposed for promotion to a named fast-path (persisted via `app.data`), re-validated before each run; tainted plans are never promotable. |
+| M | delivers |
+|---|----------|
+| M1 | `ui:titlebar` permission + a contract test that the plugin can call core commands (`state.commands`, `ui.tree`). |
+| M2 | titlebar ✦ action (`registerHeaderAction`) + an empty draggable 560px modal shell (content tab preserved). |
+| M3 | the modal body — NL bar, clickable example rows, live command palette, search, live pane; 5-theme CSS via core tokens. |
+| M4 | fast-path executor + `plan.ts` validation; example/palette → `app.commands.execute`; destructive → confirm gate. |
+| M5 | slow-path orchestration — NL → engine → 3-axis plan → executor, with a dry-run preview and result feedback. |
+| M6 | multi-agent distribution (per mode), a serial confirm queue, and interrupt. |
+| M7 | session / trace persistence over `app.data` (plans + steps + outcomes). |
+| M8 | post-execution reflection loop (dispatch → verify via `status.query`, not poll → re-plan) with max-steps / max-replan guards and escalation. |
+| M9 | editable dry-run preview (delete / reorder / edit-param, re-validated) + limited honest rollback (snapshot → inverse commands for invertible steps only; non-invertible reported as `unrestorable`). |
+| M10 | untrusted-content scanner (prompt-injection / homograph / pipe-to-interpreter / ANSI / zero-width / encoded) + taint tracking → a destructive step derived from untrusted context is forced through the confirm gate; flagged plans are refused. |
+| M11 | macro promotion — a repeated trusted NL→plan is proposed for promotion to a named fast-path (persisted via `app.data`), re-validated before each run; tainted plans are never promotable. |
 
 ---
 
