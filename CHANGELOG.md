@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- C43: A member session that ends before its protocol turn ends the step without an error report, and a send uses only the stored sessions that `core.sessions` lists (`docs/spec/room.md#room-protocol`).
 - C42: In a relay one after another each later member receives the earlier answers as `[@<name>] <answer>` with the message (`docs/spec/room.md#modes`).
 - C41: The answer of a member is the last reply block of its screen rows, without the status line, the spinner, the separators and the prompt; rows that the terminal broke are refused with the row (`docs/spec/room.md#answer`).
 - C40: The version is 0.0.6, which releases C36 to C38.

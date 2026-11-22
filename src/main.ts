@@ -364,7 +364,8 @@ function buildRoom({ settings, collections }: RoomContext): RoomHandlers {
   type OpenMember = { id: string; name: string; session: string };
   const openMembers = (): OpenMember[] =>
     roster
-      .filter((entry) => entry.checked && memberSessions.has(entry.id))
+      // The stored relation is read again after each change of core.sessions; until then a session that has ended is left out.
+      .filter((entry) => entry.checked && memberSessions.has(entry.id) && openSessionIds.has(memberSessions.get(entry.id)!))
       .map((entry) => ({ id: entry.id, name: entry.name, session: memberSessions.get(entry.id)! }));
   // Resolves with the members whose protocol turn has ended; a refused member receives no relayed message.
   const taughtMembers = async (members: OpenMember[]): Promise<OpenMember[]> => {

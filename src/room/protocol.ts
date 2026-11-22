@@ -53,18 +53,35 @@ export function createProtocolInjector(ports: RelayPorts, report: (where: string
       if (check(ports.sessions())) return;
       stop = ports.watchSessions((value) => void check(value));
     });
+  // A session that core.sessions no longer lists has ended; a later summon opens the session that replaces it, and that session
+  // receives its own protocol turn. The end is no failure of the member, so it is not reported.
+  const listed = (session: string): boolean =>
+    Array.isArray(ports.sessions()) && (ports.sessions() as { session?: unknown }[]).some((entry) => entry?.session === session);
   const inject = async (member: ProtocolMember, peers: string[]): Promise<ProtocolOutcome> => {
+    const controller = new AbortController();
+    let failure: unknown = null;
     try {
       await firstIdle(member.session);
       const port: SessionRelayPort = {
         submit: sessionSubmit(ports, member.session),
         program: () => sessionProgram(ports.sessions(), member.session),
-        watch: (listener) => ports.watchSessions((value) => listener(sessionProgram(value, member.session))),
+        watch: (listener) => ports.watchSessions((value) => {
+          try {
+            listener(sessionProgram(value, member.session));
+          } catch (error) {
+            failure = error;
+            controller.abort();
+          }
+        }),
       };
-      await relayMemberMessage(port, roomProtocolLine(member.name, peers));
+      await relayMemberMessage(port, roomProtocolLine(member.name, peers), { signal: controller.signal });
       return { ok: true };
     } catch (error) {
-      const reason = `member ${member.id}: ${error instanceof Error ? error.message : String(error)}`;
+      if (!listed(member.session)) {
+        return { ok: false, reason: `member ${member.id}: session ${member.session} ended before its protocol turn` };
+      }
+      const cause = failure ?? error;
+      const reason = `member ${member.id}: ${cause instanceof Error ? cause.message : String(cause)}`;
       report("room protocol", reason);
       return { ok: false, reason };
     }

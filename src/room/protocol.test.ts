@@ -31,7 +31,13 @@ function fakeCore(initial: Record<string, State | null>) {
       return () => void listeners.delete(listener);
     },
   };
-  return { ports, submitted, set };
+  // Ends the session: core.sessions no longer lists it.
+  const end = (session: string) => {
+    const { [session]: _ended, ...rest } = states;
+    states = rest;
+    for (const listener of [...listeners]) listener(value());
+  };
+  return { ports, submitted, set, end };
 }
 
 const claude = { id: "reviewer", name: "Claude", session: "s-1" };
@@ -70,4 +76,32 @@ describe("createProtocolInjector", () => {
     expect(await injector.ensure(claude, [])).toEqual({ ok: false, reason: "member reviewer: core.session.submit refused" });
     expect(reports).toEqual(["room protocol: member reviewer: core.session.submit refused"]);
   });
+
+  it("ends without an error when the session ends before its protocol turn, and teaches the session that replaces it", async () => {
+    const core = fakeCore({ "s-1": null });
+    const reports: string[] = [];
+    const injector = createProtocolInjector(core.ports, (where, text) => void reports.push(`${where}: ${text}`));
+    const stale = injector.ensure(claude, []);
+    core.end("s-1");
+    expect(await stale).toEqual({ ok: false, reason: "member reviewer: session s-1 ended before its protocol turn" });
+    core.set("s-2", "idle");
+    expect(await injector.ensure({ ...claude, session: "s-2" }, [])).toEqual({ ok: true });
+    expect(core.submitted.map((entry) => entry.session)).toEqual(["s-2"]);
+    expect(reports).toEqual([]);
+  });
+
+  it("ends without an error when the session ends during its protocol turn", async () => {
+    const core = fakeCore({ "s-1": "idle" });
+    core.ports.commands.execute = async (_name, params) => {
+      core.submitted.push({ session: params.session as string, text: params.text as string });
+      core.set("s-1", "working");
+      core.end("s-1");
+      return {};
+    };
+    const reports: string[] = [];
+    const injector = createProtocolInjector(core.ports, (where, text) => void reports.push(`${where}: ${text}`));
+    expect(await injector.ensure(claude, [])).toEqual({ ok: false, reason: "member reviewer: session s-1 ended before its protocol turn" });
+    expect(reports).toEqual([]);
+  });
 });
+
