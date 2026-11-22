@@ -19,7 +19,7 @@ import { createRoomReport } from "./room/report";
 import { createArrangementStatus } from "./room/arrangement";
 import { HEADER_CSS, createRoomHeader } from "./room/header";
 import { memberLaunch } from "./room/isolation";
-import { conversationView, elapsedLabel } from "./room/bubbles";
+import { conversationView, elapsedLabel, nextLabelChange } from "./room/bubbles";
 import { createFollow, type FollowState } from "./room/follow";
 import { createStopState } from "./room/stop-state";
 import { readAgentDefinitions, toMemberDefinition, type AgentDataGet, type AgentDefinition } from "./room/definitions";
@@ -608,7 +608,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
       for (const note of item.notes) row.append(elText("div", `${note.kind} · ${note.text}`, `st-note st-note-${note.kind}`));
       return indexed(row, item.index);
     });
-    // A waiting member shows the time since the room began to wait for it, which the display frames of the window advance.
+    // A waiting member shows the time since the room began to wait for it, which tickWaits writes at each change of its label.
     const waitRows = value.waiting.map((wait) => {
       const key = `${wait.member}/${wait.session}/${wait.step}`;
       if (!waitStarts.has(key)) waitStarts.set(key, Date.now());
@@ -639,23 +639,31 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
     row.dataset.index = String(index);
     return row;
   };
-  // The live counter of the waiting members runs on the display frames of the window through requestAnimationFrame, so it follows the
-  // refresh rate of the display that shows the window and stops when no member is waited for (AGENTS.md, refresh rate).
+  // The counter of each waiting member shows elapsedLabel of the time since the wait began. No event announces that a label unit has
+  // passed, and the label is not tied to the display frames, so one timer runs to the next change of the label of any waiting line;
+  // a line is written only when its text differs, and the timer ends when no wait remains and at the teardown of the view
+  // (docs/spec/room.md#timing).
   const waitStarts = new Map<string, number>();
-  let frame = 0;
+  let waitTimer: ReturnType<typeof setTimeout> | null = null;
   const tickWaits = (): void => {
+    if (waitTimer !== null) clearTimeout(waitTimer);
+    waitTimer = null;
     const lines = [...msgs.querySelectorAll<HTMLElement>(".st-waiting")];
+    if (lines.length === 0) return;
+    const now = Date.now();
+    let delay = Number.POSITIVE_INFINITY;
     for (const line of lines) {
-      const started = waitStarts.get(line.dataset.key!) ?? Date.now();
-      line.textContent = `${line.dataset.text} · ${elapsedLabel(Date.now() - started, lang)}`;
+      const elapsed = now - (waitStarts.get(line.dataset.key!) ?? now);
+      const text = `${line.dataset.text} · ${elapsedLabel(elapsed, lang)}`;
+      if (line.textContent !== text) line.textContent = text;
+      delay = Math.min(delay, nextLabelChange(elapsed));
     }
-    if (lines.length > 0 && frame === 0) {
-      frame = requestAnimationFrame(() => {
-        frame = 0;
-        tickWaits();
-      });
-    }
+    waitTimer = setTimeout(tickWaits, delay);
   };
+  addEventListener("pagehide", () => {
+    if (waitTimer !== null) clearTimeout(waitTimer);
+    waitTimer = null;
+  });
   // Each member receives the record lines that it has not received at the start of its turn (docs/spec/room.md#room-record).
   const speakerName = (speaker: string): string => (speaker === "owner" ? "owner" : memberName(speaker));
   // The declared conversation status carries the entries that the page shows and the members that the room waits for; the page draws

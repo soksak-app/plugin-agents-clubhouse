@@ -172,7 +172,7 @@ Room view는 각 record 항목을 말풍선으로 그린다. Owner의 말풍선�
 
 ## Timing
 
-각 record 항목은 방이 그것을 받은 시각 `at`을 epoch millisecond로 가지고, member의 답은 turn 줄의 submit이 받아들여진 때부터 답이 도착할 때까지의 millisecond인 `elapsedMs`를 가진다. 다른 항목의 `elapsedMs`는 null이다. Tab state와 [conversation status](#conversation-status)의 항목은 두 field를 모두 가지고, tab state의 reader는 두 field가 없는 항목을 `room tab state: conversation must be an array of {speaker, text, at, elapsedMs}`로 거부한다. 방이 시각을 기록하기 전에 받은 항목은 `at: null`, `elapsedMs: null`이며 view는 시각 없이 보여 준다. 답의 말풍선은 시간을 소수 한 자리의 초로, 예를 들어 `12.4초`로 보여 준다. 기다리는 member([conversation status](#conversation-status))는 방이 그 member를 기다리기 시작한 뒤의 시간을 보여 준다. View는 이 counter를 `requestAnimationFrame`으로 window의 display frame마다 진행하므로 window를 보여 주는 display의 refresh rate를 따르고, 기다리는 member가 없으면 멈춘다.
+각 record 항목은 방이 그것을 받은 시각 `at`을 epoch millisecond로 가지고, member의 답은 turn 줄의 submit이 받아들여진 때부터 답이 도착할 때까지의 millisecond인 `elapsedMs`를 가진다. 다른 항목의 `elapsedMs`는 null이다. Tab state와 [conversation status](#conversation-status)의 항목은 두 field를 모두 가지고, tab state의 reader는 두 field가 없는 항목을 `room tab state: conversation must be an array of {speaker, text, at, elapsedMs}`로 거부한다. 방이 시각을 기록하기 전에 받은 항목은 `at: null`, `elapsedMs: null`이며 view는 시각 없이 보여 준다. 답의 말풍선은 시간을 소수 한 자리의 초로, 예를 들어 `12.4초`로 보여 준다. 기다리는 member([conversation status](#conversation-status))는 방이 그 member를 기다리기 시작한 뒤의 시간을 보여 준다. View는 이 counter를 label이 바뀔 때만 쓴다. Label 단위가 지났음을 알리는 event가 없으므로 기다리는 member의 label 중 다음 변화까지 timer 하나가 돌고, 기다리는 member가 없어지거나 view가 끝나면 멈춘다.
 
 ## Answer
 

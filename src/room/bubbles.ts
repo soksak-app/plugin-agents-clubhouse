@@ -88,3 +88,18 @@ export function elapsedLabel(ms: number, lang: "en" | "ko"): string {
   const seconds = (ms / 1000).toFixed(1);
   return lang === "ko" ? `${seconds}초` : `${seconds} s`;
 }
+
+// The unit of the label: elapsedLabel shows tenths of a second through toFixed, so the label changes once per 100 ms near each 50 ms
+// mark; the binary value of a mark such as 0.15 can round down, so the change is found from the label itself.
+const LABEL_UNIT_MS = 100;
+
+// The whole milliseconds from `ms` to the next change of elapsedLabel, always positive (docs/spec/room.md#timing).
+export function nextLabelChange(ms: number): number {
+  const label = elapsedLabel(ms, "en");
+  const half = LABEL_UNIT_MS / 2;
+  const phase = (((ms - half) % LABEL_UNIT_MS) + LABEL_UNIT_MS) % LABEL_UNIT_MS;
+  // Two milliseconds before the nominal mark, so a mark that rounds early is not passed.
+  let next = Math.max(ms + 1, ms + LABEL_UNIT_MS - phase - 2);
+  while (elapsedLabel(next, "en") === label) next += 1;
+  return next - ms;
+}

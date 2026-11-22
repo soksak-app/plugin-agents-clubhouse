@@ -2,7 +2,7 @@
 // stable color by roster order, room lines as centered system lines, reports, claims and releases as notes under the bubble of their
 // member, sections as blocks of the bubble, and a divider with the round number before each round of the members.
 import { describe, expect, it } from "vitest";
-import { conversationView, elapsedLabel } from "./bubbles";
+import { conversationView, elapsedLabel, nextLabelChange } from "./bubbles";
 import type { StatusEntry } from "./conversation-status";
 
 const entry = (speaker: string, text: string, elapsedMs: number | null = null, sections: StatusEntry["sections"] = []): StatusEntry => ({
@@ -50,5 +50,33 @@ describe("elapsedLabel", () => {
     expect(elapsedLabel(12400, "ko")).toBe("12.4초");
     expect(elapsedLabel(12400, "en")).toBe("12.4 s");
     expect(elapsedLabel(0, "ko")).toBe("0.0초");
+  });
+});
+
+// The counter of a waiting member (docs/spec/room.md#timing): the view schedules one callback at the next change of the label, so the
+// writes and the callbacks over a wait are as many as the label changes, not as many as the display frames.
+describe("nextLabelChange", () => {
+  it("schedules each callback at a change of the real elapsedLabel, once per change over a ten-minute wait", () => {
+    const span = 10 * 60 * 1000;
+    let changes = 0;
+    for (let ms = 1; ms <= span; ms += 1) if (elapsedLabel(ms, "ko") !== elapsedLabel(ms - 1, "ko")) changes += 1;
+    let callbacks = 0;
+    let writes = 0;
+    let shown = elapsedLabel(0, "ko");
+    for (let ms = 0; ms < span; ) {
+      const delay = nextLabelChange(ms);
+      expect(delay).toBeGreaterThan(0);
+      ms += delay;
+      if (ms > span) break;
+      callbacks += 1;
+      const label = elapsedLabel(ms, "ko");
+      expect(elapsedLabel(ms - 1, "ko")).not.toBe(label);
+      if (label !== shown) {
+        writes += 1;
+        shown = label;
+      }
+    }
+    expect(callbacks).toBe(changes);
+    expect(writes).toBe(changes);
   });
 });
