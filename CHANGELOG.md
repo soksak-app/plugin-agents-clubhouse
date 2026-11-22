@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- C20: A room message that mentions members (`@name`) goes only to the mentioned members, in the order of their first mention (`docs/spec/room.md`).
 - C19: The descriptions of `plugin.json`, `package.json` and README state the current room: members from the agents definitions, owned terminal sessions, and the relay in roster order. The ACP dependency, the fixed members and the removed commands are no longer described.
 - C18: The repository uses pnpm, the checks of the pinned `@soksak/kit` release and the workflows `ci.yml` and `release.yml`; `make pack` builds and packs the release. The `doctor` script and its dependency, the former release scripts, `main.js` and the ACP test helpers are removed, and `repository` names `https://github.com/soksak-app/plugin-agents-clubhouse`.
 - C2, C6: The room runs on its view page (`ui/clubhouse.html`) with the commands, elements, status and project data of `plugin.json`. The ACP engine, its dependency and the commands that used it are removed, so the room has no member transport until C3 and C5.

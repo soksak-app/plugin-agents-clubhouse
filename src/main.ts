@@ -21,6 +21,7 @@ import { readAgentDefinitions, toMemberDefinition, type AgentDataGet, type Agent
 import { createMemberSessionStore } from "./room/session-store";
 import { serialRunner, summonAndArrange, type TriggerDeps } from "./room/trigger";
 import { relayToMembers, type RelayPorts } from "./room/room-relay";
+import { mentionedMembers } from "./room/mention";
 import { rosterFrom, type RosterEntry } from "./room/roster";
 import { createMacroStore } from "./tower/macro";
 import { setupTower } from "./tower/header";
@@ -369,9 +370,12 @@ function buildRoom({ settings, collections }: RoomContext): RoomHandlers {
   send.addEventListener("click", () => {
     const text = input.value.trim();
     if (text === "" || busy) return;
-    const targets = roster
+    const open = roster
       .filter((entry) => entry.checked && memberSessions.has(entry.id))
-      .map((entry) => ({ id: entry.id, session: memberSessions.get(entry.id)! }));
+      .map((entry) => ({ id: entry.id, name: entry.name, session: memberSessions.get(entry.id)! }));
+    // A message that mentions members goes only to them, in the order of their first mention (docs/spec/room.md#mentions).
+    const mentioned = mentionedMembers(text, open);
+    const targets = mentioned.length > 0 ? mentioned : open;
     if (targets.length === 0) {
       report("room relay", "no member session is open: check a member of the roster");
       return;
