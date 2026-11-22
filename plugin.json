@@ -1,225 +1,209 @@
 {
-  "spec": "soksak-spec-plugin@0.0.1",
   "id": "soksak-plugin-agents-clubhouse",
-  "name": {
-    "en": "Agents Clubhouse",
-    "ko": "\uc5d0\uc774\uc804\ud2b8 \ud074\ub7fd\ud558\uc6b0\uc2a4"
+  "name": "에이전트 클럽하우스",
+  "description": "여러 AI 코딩 에이전트(Claude·Codex)를 한 워크스페이스에서 하나의 대화로 묶는 방. 체크박스로 참여자를 고르고, 순차·동시 모드와 @이름 멘션으로 대화한다. 기본은 대화이며, 에이전트는 사용자가 요청할 때만 실제 파일을 건드린다.",
+  "mark": "방",
+  "icon": "<path d=\"M2 3h12v8H7l-3 2v-2H2z\"/>",
+  "surface": {
+    "composition": {
+      "kind": "view",
+      "page": "ui/clubhouse.html"
+    }
   },
-  "version": "0.0.1",
-  "description": {
-    "en": "A hub that brings multiple AI coding agents (Claude, Codex, Gemini) together in one workspace \u2014 select 1\u20133 via checkboxes, discuss in turn-based, free, or simultaneous mode, and mention a peer directly with '@name'. Conversation by default; the agents touch real files only when you ask. Runs agents through the agents-acp runtime.",
-    "ko": "\uc5ec\ub7ec AI \ucf54\ub529 \uc5d0\uc774\uc804\ud2b8(Claude\u00b7Codex\u00b7Gemini)\ub97c \ud55c \uc6cc\ud06c\uc2a4\ud398\uc774\uc2a4\uc5d0 \ubaa8\uc544\uc8fc\ub294 \ud5c8\ube0c \u2014 \uccb4\ud06c\ubc15\uc2a4\ub85c 1~3 \uc120\ud0dd, \ud0ed \uc21c\uc11c\ub300\ub85c \ud134\uc81c\u00b7\uc790\uc720\u00b7\ub3d9\uc2dc \ubaa8\ub4dc\ub85c \ud568\uaed8 \ub17c\uc758. \ubcf8\ubb38 '@\uc774\ub984' \uc73c\ub85c \ub3d9\ub8cc \uc9c1\uc811 \ud638\ucd9c. \uae30\ubcf8\uc740 \ub300\ud654\uc774\uace0, \uc0ac\uc6a9\uc790\uac00 \uc694\uccad\ud560 \ub54c\ub9cc \uc2e4\ud30c\uc77c \uc791\uc5c5. \uc5d0\uc774\uc804\ud2b8 \uc2e4\ud589\uc740 agents-acp \ub7f0\ud0c0\uc784 \uacbd\uc720."
+  "preview": {
+    "ink": "--fg"
   },
-  "entry": "main.js",
-  "permissions": [
-    "ui",
-    "ui:titlebar",
-    "commands",
-    "commands:inject",
-    "programs",
-    "fs:read",
-    "data"
-  ],
   "dependencies": {
     "soksak-plugin-agents-acp": "0.0.1"
   },
-  "configuration": [
-    {
-      "key": "permissionPolicy",
+  "settings": {
+    "permissionPolicy": {
+      "label": "권한 요청 정책",
+      "description": "에이전트가 파일이나 명령 권한을 요청할 때의 처리 방식. 거부(안전)는 거절하고, 허용은 승인하며, 물어보기는 화면에 묻는다.",
       "type": "enum",
-      "enum": [
-        "deny",
-        "allow",
-        "ask"
-      ],
-      "enumLabels": [
-        "\uac70\ubd80(\uc548\uc804)",
-        "\ud5c8\uc6a9",
-        "\ubb3c\uc5b4\ubcf4\uae30"
-      ],
       "default": "deny",
-      "title": "\uad8c\ud55c \uc694\uccad \uc815\ucc45",
-      "description": "\uc5d0\uc774\uc804\ud2b8\uac00 \ud30c\uc77c/\uba85\ub839 \uad8c\ud55c\uc744 \uc694\uccad\ud560 \ub54c \ucc98\ub9ac \ubc29\uc2dd"
+      "values": ["deny", "allow", "ask"]
     },
-    {
-      "key": "kibitzDefault",
+    "kibitzDefault": {
+      "label": "대화 기본 모드",
+      "description": "새 방의 대화 방식. 진행(사회자)은 진행자가 동료를 조율하고, 순차는 탭 순서대로 각 1회, 동시는 전원이 병렬로 답한다.",
       "type": "enum",
-      "enum": [
-        "facil",
-        "turn",
-        "simul"
-      ],
-      "enumLabels": [
-        "\uc9c4\ud589(\uc0ac\ud68c\uc790)",
-        "\uc21c\ucc28",
-        "\ub3d9\uc2dc"
-      ],
       "default": "facil",
-      "title": "\ub300\ud654 \uae30\ubcf8 \ubaa8\ub4dc",
-      "description": "\uc0c8 \uc6cc\ud06c\uc2a4\ud398\uc774\uc2a4\uc758 \ub300\ud654 \uc2a4\ud0c0\uc77c \uae30\ubcf8\uac12 \u2014 \uc9c4\ud589(\uc9c4\ud589\uc790\uac00 \ub3d9\ub8cc\ub97c \uc870\uc728\u00b7\ub9c8\ubb34\ub9ac), \uc21c\ucc28(\ud0ed \uc21c\uc11c \uac01 1\ud68c), \ub3d9\uc2dc(\uc804\uc6d0 \ubcd1\ub82c \ubc1c\ud654)"
+      "values": ["facil", "turn", "simul"]
     },
-    {
-      "key": "facilMaxRounds",
-      "type": "number",
+    "facilMaxRounds": {
+      "label": "진행 모드 라운드 상한",
+      "description": "진행 모드에서 진행자와 동료 사이 라운드의 하드 상한. 도달하면 강제로 마무리한다.",
+      "type": "integer",
       "default": 6,
-      "min": 1,
-      "max": 20,
-      "title": "\uc9c4\ud589 \ubaa8\ub4dc \ub77c\uc6b4\ub4dc \uc0c1\ud55c",
-      "description": "\uc9c4\ud589 \ubaa8\ub4dc\uc5d0\uc11c \uc9c4\ud589\uc790\u2194\ub3d9\ub8cc \ub77c\uc6b4\ub4dc\uc758 \ud558\ub4dc \uc0c1\ud55c(\ud3ed\uc8fc \ubc29\uc9c0 \u2014 \ub3c4\ub2ec \uc2dc \uac15\uc81c \ub9c8\ubb34\ub9ac)"
+      "minimum": 1,
+      "maximum": 20
     },
-    {
-      "key": "nameTriggerDepthCap",
-      "type": "number",
+    "nameTriggerDepthCap": {
+      "label": "@멘션 연쇄 상한",
+      "description": "한 @지목 스레드가 이어질 수 있는 최대 깊이. 무한 루프를 막는 안전판이며 강제로 늘리지 않는다.",
+      "type": "integer",
       "default": 4,
-      "min": 1,
-      "max": 20,
-      "title": "@\uba58\uc158 \uc5f0\uc1c4 \uc0c1\ud55c",
-      "description": "\ud55c @\uc9c0\ubaa9 \uc2a4\ub808\ub4dc\uac00 \uc774\uc5b4\uc9c0\ub294 \ucd5c\ub300 \uae4a\uc774(\ud3ed\uc8fc \ubc29\uc9c0 \uc548\uc804\ud310 \u2014 \uac15\uc81c \uc544\ub2d8)"
+      "minimum": 1,
+      "maximum": 20
     }
-  ],
-  "contributes": {
-    "views": [
-      {
-        "id": "clubhouse",
-        "title": {
-          "en": "Clubhouse",
-          "ko": "Clubhouse"
-        },
-        "icon": "\ud83d\udcac",
-        "placements": [
-          "content"
-        ],
-        "status": [],
-        "defaultPlacement": "content",
-        "sidebar": {
-          "left": [
-            {
-              "ref": "self.roster",
-              "instance": "per-view"
-            }
-          ]
-        }
-      },
-      {
-        "id": "roster",
-        "title": {
-          "en": "Roster",
-          "ko": "\ub85c\uc2a4\ud130"
-        },
-        "icon": "\ud83d\udc65",
-        "placements": [
-          "rail"
-        ]
-      }
-    ],
+  },
+  "exposes": {
     "commands": [
       {
-        "name": "send",
-        "title": {
-          "en": "Send Message to Clubhouse",
-          "ko": "\ud65c\uc131 Clubhouse \uc5d0 \uc0ac\ub78c \uba54\uc2dc\uc9c0 \uc804\uc1a1(\ub77c\uc774\ube0c \uad6c\ub3d9\u00b7\uc790\ub3d9\ud654)"
-        }
+        "name": "soksak-plugin-agents-clubhouse.send",
+        "description": "Inject a human message into the active clubhouse, as if typed and submitted in its input.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "text": { "type": "string" },
+            "mode": { "type": "string", "enum": ["turn", "facil", "simul"] },
+            "cut": { "type": "boolean" }
+          },
+          "required": ["text"]
+        },
+        "result": { "type": "object" }
       },
       {
-        "name": "state",
-        "title": {
-          "en": "Clubhouse Live State",
-          "ko": "\ud65c\uc131 Clubhouse \ub77c\uc774\ube0c \uc0c1\ud0dc(\uc2a4\ud2b8\ub9ac\ubc0d \uae38\uc774 \ub4f1 \u2014 \uad00\ucc30\u00b7E2E)"
-        }
+        "name": "soksak-plugin-agents-clubhouse.state",
+        "description": "Return the live state of the active clubhouse: mode, running flag, utterance count, roster check states and streaming lengths.",
+        "params": { "type": "object", "properties": {} },
+        "result": { "type": "object" }
       },
       {
-        "name": "ask",
-        "title": {
-          "en": "Ask (single agent, headless)",
-          "ko": "\ud504\ub86c\ud504\ud2b8 1\ud68c(\ub2e8\uc77c \uc5d0\uc774\uc804\ud2b8, \ud5e4\ub4dc\ub9ac\uc2a4)"
-        }
+        "name": "soksak-plugin-agents-clubhouse.tower.plan",
+        "description": "Turn a natural-language request into a validated command, DOM and status plan, returned as a dry run unless commit is true.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "text": { "type": "string" },
+            "commit": { "type": "boolean" },
+            "plan": { "type": "array" },
+            "render": { "type": "boolean" },
+            "edit": { "type": "array" },
+            "distribute": { "type": "boolean" }
+          },
+          "required": ["text"]
+        },
+        "result": { "type": "object" }
       },
       {
-        "name": "converse",
-        "title": {
-          "en": "Converse (multi-agent, headless)",
-          "ko": "\ub2e4\uc911 \uc5d0\uc774\uc804\ud2b8 1\uad50\ud658(\ud134\ud14c\uc774\ud0b9, \ud5e4\ub4dc\ub9ac\uc2a4 E2E)"
-        }
+        "name": "soksak-plugin-agents-clubhouse.tower.reflect",
+        "description": "Plan, dispatch and verify a natural-language request, re-planning on failure up to a cap, then escalate.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "text": { "type": "string" },
+            "plans": { "type": "array" },
+            "goalCheck": { "type": "object" },
+            "failGoalCodes": { "type": "array" },
+            "maxReplans": { "type": "number" },
+            "maxSteps": { "type": "number" }
+          },
+          "required": ["text"]
+        },
+        "result": { "type": "object" }
       },
       {
-        "name": "tower.plan",
-        "title": {
-          "en": "Tower Plan (slow-path, headless)",
-          "ko": "\ucee8\ud2b8\ub864 \ud0c0\uc6cc \uacc4\ud68d(slow-path NL\u21923\ucd95 plan, dry-run/commit)"
-        }
+        "name": "soksak-plugin-agents-clubhouse.tower.trace",
+        "description": "Return the persisted plan and step history of the control tower, newest first, or the steps of one plan.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "plan": { "type": "string" },
+            "limit": { "type": "number" }
+          }
+        },
+        "result": { "type": "object" }
       },
       {
-        "name": "tower.reflect",
-        "title": {
-          "en": "Tower Reflect (post-execution loop, headless)",
-          "ko": "\ucee8\ud2b8\ub864 \ud0c0\uc6cc reflection(\ub514\uc2a4\ud328\uce58\u2192\uac80\uc99d\u2192\uc7ac\uacc4\ud68d\u2192escalate, M8)"
-        }
+        "name": "soksak-plugin-agents-clubhouse.tower.scan",
+        "description": "Scan untrusted text and plan steps for injection signatures and report the verdict.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "untrusted": { "type": "array" },
+            "steps": { "type": "array" }
+          }
+        },
+        "result": { "type": "object" }
       },
       {
-        "name": "tower.trace",
-        "title": {
-          "en": "Tower Trace (session plan/step history)",
-          "ko": "\ucee8\ud2b8\ub864 \ud0c0\uc6cc trace(\uc138\uc158 plan\u00b7step\u00b7\uacb0\uacfc \uc774\ub825 \uc870\ud68c)"
-        }
+        "name": "soksak-plugin-agents-clubhouse.tower.macro",
+        "description": "Save, run, list, forget or propose a named control-tower macro.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "verb": { "type": "string", "enum": ["save", "run", "list", "forget", "propose"] },
+            "name": { "type": "string" },
+            "trigger": { "type": "string" },
+            "steps": { "type": "array" },
+            "tainted": { "type": "boolean" },
+            "scanVerdict": { "type": "string" },
+            "threshold": { "type": "number" },
+            "autoConfirm": { "type": "string", "enum": ["deny"] }
+          },
+          "required": ["verb"]
+        },
+        "result": { "type": "object" }
       },
       {
-        "name": "tower.scan",
-        "title": {
-          "en": "Tower Scan (untrusted-content injection scanner, headless)",
-          "ko": "\ucee8\ud2b8\ub864 \ud0c0\uc6cc \uc2a4\uce94(\ube44\uc2e0\ub8b0 \ucf58\ud150\uce20 \uc8fc\uc785 \uc2dc\uadf8\ub2c8\ucc98 \uac80\uc0ac, M10)"
-        }
+        "name": "soksak-plugin-agents-clubhouse.ask",
+        "description": "Send one prompt to one agent and return its single turn, headless.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "agent": { "type": "string" },
+            "text": { "type": "string" }
+          },
+          "required": ["text"]
+        },
+        "result": { "type": "object" }
       },
       {
-        "name": "tower.macro",
-        "title": {
-          "en": "Tower Macro (named fast-path: save/run/list/forget/propose)",
-          "ko": "\ucee8\ud2b8\ub864 \ud0c0\uc6cc \ub9e4\ud06c\ub85c(\uba85\uba85 fast-path: \uc800\uc7a5\u00b7\uc2e4\ud589\u00b7\ubaa9\ub85d\u00b7\uc0ad\uc81c\u00b7\uc2b9\uaca9\uc81c\uc548, M11)"
-        }
+        "name": "soksak-plugin-agents-clubhouse.converse",
+        "description": "Run one exchange among several agents, one turn each, headless.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "message": { "type": "string" },
+            "agents": { "type": "array" },
+            "cwd": { "type": "string" }
+          },
+          "required": ["message"]
+        },
+        "result": { "type": "object" }
       }
     ],
-    "nodes": [
+    "element": [
       {
-        "id": "send",
-        "description": "\uc804\uc1a1 \ubc84\ud2bc"
+        "name": "soksak-plugin-agents-clubhouse.send",
+        "description": "Send button"
       },
       {
-        "id": "input",
-        "description": "\uba54\uc2dc\uc9c0 \uc785\ub825"
+        "name": "soksak-plugin-agents-clubhouse.input",
+        "description": "Message input field"
       },
       {
-        "id": "tab",
-        "description": "\uc5d0\uc774\uc804\ud2b8 \ud0ed(\uccb4\ud06c\u00b7\ub4dc\ub798\uadf8)"
+        "name": "soksak-plugin-agents-clubhouse.tab",
+        "description": "Agent tab with its checkbox and drag handle",
+        "many": true
       },
       {
-        "id": "mode",
-        "description": "\ub300\ud654 \ubaa8\ub4dc \ubc84\ud2bc(\uc9c4\ud589/\uc21c\ucc28/\ub3d9\uc2dc)"
+        "name": "soksak-plugin-agents-clubhouse.mode",
+        "description": "Conversation mode button (facilitator, sequential, simultaneous)"
       },
       {
-        "id": "crown",
-        "description": "\uc9c4\ud589\uc790 \uc9c0\uc815(\ud83d\udc51, \uc9c4\ud589 \ubaa8\ub4dc)"
+        "name": "soksak-plugin-agents-clubhouse.crown",
+        "description": "Facilitator selector in facilitator mode"
       },
       {
-        "id": "modal",
-        "description": "\ucc38\uacac \ubaa8\ub2ec \ubc84\ud2bc(\uc9c0\uae08 \ub04a\uae30/\ub05d\ub098\uba74/\ucde8\uc18c)"
+        "name": "soksak-plugin-agents-clubhouse.modal",
+        "description": "Intervention modal button (interrupt now, finish, cancel)"
       },
       {
-        "id": "tower",
-        "description": "AI-\uba85\ub839 \ucee8\ud2b8\ub864 \ud0c0\uc6cc \ubaa8\ub2ec(NL \uc785\ub825\ubc14\u00b7\uc608\uc2dc\ud589\u00b7\uba85\ub839 \ud314\ub808\ud2b8\u00b7\uac80\uc0c9\u00b7\ub77c\uc774\ube0c\uce78\u00b7\ub2eb\uae30\u00b7\ub4dc\ub798\uadf8 \uadf8\ub9bd)"
-      }
-    ],
-    "programs": [
-      {
-        "id": "clubhouse",
-        "title": {
-          "en": "Clubhouse",
-          "ko": "Clubhouse"
-        },
-        "path": {
-          "ko": "\uc5d0\uc774\uc804\ud2b8",
-          "en": "Agents"
-        },
-        "kind": "view",
-        "view": "clubhouse"
+        "name": "soksak-plugin-agents-clubhouse.tower",
+        "description": "Control tower modal: natural-language input, dry run, command templates, search, titlebar and graph"
       }
     ]
   }
