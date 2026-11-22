@@ -2,7 +2,7 @@
 // core.session.submit {session, text} answers {}, core.session.read {session} answers {rows, cursor}, and the program state of a
 // session is read from its entry of core.sessions. The port double answers with those shapes; no module is mocked.
 import { describe, expect, it, vi } from "vitest";
-import { sessionProgram, sessionRead, sessionSubmit } from "./session-channel";
+import { sessionProgram, sessionRead, sessionReadLines, sessionSubmit } from "./session-channel";
 
 function port(reply: (name: string, params: Record<string, unknown>) => unknown = () => ({})) {
   const calls: Array<[string, Record<string, unknown>]> = [];
@@ -47,21 +47,49 @@ describe("sessionSubmit", () => {
 });
 
 describe("sessionRead", () => {
-  it("returns the rows and the cursor of the screen that core.session.read answers", async () => {
-    const screen = { rows: ["$ ls", "a.txt"], cursor: { row: 1, column: 5 } };
+  it("returns the absolute line of the first row, the rows and the cursor of the screen that core.session.read answers", async () => {
+    const screen = { from: 12, rows: ["$ ls", "a.txt"], cursor: { row: 1, column: 5 } };
     const { calls, port: p } = port(() => screen);
     await expect(sessionRead(p, "s-1")).resolves.toEqual(screen);
     expect(calls).toEqual([["core.session.read", { session: "s-1" }]]);
   });
 
   it("rejects a reply whose rows are not all strings", async () => {
-    const { port: p } = port(() => ({ rows: ["a", 1], cursor: { row: 0, column: 0 } }));
+    const { port: p } = port(() => ({ from: 0, rows: ["a", 1], cursor: { row: 0, column: 0 } }));
     await expect(sessionRead(p, "s-1")).rejects.toThrow("core.session.read rows must be an array of strings");
   });
 
+  it("rejects a reply whose from is not an integer of 0 or more", async () => {
+    const { port: p } = port(() => ({ rows: ["a"], cursor: { row: 0, column: 0 } }));
+    await expect(sessionRead(p, "s-1")).rejects.toThrow("core.session.read from must be an integer of 0 or more");
+  });
+
   it("rejects a cursor that is not a pair of zero-based integers", async () => {
-    const { port: p } = port(() => ({ rows: ["a"], cursor: { row: -1, column: 0 } }));
+    const { port: p } = port(() => ({ from: 0, rows: ["a"], cursor: { row: -1, column: 0 } }));
     await expect(sessionRead(p, "s-1")).rejects.toThrow("core.session.read cursor must be zero-based integers");
+  });
+});
+
+describe("sessionReadLines", () => {
+  it("reads count retained rows from an absolute line and returns the rows", async () => {
+    const { calls, port: p } = port(() => ({ from: 300, count: 2, rows: ["a", "b"] }));
+    await expect(sessionReadLines(p, "s-1", 300, 2)).resolves.toEqual(["a", "b"]);
+    expect(calls).toEqual([["core.session.read", { session: "s-1", from: 300, count: 2 }]]);
+  });
+
+  it("refuses a count outside 1 to 200 before any request", async () => {
+    const { calls, port: p } = port(() => ({}));
+    await expect(sessionReadLines(p, "s-1", 0, 201)).rejects.toThrow("read count must be an integer from 1 to 200, got 201");
+    expect(calls).toEqual([]);
+  });
+
+  it("rejects a reply that names other lines or another number of rows", async () => {
+    await expect(sessionReadLines(port(() => ({ from: 1, count: 2, rows: ["a", "b"] })).port, "s-1", 0, 2)).rejects.toThrow(
+      "core.session.read answered lines 1 to 2 for lines 0 to 1",
+    );
+    await expect(sessionReadLines(port(() => ({ from: 0, count: 2, rows: ["a"] })).port, "s-1", 0, 2)).rejects.toThrow(
+      "core.session.read answered lines 0 to 0 for lines 0 to 1",
+    );
   });
 });
 

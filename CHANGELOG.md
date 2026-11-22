@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- C47: The answer of a member is the last reply block of the rows of its turn, which the room reads after the submitted line by absolute line number in pages of at most 200 rows, so an answer taller than the screen is read whole (`docs/spec/room.md#answer`).
 - C51: The version is 0.0.9, which releases C49 and C50.
 - C50: A room tab without a state checks and reattaches the members whose stored session `core.sessions` lists with the room as owner (`docs/spec/room.md#restart`).
 - C49: A reattach measures no size, and a session opens only with the measured positive size of the room card, after the first resize event that gives one (`docs/spec/room.md#restart`).

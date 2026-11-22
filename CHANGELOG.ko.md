@@ -2,6 +2,7 @@
 
 ## 미출시
 
+- C47: Member의 답은 방이 submit된 줄 뒤에서 absolute line number로 최대 200행씩 읽는 그 turn의 행의 마지막 reply block이므로, 화면보다 긴 답도 전부 읽는다(`docs/spec/room.md#answer`).
 - C51: 버전은 0.0.9이며 C49와 C50을 출시한다.
 - C50: 상태가 없는 방 tab은 `core.sessions`가 방을 owner로 나열하는 저장된 session의 member를 체크하고 다시 붙는다(`docs/spec/room.md#restart`).
 - C49: 다시 붙기는 크기를 측정하지 않고, session은 방 card의 측정한 양수 크기로만, 그 크기를 주는 첫 resize event 뒤에 열린다(`docs/spec/room.md#restart`).

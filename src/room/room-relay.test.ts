@@ -7,11 +7,19 @@ import fixture from "./fixtures/member-screens.json";
 
 interface FakeSession { session: string; program: { state: "idle" | "working" | "blocked" } | null }
 
-function fakeCore(initial: FakeSession[], options: { stuckOn?: string; vanishOn?: string; manual?: boolean; screens?: Record<string, string[]> } = {}) {
+function fakeCore(
+  initial: FakeSession[],
+  options: { stuckOn?: string; vanishOn?: string; manual?: boolean; replies?: Record<string, string[]>; height?: number } = {},
+) {
   let sessions: FakeSession[] = initial.map((entry) => ({ ...entry }));
   const listeners = new Set<(value: unknown) => void>();
   const submitted: { session: string; text: string }[] = [];
+  const reads: { session: string; from?: number; count?: number }[] = [];
   const waiters: { count: number; resolve: () => void }[] = [];
+  // The retained rows of each session by absolute line number: the program echoes a submitted line after its prompt marker and
+  // writes its reply rows and its next prompt when its turn ends.
+  const lines = new Map<string, string[]>(initial.map((entry) => [entry.session, ["❯"]]));
+  const height = options.height ?? 40;
   // Resolves when the given number of lines has been submitted, so a test reads the submits of parallel turns without a timer.
   const submits = (count: number) => new Promise<void>((resolve) => (submitted.length >= count ? resolve() : waiters.push({ count, resolve })));
   const publish = () => { for (const listener of [...listeners]) listener(sessions.map((entry) => ({ ...entry }))); };
@@ -19,25 +27,41 @@ function fakeCore(initial: FakeSession[], options: { stuckOn?: string; vanishOn?
     sessions = sessions.map((entry) => (entry.session === session ? { ...entry, program: { state } } : entry));
     publish();
   };
+  const finish = (session: string) => {
+    lines.get(session)!.push(...(options.replies?.[session] ?? [`⏺ answer of ${session}`, "", "❯"]));
+    setState(session, "idle");
+  };
   const ports: RelayPorts = {
     commands: {
       execute: async (name, params) => {
+        const session = params.session as string;
         if (name === "core.session.submit") {
-          submitted.push({ session: params.session as string, text: params.text as string });
+          submitted.push({ session, text: params.text as string });
           for (const waiter of waiters) if (submitted.length >= waiter.count) waiter.resolve();
-          const session = params.session as string;
+          lines.get(session)!.push(`❯ ${params.text as string}`);
           setState(session, "working");
           if (options.vanishOn === session) {
             sessions = sessions.filter((entry) => entry.session !== session);
             publish();
           } else if (options.stuckOn !== session && !options.manual) {
-            queueMicrotask(() => setState(session, "idle"));
+            // The turn ends in the next macrotask, after every microtask of the submit: a program answers after the room has read
+            // the screen that shows the submitted line, and the fake core answers each command within microtasks.
+            setImmediate(() => finish(session));
           }
           return {};
         }
         if (name === "core.session.read") {
-          const rows = options.screens?.[params.session as string] ?? [`⏺ answer of ${params.session}`, ""];
-          return { rows, cursor: { row: 0, column: 0 } };
+          const all = lines.get(session)!;
+          reads.push({ session, from: params.from as number | undefined, count: params.count as number | undefined });
+          if (params.from === undefined) {
+            const from = Math.max(0, all.length - height);
+            return { from, rows: all.slice(from), cursor: { row: 0, column: 0 } };
+          }
+          const from = params.from as number;
+          const count = params.count as number;
+          if (count < 1 || count > 200) throw new Error("core.session.read count must be an integer from 1 to 200");
+          if (from + count > all.length) throw new Error(`lines ${from} to ${from + count - 1} are outside the retained rows`);
+          return { from, count, rows: all.slice(from, from + count) };
         }
         throw new Error(`unexpected command ${name}`);
       },
@@ -48,7 +72,7 @@ function fakeCore(initial: FakeSession[], options: { stuckOn?: string; vanishOn?
       return () => void listeners.delete(listener);
     },
   };
-  return { ports, submitted, submits, finish: (session: string) => setState(session, "idle") };
+  return { ports, submitted, reads, submits, finish };
 }
 
 const IDLE = (session: string): FakeSession => ({ session, program: { state: "idle" } });
@@ -64,20 +88,33 @@ describe("relayToMembers", () => {
     ]);
   });
 
-  it("answers the reply rows of the screen only, without the status line, the separators and the prompt", async () => {
+  it("answers the reply rows of the turn only, without the status line, the separators and the prompt", async () => {
     const rows = fixture.screens[0].rows;
-    const core = fakeCore([IDLE("s-1")], { screens: { "s-1": rows } });
+    const core = fakeCore([IDLE("s-1")], { replies: { "s-1": rows } });
     const answers = await relayToMembers(core.ports, [{ id: "harness-harness", session: "s-1" }], "hello");
     expect(answers).toEqual([
       { id: "harness-harness", text: "여러분들, 저는 harness고 코드 변경을 꼼꼼히 확인하고\n커밋하는 일을 잘하는데요, 아직 앞에서 말한 사람이\n없어서 덧붙일 말은 없어요." },
     ]);
   });
 
-  it("rejects with the member when the reply rows on its screen are broken", async () => {
-    const core = fakeCore([IDLE("s-1")], { screens: { "s-1": fixture.screens[1].rows } });
+  it("rejects with the member when the reply rows of its turn are broken", async () => {
+    const core = fakeCore([IDLE("s-1")], { replies: { "s-1": fixture.screens[1].rows } });
     await expect(relayToMembers(core.ports, [{ id: "moai-manager-lead", session: "s-1" }], "hello")).rejects.toThrow(
-      'member moai-manager-lead: the reply rows are broken at screen row 1: "보고"',
+      'member moai-manager-lead: the reply rows are broken at turn row 1: "보고"',
     );
+  });
+
+  it("answers a reply taller than the screen, read from the submitted line in pages of at most 200 rows", async () => {
+    const body = Array.from({ length: 450 }, (_, index) => `  row ${index + 1}`);
+    const core = fakeCore([IDLE("s-1")], { height: 5, replies: { "s-1": ["⏺ row 0", ...body, "", "✻ Baked for 9s", "─────", "❯", "─────"] } });
+    const answers = await relayToMembers(core.ports, [{ id: "harness-harness", session: "s-1" }], "hello");
+    expect(answers).toEqual([{ id: "harness-harness", text: ["row 0", ...body.map((row) => row.slice(2))].join("\n") }]);
+    // Line 0 is the first prompt and line 1 the submitted line; the turn rows are lines 2 to 457.
+    expect(core.reads.filter((read) => read.from !== undefined)).toEqual([
+      { session: "s-1", from: 2, count: 200 },
+      { session: "s-1", from: 202, count: 200 },
+      { session: "s-1", from: 402, count: 56 },
+    ]);
   });
 
   it("refuses a member that is working, with the member named, and submits nothing to it", async () => {
@@ -123,7 +160,7 @@ describe("relayInMode (docs/spec/room.md#modes)", () => {
   });
 
   it("turn: an earlier answer of several rows reaches the next member as one line", async () => {
-    const core = fakeCore([IDLE("s-1"), IDLE("s-2")], { screens: { "s-1": ["⏺ one", "  two", ""] } });
+    const core = fakeCore([IDLE("s-1"), IDLE("s-2")], { replies: { "s-1": ["⏺ one", "  two", "", "❯"] } });
     await relayInMode(core.ports, "turn", MEMBERS, "hello");
     expect(core.submitted[1]).toEqual({ session: "s-2", text: "[@owner] hello | [@Claude] one two" });
   });

@@ -3,14 +3,14 @@
 import { describe, expect, it } from "vitest";
 import { parseRoomState, type RoomState } from "./room-state";
 import fixture from "./fixtures/member-screens.json";
-import { answerText } from "./answer";
+import { turnAnswer } from "./answer";
 
 const state: RoomState = {
   roster: [{ id: "harness-harness", checked: true }, { id: "moai-manager-lead", checked: false }],
   mode: "turn",
   conversation: [
     { speaker: "owner", text: "한 문장씩만" },
-    { speaker: "harness-harness", text: answerText(fixture.screens[0].rows) },
+    { speaker: "harness-harness", text: turnAnswer(fixture.screens[0].rows) },
   ],
   sessions: ["owned-1"],
   taught: ["owned-1"],

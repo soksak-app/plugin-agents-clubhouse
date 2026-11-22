@@ -1,11 +1,11 @@
 // The message relay of the room (C5, docs/spec/room.md) over the members' owned sessions. The mode and the mentions of a message decide
 // which members receive it and whether their turns run one after another or at the same time. The answer of a member is the reply block
-// of the screen that core.session.read reports after its turn (docs/spec/room.md#answer). In a relay one after another, each member
+// of the rows of its turn, which core.session.read reads from the submitted line by absolute line number (docs/spec/room.md#answer). In a relay one after another, each member
 // receives the answers of the members before it with the message, so that it reads what was said before its turn.
 import { relayMemberMessage, type SessionRelayPort } from "./relay";
-import { sessionProgram, sessionRead, sessionSubmit, type SessionCommandPort } from "./session-channel";
+import { READ_PAGE, sessionProgram, sessionRead, sessionReadLines, sessionSubmit, type SessionCommandPort } from "./session-channel";
 import { mentionedMembers } from "./mention";
-import { answerText } from "./answer";
+import { submittedLine, turnAnswer } from "./answer";
 import type { RoomMode } from "./commands";
 
 export interface RelayMember {
@@ -35,14 +35,35 @@ function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+// Reads the rows of the session after the line through the last line of the screen, in pages of at most 200 rows.
+async function rowsAfter(ports: RelayPorts, session: string, line: number): Promise<string[]> {
+  const screen = await sessionRead(ports, session);
+  const end = screen.from + screen.rows.length;
+  const rows: string[] = [];
+  for (let from = line + 1; from < end; from += READ_PAGE) {
+    rows.push(...(await sessionReadLines(ports, session, from, Math.min(READ_PAGE, end - from))));
+  }
+  return rows;
+}
+
 // Sends the text to one member and resolves with its answer after its turn. A refusal, a turn that is blocked, a session that leaves
-// core.sessions, or a screen whose reply rows break the rule of the answer rejects with the member identifier and the reason.
+// core.sessions, a screen that shows no submitted line, or rows of the turn that break the rule of the answer rejects with the member
+// identifier and the reason.
 async function relayToMember(ports: RelayPorts, member: RelayMember, text: string): Promise<MemberAnswer> {
   const controller = new AbortController();
   // A value of core.sessions that the relay cannot read ends the turn with this error, so the relay never waits on a bad value.
   let failure: unknown = null;
+  const submit = sessionSubmit(ports, member.session);
+  // The absolute line of the submitted line, read from the screen right after the submit, before the rows of the turn move it up.
+  let line: Promise<number> | null = null;
   const port: SessionRelayPort = {
-    submit: sessionSubmit(ports, member.session),
+    submit: (submitted) => {
+      const accepted = submit(submitted);
+      line = accepted.then(() => sessionRead(ports, member.session)).then((screen) => submittedLine(screen, submitted));
+      // The relay reads the line after the turn and rejects with its error there; a refused submit rejects the turn through accepted.
+      line.catch(() => {});
+      return accepted;
+    },
     program: () => sessionProgram(ports.sessions(), member.session),
     watch: (listener) => ports.watchSessions((value) => {
       try {
@@ -59,8 +80,8 @@ async function relayToMember(ports: RelayPorts, member: RelayMember, text: strin
     throw new Error(`member ${member.id}: ${messageOf(failure ?? error)}`);
   }
   try {
-    const screen = await sessionRead(ports, member.session);
-    return { id: member.id, text: answerText(screen.rows) };
+    if (line === null) throw new Error("the turn ended without a submit");
+    return { id: member.id, text: turnAnswer(await rowsAfter(ports, member.session, await line)) };
   } catch (error) {
     throw new Error(`member ${member.id}: ${messageOf(error)}`);
   }

@@ -2,7 +2,7 @@
 
 [한국어](room.ko.md)
 
-The room relays each message of the composer to the checked members whose owned session is open. A member receives the message as one submitted line (`core.session.submit`); its turn ends when the program state of its session goes `working` and then `idle`, and its answer is the reply block of the screen that `core.session.read` reports after the turn ([answer](#answer)).
+The room relays each message of the composer to the checked members whose owned session is open. A member receives the message as one submitted line (`core.session.submit`); its turn ends when the program state of its session goes `working` and then `idle`, and its answer is the reply block of the rows of its turn, which `core.session.read` reads by absolute line number ([answer](#answer)).
 
 ## Roster
 
@@ -52,12 +52,15 @@ A failed turn rejects the relay with the member and the reason. In `turn` and `f
 
 ## Answer
 
-The answer of a member is the last reply block of the screen rows that `core.session.read` reports after its turn. Core gives the owner of a session only the visible rows of its screen as text, and declares no channel that carries the reply text of a program: the program status of `core.sessions` carries the state alone. So the room takes the answer from the rows by this rule:
+The answer of a member is the last reply block of the rows of its turn. Core gives the owner of a session the rows of its screen and its retained rows as text (core `docs/spec/plugins.md#owned-sessions`), and declares no channel that carries the reply text of a program: the program status of `core.sessions` carries the state alone. So the room reads the rows of the turn by absolute line number and takes the answer from them by this rule:
 
-- A reply block starts at the last row that begins with the reply marker `⏺ ` and continues with each following row that begins with two spaces and with each blank row. It ends at a row that does not begin with two spaces and follows a blank row; that row and the rows after it, such as the status line, the separators and the prompt of the program, are not part of the answer.
+- After the submit of the line, the room reads the screen with `core.session.read {session}`, which answers `{from, rows, cursor}`. The submitted line is the last row that begins with the prompt marker `❯ ` followed by a text that is not empty and with which the submitted text begins, so the first row of a line that the terminal wrapped identifies the line; its absolute line number is `from` plus the index of that row. A screen without such a row is refused with `the screen shows no submitted line: no row starts with the prompt marker and the submitted text`.
+- After the turn, the room reads the screen again; its last absolute line is `from` plus the number of its rows less one. The room reads the rows after the submitted line through that line with `core.session.read {session, from, count}` in pages of at most 200 rows, so an answer taller than the screen is read whole. A refusal of core, such as a line that has left the retained rows, fails the answer with its text.
+- The rows of the turn are the rows after the submitted line up to the first row that begins with the prompt marker `❯`, which is the next prompt of the program; that row and the rows after it are not part of the turn. Rows without such a row are refused with `the rows of the turn show no prompt row after the submitted line`.
+- A reply block starts at the last row of the turn that begins with the reply marker `⏺ ` and continues with each following row that begins with two spaces and with each blank row. It ends at a row that does not begin with two spaces and follows a blank row; that row and the rows after it, such as the status line and the separators of the program, are not part of the answer.
 - The text of the block is its first row without the marker and each other row without the two spaces, each without its trailing blanks, joined with line breaks; the trailing blank rows are removed.
-- A screen without a row that begins with the marker is refused with `the screen shows no reply row: no row starts with the reply marker`; this is also the case of a reply whose first row has left the top of the screen.
-- A row that does not begin with two spaces and directly follows a row of the block breaks the block. The room refuses the answer with `the reply rows are broken at screen row <row>: <text>` and repairs nothing, because such rows come from a program and a terminal that laid out the screen at different widths, and the rows no longer hold the reply as the program wrote it.
+- Rows of the turn without a row that begins with the reply marker are refused with `the rows of the turn show no reply row: no row starts with the reply marker`.
+- A row that does not begin with two spaces and directly follows a row of the block breaks the block. The room refuses the answer with `the reply rows are broken at turn row <row>: <text>`, `<row>` being the zero-based index in the rows of the turn, and repairs nothing, because such rows come from a program and a terminal that laid out the rows at different widths, and the rows no longer hold the reply as the program wrote it.
 
 A refused answer fails the turn of the member with `member <id>: <reason>` ([modes](#modes)).
 
