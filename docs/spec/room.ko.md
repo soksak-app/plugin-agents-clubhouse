@@ -4,6 +4,10 @@
 
 방은 입력창의 메시지를 owned session이 열린 체크된 member에게 전달한다. Member는 메시지를 turn의 token으로 끝나는 submit된 한 줄(`core.session.submit`)로 받고, 선언된 command `soksak-plugin-agents-clubhouse.answer`로 답을 전한다. 그 답이 도착하면 turn이 끝난다([답](#answer)).
 
+## Manifest
+
+`sok plugin install`이 같은 text로 manifest를 거부하므로, `plugin.json`은 plugin이 설치되는 core version의 release인 `@soksak/plugin-api`의 `validateManifest`를 통과한다. Test `src/manifest-validation.test.ts`가 이를 호출한다. Status와 command schema는 core exposure schema subset의 keyword `type`, `properties`, `required`, `items`, `enum`만 쓰고, `minimum` 같은 범위는 description에 적는다.
+
 ## Roster
 
 Roster는 agents plugin의 agent definition마다 entry 하나를 나열한다. Entry는 그 definition이 있는 동안 체크 상태와 자리를 유지한다. 제거된 definition은 roster에서 빠지고, 새 definition은 체크되지 않은 채 끝에 들어온다. Member를 초대하는 것은 사람의 선택이기 때문이다. 체크된 member가 바뀌면 open session이 없는 체크된 member를 summon한다.

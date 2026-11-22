@@ -26,6 +26,7 @@
   },
   "devDependencies": {
     "@soksak/kit": "https://github.com/soksak-app/kit/releases/download/v0.0.14/soksak-kit-0.0.14.tgz",
+    "@soksak/plugin-api": "https://github.com/soksak-app/core/releases/download/v0.0.48/soksak-plugin-api-0.0.48.tgz",
     "@types/node": "^24.10.1",
     "esbuild": "^0.28.2",
     "jsdom": "^31.0.1",

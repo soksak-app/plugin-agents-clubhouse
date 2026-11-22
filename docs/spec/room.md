@@ -4,6 +4,10 @@
 
 The room relays each message of the composer to the checked members whose owned session is open. A member receives the message as one submitted line (`core.session.submit`) that ends with the token of its turn, and delivers its answer with the declared command `soksak-plugin-agents-clubhouse.answer`; its turn ends when that answer arrives ([answer](#answer)).
 
+## Manifest
+
+`plugin.json` passes `validateManifest` of `@soksak/plugin-api`, the release of the core version into which the plugin installs, because `sok plugin install` refuses a manifest that it refuses with the same text. The test `src/manifest-validation.test.ts` calls it. A status or command schema uses only the keywords of the schema subset of core exposures: `type`, `properties`, `required`, `items` and `enum`; a bound such as `minimum` is stated in the description.
+
 ## Roster
 
 The roster lists one entry per agent definition of the agents plugin. An entry keeps its checked state and its place while its definition exists; a removed definition leaves the roster, and a new definition joins it at the end unchecked, because inviting a member is the choice of the person. A change of the checked members summons the checked members that have no open session.

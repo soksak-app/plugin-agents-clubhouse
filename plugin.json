@@ -127,12 +127,12 @@
       },
       {
         "name": "soksak-plugin-agents-clubhouse.view",
-        "description": "The follow mode of the conversation view: following while the view is at the bottom and follows new entries, and unseen, the number of entries below the viewport that have not been visible since the person scrolled up; stopEnabled, whether the stop button is enabled, which it is only while a relay or a record wait runs.",
+        "description": "The follow mode of the conversation view: following while the view is at the bottom and follows new entries, and unseen, the number (0 or more) of entries below the viewport that have not been visible since the person scrolled up; stopEnabled, whether the stop button is enabled, which it is only while a relay or a record wait runs.",
         "schema": {
           "type": "object",
           "properties": {
             "following": { "type": "boolean" },
-            "unseen": { "type": "integer", "minimum": 0 },
+            "unseen": { "type": "integer" },
             "stopEnabled": { "type": "boolean" }
           },
           "required": ["following", "unseen", "stopEnabled"]

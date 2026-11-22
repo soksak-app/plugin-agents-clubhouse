@@ -43,6 +43,8 @@ declare module "@soksak/plugin-api/view" {
 }
 
 declare module "@soksak/plugin-api" {
+  // The manifest validator of core, which the test of plugin.json calls; it throws the refusal of `sok plugin install`.
+  export function validateManifest(manifest: unknown): unknown;
   export interface ExposeApi {
     command(name: string, run: (params: any) => unknown): Promise<void>;
     element(name: string, target: object | (() => object[])): Promise<void>;

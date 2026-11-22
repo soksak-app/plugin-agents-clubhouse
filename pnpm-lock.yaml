@@ -11,6 +11,9 @@ importers:
       '@soksak/kit':
         specifier: https://github.com/soksak-app/kit/releases/download/v0.0.14/soksak-kit-0.0.14.tgz
         version: https://github.com/soksak-app/kit/releases/download/v0.0.14/soksak-kit-0.0.14.tgz
+      '@soksak/plugin-api':
+        specifier: https://github.com/soksak-app/core/releases/download/v0.0.48/soksak-plugin-api-0.0.48.tgz
+        version: https://github.com/soksak-app/core/releases/download/v0.0.48/soksak-plugin-api-0.0.48.tgz(jsdom@31.0.1)
       '@types/node':
         specifier: ^24.10.1
         version: 24.19.2
@@ -325,6 +328,15 @@ packages:
     version: 0.0.14
     hasBin: true
 
+  '@soksak/plugin-api@https://github.com/soksak-app/core/releases/download/v0.0.48/soksak-plugin-api-0.0.48.tgz':
+    resolution: {integrity: sha512-QLanKO7IYHaT3RsMFCL8aOJuwGwHQONtjK5qqij9U3FrxSyOyt8A/gajwiRbbW1ke/2RAptZ+fkr0VBvAU1r0w==, tarball: https://github.com/soksak-app/core/releases/download/v0.0.48/soksak-plugin-api-0.0.48.tgz}
+    version: 0.0.48
+    peerDependencies:
+      jsdom: ^30.0.1
+    peerDependenciesMeta:
+      jsdom:
+        optional: true
+
   '@standard-schema/spec@1.1.0':
     resolution: {integrity: sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w==}
 
@@ -409,6 +421,9 @@ packages:
 
   es-module-lexer@2.3.2:
     resolution: {integrity: sha512-poHGpORABojJJucnV9KbOavETW8lBVnphkW77ER5/BQ5Fz7oXSoCNek7IH3vR5nRjdsEz926ibFYX8KtLQmdyw==}
+
+  es-module-lexer@3.0.5:
+    resolution: {integrity: sha512-RNq2lKJw53c7z9QRHeiKeA6Ez0oikOqiBGdmxQhKDxEiOX1g5QJR4IoFVwicn8uCZcRWNrXC3NZaJihgK7aEbg==}
 
   esbuild@0.28.2:
     resolution: {integrity: sha512-HKVLS8dvII+xoKW9kmqxbRKrnWEXfJJr/FZhhJmiqIB0e053QNYFqOBouTMO/k5sID4MvCiUCvv8b9M4h32wIA==}
@@ -939,6 +954,12 @@ snapshots:
       ajv: 8.20.0
       smol-toml: 1.9.1
 
+  '@soksak/plugin-api@https://github.com/soksak-app/core/releases/download/v0.0.48/soksak-plugin-api-0.0.48.tgz(jsdom@31.0.1)':
+    dependencies:
+      es-module-lexer: 3.0.5
+    optionalDependencies:
+      jsdom: 31.0.1
+
   '@standard-schema/spec@1.1.0': {}
 
   '@tybys/wasm-util@0.10.5':
@@ -1035,6 +1056,8 @@ snapshots:
   entities@9.0.0: {}
 
   es-module-lexer@2.3.2: {}
+
+  es-module-lexer@3.0.5: {}
 
   esbuild@0.28.2:
     optionalDependencies:
