@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// The stop button is enabled only while a relay or a record wait runs, and a disabled button is drawn as disabled
+// The stop button is enabled only while a relay runs or a kept token is open, and a disabled button is drawn as disabled
 // (docs/spec/room.md#commands).
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -8,7 +8,7 @@ import { describe, expect, it } from "vitest";
 import { createStopState } from "./stop-state";
 
 describe("createStopState", () => {
-  it("disables the button when no relay and no record wait runs, and enables it while one runs", () => {
+  it("disables the button when no relay runs and no kept token is open, and enables it while one is", () => {
     const button = document.createElement("button");
     let changes = 0;
     const stop = createStopState(button, () => void (changes += 1));

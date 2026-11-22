@@ -1,8 +1,9 @@
 // The work reports and the path claims of the members (docs/spec/room.md#work-reports). A member reports, claims and releases with the
 // token of its open turn, which proves the member, and the turn goes on. Each report, claim and release is a record line of the member,
-// `(report) <text>`, `(claim) <paths>` or `(release) <paths>`. The room injects the lines that a working session has not been sent at
-// once, without a token, so the member reads them during its work; an idle session receives them with its next turn line or its closing
-// delivery, and a blocked session when the event of core.sessions shows it working again. The room decides each claim at once in the
+// `(report) <text>`, `(claim) <paths>` or `(release) <paths>`, which each other member reads in its next turn line
+// (docs/spec/room.md#conversation-first). Outside a turn the room injects only an owner line that the owner sent during a relay, as an
+// owner instruction, into each working session, and into a blocked session when the event of core.sessions shows it working again
+// (docs/spec/room.md#owner-follow-up). The room decides each claim at once in the
 // handler, which runs to its end before another handler, so two overlapping claims never both succeed. The claims of a turn are released
 // when the turn closes.
 import { sessionProgram } from "./session-channel";
@@ -14,10 +15,8 @@ export const REPORT_COMMAND = "soksak-plugin-agents-clubhouse.report";
 export const CLAIM_COMMAND = "soksak-plugin-agents-clubhouse.claim";
 export const RELEASE_COMMAND = "soksak-plugin-agents-clubhouse.release";
 
-// The preface of an injected line: the member reads it and goes on with its work.
-export const INJECT_TEXT = "답하지 말고 하던 작업을 계속해.";
-// The preface of an injected line that holds an owner line, which the owner sent during the relay (docs/spec/room.md#owner-follow-up).
-export const OWNER_INJECT_TEXT = "방장의 새 지시야. 답하지 말고 하던 작업에 반영해.";
+// The preface of the injected line that holds an owner line, which the owner sent during the relay (docs/spec/room.md#owner-follow-up).
+export const OWNER_INJECT_TEXT = "[@clubhouse] 방장의 새 지시야. 하던 작업에 반영하고 다음 답에서 답해.";
 
 export interface WorkMember {
   id: string;
@@ -38,7 +37,10 @@ export interface WorkReports {
   release(params: unknown): { turn: string; paths: string[] };
   // Releases the claims of a closed turn token.
   closed(token: OpenToken): void;
-  // Injects the unsent lines into each working session; the room calls it after each work line and at each value of core.sessions.
+  // Marks the last record line, an owner line that the owner sent during a relay, as a follow-up and injects it.
+  followUp(): void;
+  // Injects the unsent lines into each working session whose unsent lines hold a follow-up; the room calls it at each value of
+  // core.sessions.
   inject(): void;
   // The claimed paths and their members.
   claims(): { path: string; member: string }[];
@@ -58,6 +60,8 @@ function pathsOf(params: unknown): string[] {
 export function createWorkReports(ports: WorkPorts, record: RoomRecord, members: () => WorkMember[]): WorkReports {
   const claimed = new Map<string, { member: string; turn: string }>();
   const injecting = new Set<string>();
+  // The record indexes of the owner lines that the owner sent during a relay.
+  const followUps = new Set<number>();
   const inject = (): void => {
     let value: unknown;
     try {
@@ -69,7 +73,8 @@ export function createWorkReports(ports: WorkPorts, record: RoomRecord, members:
     for (const member of members()) {
       const session = member.session;
       if (injecting.has(session)) continue;
-      if ((record.sent()[session] ?? 0) >= record.lines.length) continue;
+      const from = record.sent()[session] ?? 0;
+      if (![...followUps].some((index) => index >= from)) continue;
       let state;
       try {
         state = sessionProgram(value, session);
@@ -88,21 +93,25 @@ export function createWorkReports(ports: WorkPorts, record: RoomRecord, members:
             record.markSent(session, record.lines.length);
             return null;
           }
-          const from = record.sent()[session] ?? 0;
-          const owner = record.lines.slice(from, lines.count).some((line) => line.speaker === "owner");
-          return { text: `${owner ? OWNER_INJECT_TEXT : INJECT_TEXT} | ${lines.text}`, accepted: () => record.markSent(session, lines.count) };
+          return { text: `${OWNER_INJECT_TEXT} | ${lines.text}`, accepted: () => record.markSent(session, lines.count) };
         })
-        .catch((error: unknown) => ports.report("room report", `member ${member.id}: ${error instanceof Error ? error.message : String(error)}`))
-        .finally(() => {
+        .then(
+          () => true,
+          (error: unknown) => {
+            ports.report("room report", `member ${member.id}: ${error instanceof Error ? error.message : String(error)}`);
+            return false;
+          },
+        )
+        .then((submitted) => {
           injecting.delete(session);
-          if ((record.sent()[session] ?? 0) < record.lines.length) inject();
+          // A follow-up added while the line was built goes next; a refused submit waits for the next value of core.sessions.
+          if (submitted) inject();
         });
     }
   };
   const releaseOf = (token: OpenToken, paths: string[]): void => {
     for (const path of paths) claimed.delete(path);
     record.append(token.member, `(release) ${paths.join(", ")}`);
-    inject();
   };
   return {
     reportCommand(params) {
@@ -116,7 +125,6 @@ export function createWorkReports(ports: WorkPorts, record: RoomRecord, members:
       const unclaimed = named.filter((path) => !covered(path));
       if (unclaimed.length > 0) throw new Error(`paths ${unclaimed.join(", ")} are not claimed by ${token.member}`);
       record.append(token.member, `(report) ${text}${named.length > 0 ? ` [${named.join(", ")}]` : ""}`);
-      inject();
       return { turn: token.turn };
     },
     claim(params) {
@@ -129,7 +137,6 @@ export function createWorkReports(ports: WorkPorts, record: RoomRecord, members:
       }
       for (const path of paths) claimed.set(path, { member: token.member, turn: token.turn });
       record.append(token.member, `(claim) ${paths.join(", ")}`);
-      inject();
       return { turn: token.turn, paths };
     },
     release(params) {
@@ -142,9 +149,12 @@ export function createWorkReports(ports: WorkPorts, record: RoomRecord, members:
       return { turn: token.turn, paths };
     },
     closed(token) {
-      if (token.kind !== "answer") return;
       const paths = [...claimed].filter(([, owner]) => owner.turn === token.turn).map(([path]) => path);
       if (paths.length > 0) releaseOf(token, paths);
+    },
+    followUp() {
+      followUps.add(record.lines.length - 1);
+      inject();
     },
     inject,
     claims: () => [...claimed].map(([path, owner]) => ({ path, member: owner.member })),

@@ -1,11 +1,11 @@
 // The message relay of the room (C5, docs/spec/room.md) over the members' owned sessions. The mode and the mentions of a message decide
 // which members receive it and whether their turns run one after another or at the same time. Each relayed line carries the token of
 // its turn, and the member delivers its answer with the declared answer command (docs/spec/room.md#answer); the turn ends when the
-// answer arrives. Each member receives every line of the room record that it has not received, so every member reads the whole record.
-import { relayMemberMessage, type SessionRelayPort } from "./relay";
+// answer arrives (docs/spec/room.md#turn-end). Each turn line carries every line of the room record that its member has not received, and
+// the record reaches a member in no other line (docs/spec/room.md#conversation-first).
 import { sessionProgram, type SessionCommandPort } from "./session-channel";
 import { mentionedMembers } from "./mention";
-import { ANSWER_COMMAND, type AnswerChannel, type AnswerStatus } from "./answer";
+import type { AnswerChannel, AnswerStatus } from "./answer";
 import type { SubmitQueue } from "./submit-queue";
 import type { RoomMode } from "./commands";
 import type { RoomRecord } from "./room-record";
@@ -26,9 +26,10 @@ export interface NamedRelayMember extends RelayMember {
 
 // The roles that a turn line states to its member when a member of the relay has a role: its own role and the roles of the others.
 // The rule of each turn line (docs/spec/room.md#room-protocol): the room cannot read the terminal of a member.
-// The room line of a turn of a member that has received every record line: the turn still runs and takes an answer with a status
-// (docs/spec/room.md#room-record).
-export const EMPTY_TURN_TEXT = "새 줄은 없어. 네 차례야: 지금까지 기록에 답하고 status를 정해.";
+// The preface of a turn line, before the record lines that the member has not received, and the room line of a turn of a member that
+// has received every record line, which still runs and takes an answer with a status (docs/spec/room.md#modes).
+export const TURN_TEXT = "네 차례야. 아래는 네가 아직 못 본 기록이야.";
+export const EMPTY_TURN_TEXT = "네 차례야. 네가 아직 못 본 기록은 없어.";
 export const TURN_RULE = "answer through the room only: reply to the speakers, put a message to the owner in @owner:, write nothing in your terminal";
 
 export function rolesLine(member: NamedRelayMember, members: NamedRelayMember[]): string | null {
@@ -45,6 +46,14 @@ export interface MemberAnswer {
   status: AnswerStatus;
   // The milliseconds from the submit of the turn line to the arrival of the answer (docs/spec/room.md#timing).
   elapsedMs: number;
+  // The index of the record line of the answer, once the room appended it.
+  index?: number;
+}
+
+// Appends the answer to the record and keeps the index of its line.
+function appendAnswer(record: RoomRecord, answer: MemberAnswer): void {
+  record.append(answer.id, answer.text, answer.elapsedMs);
+  answer.index = record.lines.length - 1;
 }
 
 export interface RelayPorts extends SessionCommandPort {
@@ -66,11 +75,10 @@ function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-// Resolves true when the session has no open line and its program is not working: a session with an open token waits for its answer
-// or acknowledgement, and a working session, such as a member whose program has not gone idle after its answer, waits for the next
-// value of core.sessions that shows it not working, so the next line never lands in a turn of the program (docs/spec/room.md#modes).
-// The wait is the step `turn` of the conversation status. A stop of the owner ends the wait with false. The relay refuses the other
-// program states, blocked or ended, as before.
+// Resolves true when the session has no open turn and its program is not blocked: a session with an open token waits for its answer, and
+// a blocked session waits for the next value of core.sessions that shows it not blocked, because a question of its program would take
+// the line as its answer (docs/spec/room.md#turn-end). An idle or a working session takes the line at once, because the program queues
+// a line typed while it works. The wait is the step `turn` of the conversation status. A stop of the owner ends the wait with false.
 async function lineFree(ports: RelayPorts, member: RelayMember, stopping?: ConversationBound["stopping"]): Promise<boolean> {
   const session = member.session;
   if (ports.answers.has(session)) await ports.answers.settled(session);
@@ -78,11 +86,11 @@ async function lineFree(ports: RelayPorts, member: RelayMember, stopping?: Conve
     try {
       return sessionProgram(value, session) ?? "none";
     } catch {
-      // A session that core.sessions no longer lists, or a value that the relay cannot read, ends the wait; the relay reports it.
+      // A session that core.sessions no longer lists, or a value that the relay cannot read, ends the wait; the turn reports it.
       return "unreadable";
     }
   };
-  if (stateOf(ports.sessions()) !== "working") return true;
+  if (stateOf(ports.sessions()) !== "blocked") return true;
   const endWait = ports.waiting(member, "turn");
   try {
     return await new Promise<boolean>((resolve) => {
@@ -95,7 +103,7 @@ async function lineFree(ports: RelayPorts, member: RelayMember, stopping?: Conve
         resolve(free);
       };
       const stopWatch = ports.watchSessions((value) => {
-        if (stateOf(value) !== "working") end(true);
+        if (stateOf(value) !== "blocked") end(true);
       });
       const stopStop = stopping ? stopping(() => end(false)) : () => {};
     });
@@ -104,12 +112,11 @@ async function lineFree(ports: RelayPorts, member: RelayMember, stopping?: Conve
   }
 }
 
-// Sends one member the record lines that it has not received, or the room line of an empty turn when it has received every line,
-// followed by the token of its turn, and resolves with the text of its
-// answer command (docs/spec/room.md#room-record). The answer raises the delivered number of the session; `accepted` runs after core
-// accepted the submit. A refusal, a turn that is blocked, a session that leaves core.sessions, or a program that reports idle without an
-// answer rejects with the member identifier and the reason. The member runs the answer command during its turn, and core answers that
-// command after the handler of the room ran, so the answer arrives before the program reports idle.
+// Sends one member its turn line, the turn preface with the record lines that it has not received or the room line of an empty turn,
+// followed by the token of its turn, and resolves with its answer (docs/spec/room.md#modes). The answer ends the turn and raises the
+// delivered number of the session; the room reads no program state to end the turn (docs/spec/room.md#turn-end). `accepted` runs after
+// core accepted the submit. A refused submit and a session that leaves core.sessions reject with the member identifier and the reason,
+// and a stop of the owner rejects with TurnStopped.
 async function relayToMember(
   ports: RelayPorts,
   member: RelayMember,
@@ -119,58 +126,56 @@ async function relayToMember(
   stopping?: ConversationBound["stopping"],
 ): Promise<MemberAnswer> {
   if (!(await lineFree(ports, member, stopping))) throw new TurnStopped();
-  const controller = new AbortController();
-  // A value of core.sessions that the relay cannot read ends the turn with this error, so the relay never waits on a bad value.
-  let failure: unknown = null;
+  let turn;
+  try {
+    turn = ports.answers.open(member.session, member.id, record.lines.length);
+  } catch (error) {
+    throw new Error(`member ${member.id}: ${messageOf(error)}`);
+  }
+  const end = `${roles === null ? "" : `${roles} | `}[@clubhouse] ${TURN_RULE} | [@clubhouse] turn ${turn.turn}`;
   let submittedAt = 0;
-  // The line is built at the head of the submit queue of the session, from its sent number (docs/spec/room.md#work-reports).
-  const port: SessionRelayPort = {
-    submit: async (end) => {
-      await ports.lines.submit(member.session, () => {
+  // The room waits for the answer of the member from the submit of its line until the turn ends.
+  const endWait = ports.waiting(member, "answer");
+  const stops: (() => void)[] = [];
+  try {
+    const ended = new Promise<never>((_resolve, reject) => {
+      // A session that core.sessions no longer lists, or a value that the relay cannot read, ends the turn with its error.
+      stops.push(ports.watchSessions((value) => {
+        try {
+          sessionProgram(value, member.session);
+        } catch (error) {
+          reject(error);
+        }
+      }));
+      if (stopping) stops.push(stopping(() => reject(new TurnStopped())));
+    });
+    // The line is built at the head of the submit queue of the session, from its sent number (docs/spec/room.md#work-reports).
+    const submitted = ports.lines
+      .submit(member.session, () => {
         const lines = record.pending(member.session, member.id);
         const count = lines === null ? record.lines.length : lines.count;
         return {
-          text: `${lines === null ? `[@clubhouse] ${EMPTY_TURN_TEXT}` : lines.text} | ${end}`,
+          text: `[@clubhouse] ${lines === null ? EMPTY_TURN_TEXT : `${TURN_TEXT} | ${lines.text}`} | ${end}`,
           accepted: () => {
             submittedAt = record.now();
             record.markSent(member.session, count);
           },
         };
-      });
-      accepted();
-    },
-    program: () => sessionProgram(ports.sessions(), member.session),
-    watch: (listener) => ports.watchSessions((value) => {
-      try {
-        listener(sessionProgram(value, member.session));
-      } catch (error) {
-        failure = error;
-        controller.abort();
-      }
-    }),
-  };
-  let turn;
-  try {
-    turn = ports.answers.open(member.session, member.id, "answer", record.lines.length);
-  } catch (error) {
-    throw new Error(`member ${member.id}: ${messageOf(error)}`);
-  }
-  // The room waits for the answer of the member from the submit of its line until the turn ends.
-  const endWait = ports.waiting(member, "answer");
-  const ended = relayMemberMessage(port, `${roles === null ? "" : `${roles} | `}[@clubhouse] ${TURN_RULE} | [@clubhouse] turn ${turn.turn}`, { signal: controller.signal }).then(() => {
-    throw new Error(`the member ended its turn without an answer: it ran no ${ANSWER_COMMAND}`);
-  });
-  try {
-    const reply = await Promise.race([turn.answer, ended]);
+      })
+      .then(() => accepted());
+    // The submit ends no turn: after it the turn waits for the answer.
+    const submitWatch = submitted.then(() => new Promise<never>(() => {}));
+    ended.catch(() => {});
+    submitWatch.catch(() => {});
+    const reply = await Promise.race([turn.answer, ended, submitWatch]);
     return { id: member.id, text: reply.text, status: reply.status as AnswerStatus, elapsedMs: record.now() - submittedAt };
   } catch (error) {
-    throw new Error(`member ${member.id}: ${messageOf(failure ?? error)}`);
+    if (error instanceof TurnStopped) throw error;
+    throw new Error(`member ${member.id}: ${messageOf(error)}`);
   } finally {
+    for (const stop of stops) stop();
     endWait();
     turn.close();
-    // The answer ended the turn: the watch of the program ends, and its abort is no failure.
-    ended.catch(() => {});
-    controller.abort();
   }
 }
 
@@ -181,11 +186,12 @@ export interface ConversationBound {
   limit: number;
   stopped(): boolean;
   accepted(): void;
-  // Subscribes to the stop of the owner, which ends a turn that waits for the idle of its session; the returned function ends it.
+  // Subscribes to the stop of the owner, which ends a turn that waits for a blocked session or for its answer; the returned function
+  // ends the subscription.
   stopping?: (listener: () => void) => () => void;
 }
 
-// The stop of the owner ended a turn that waited for the idle of its session.
+// The stop of the owner ended a turn that waited for a blocked session or for its answer.
 class TurnStopped extends Error {
   constructor() {
     super("the owner stopped the conversation");
@@ -215,6 +221,16 @@ function queueMentions(queue: Turn[], text: string, speaker: NamedRelayMember, m
   for (const member of mentionedMembers(text, others)) {
     if (!queue.some((turn) => turn.member === member)) queue.push({ member, byAnswer: true });
   }
+}
+
+// Whether the member has record lines that it has not received other than the settled answers of this relay: each answer is a line
+// that the other members have not received, so a turn for each settled answer would never end (docs/spec/room.md#settling).
+function unreceivedBesidesSettled(record: RoomRecord, member: RelayMember, answers: MemberAnswer[]): boolean {
+  const settled = new Set(answers.filter((answer) => answer.status === "settled").map((answer) => answer.index));
+  for (let index = record.sent()[member.session] ?? 0; index < record.lines.length; index += 1) {
+    if (record.lines[index].speaker !== member.id && !settled.has(index)) return true;
+  }
+  return false;
 }
 
 // The members whose last answer of the relay declares `continue`, in member order.
@@ -248,8 +264,14 @@ async function runTurns(
     if (queue.length === 0) {
       if (!closing) break;
       const open = continuing([...earlier, ...answers], members);
-      // A member that took its turn before an owner line of the relay takes another turn, so every member answers it (docs/spec/room.md#owner-follow-up).
-      const unanswered = members.filter((member) => turnStart.has(member.id) && turnStart.get(member.id)! <= lastOwner());
+      // A member that took its turn before an owner line of the relay takes another turn, so every member answers it
+      // (docs/spec/room.md#owner-follow-up), and so does a member with record lines that it has not received other than settled answers
+      // (docs/spec/room.md#settling).
+      const unanswered = members.filter(
+        (member) => (turnStart.has(member.id) && turnStart.get(member.id)! <= lastOwner()) ||
+          // Only a member that took part in the relay: in facil the other members take no turn.
+          ([...earlier, ...answers].some((answer) => answer.id === member.id) && unreceivedBesidesSettled(record, member, [...earlier, ...answers])),
+      );
       if (open.length === 0 && unanswered.length === 0) {
         if (earlier.length + answers.length > 0) record.append("clubhouse", "the conversation settled");
         break;
@@ -281,7 +303,7 @@ async function runTurns(
       record.append("clubhouse", "the conversation ended: the owner stopped it");
       break;
     }
-    record.append(turn.member.id, answer.text, answer.elapsedMs);
+    appendAnswer(record, answer);
     answers.push(answer);
     if (closing) queueMentions(queue, answer.text, turn.member, members);
   }
@@ -320,7 +342,7 @@ export async function relayInMode(
       targets.map((member) => relayToMember(ports, member, record, bound.accepted, rolesLine(member, members), bound.stopping)),
     );
     // The answers that arrived are record lines in member order, also when another turn failed.
-    for (const [index, result] of results.entries()) if (result.status === "fulfilled") record.append(targets[index].id, result.value.text, result.value.elapsedMs);
+    for (const [index, result] of results.entries()) if (result.status === "fulfilled") appendAnswer(record, result.value);
     const failed = results.find((result): result is PromiseRejectedResult => result.status === "rejected" && !(result.reason instanceof TurnStopped));
     if (failed) throw failed.reason;
     if (results.some((result) => result.status === "rejected")) {

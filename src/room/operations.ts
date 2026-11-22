@@ -23,7 +23,8 @@ export interface OperationDeps {
   relay: (text: string, stopped: () => boolean) => Promise<{ id: string; text: string }[]>;
   // Delivers an owner line that a send added during a relay (docs/spec/room.md#owner-follow-up).
   followUp: () => void;
-  // Ends the record waits of the closing delivery and returns their number (docs/spec/room.md#closing-delivery).
+  // Ends the turns that wait for a blocked session or an answer, and the waits of the tokens kept from before a restart, and returns the
+  // number of kept tokens that it closed (docs/spec/room.md#commands).
   stopWaits: () => number;
   // Shows a refusal or a failed relay of message.send through the error display of the window (docs/spec/room.md#commands).
   failed: (reason: string) => void;
@@ -98,7 +99,7 @@ export function createRoomOperations(deps: OperationDeps): Record<string, (param
       }
       return { mode };
     },
-    // conversation.stop ends the relay after the turns that have started and ends the record waits; a second call changes nothing.
+    // conversation.stop ends the relay and its waiting turns and the waits of the kept tokens; a second call changes nothing.
     [`${P}.conversation.stop`]: async () => {
       const waits = deps.stopWaits();
       if (!relaying && waits === 0) throw new Error("the room is relaying no message");

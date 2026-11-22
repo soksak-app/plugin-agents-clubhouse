@@ -2,6 +2,7 @@
 
 ## 미출시
 
+- C87: Record는 `[@clubhouse] 네 차례야.`로 시작하는 member의 turn 줄로만 전달된다. Closing delivery, 수동 report inject, record acknowledgement command `record.ack`를 없앴고, tab state의 열린 token에는 `kind`가 없으며, settled 답 말고 받지 않은 줄이 있는 member는 대화가 settle되기 전에 turn을 한 번 더 받고, turn은 답으로 끝나며, 방은 `blocked` session에 줄을 입력하지 않고, `conversation.stop`은 답을 기다리는 turn을 끝낸다(`docs/spec/room.md#conversation-first`, `docs/spec/room.md#turn-end`).
 - C85: Protocol 줄은 turn을 terminal text 없이 끝내게 하고 상태처럼 보이는 마무리 단어를 금한다(`docs/spec/room.md#room-protocol`).
 - C84: 모든 record 줄을 받은 member의 turn은 record 줄 대신 방의 줄로 실행되므로 그 답이 대화를 settle한다(`docs/spec/room.md#room-record`).
 - C83: Protocol 줄은 member에게 먼저 `sok skill print`를 한 번 실행하고 web page나 local server를 먼저 soksak browser tab에서 확인하라고 하며, owner 지시의 preface를 밝힌다(`docs/spec/room.md#soksak-knowledge`).

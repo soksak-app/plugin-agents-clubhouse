@@ -19,7 +19,7 @@ export interface RoomState {
   // The number of room record lines that the room submitted to each member session, at least its delivered number
   // (docs/spec/room.md#work-reports).
   sent: Record<string, number>;
-  // The open tokens of turns and record lines, so an answer or an acknowledgement after a restart is accepted
+  // The open turn tokens, so an answer after a restart is accepted
   // (docs/spec/room.md#restart).
   turns: OpenToken[];
 }
@@ -37,7 +37,6 @@ export function serializedRoomState(state: RoomState): string {
 
 const MODES: readonly string[] = ["facil", "turn", "simul"];
 const FIELDS: readonly string[] = ["roster", "mode", "conversation", "sessions", "protocolSessions", "delivered", "sent", "turns"];
-const KINDS: readonly string[] = ["answer", "record"];
 
 const isText = (value: unknown): value is string => typeof value === "string" && value !== "";
 
@@ -92,12 +91,12 @@ export function parseRoomState(value: unknown): RoomState | null {
   for (const token of turns) {
     const valid =
       typeof token === "object" && token !== null &&
-      Object.keys(token).every((key) => ["turn", "session", "member", "kind", "count"].includes(key)) &&
-      isText(token.turn) && isText(token.session) && isText(token.member) && KINDS.includes(token.kind) &&
+      Object.keys(token).every((key) => ["turn", "session", "member", "count"].includes(key)) &&
+      isText(token.turn) && isText(token.session) && isText(token.member) &&
       Number.isInteger(token.count) && token.count >= 0 && token.count <= conversation.length;
     if (!valid) {
       throw new Error(
-        `room tab state: turns must hold {turn, session, member, kind: answer or record, count from 0 to ${conversation.length}}, got ${JSON.stringify(token)}`,
+        `room tab state: turns must hold {turn, session, member, count from 0 to ${conversation.length}}, got ${JSON.stringify(token)}`,
       );
     }
   }
@@ -109,6 +108,6 @@ export function parseRoomState(value: unknown): RoomState | null {
     protocolSessions: [...(state.protocolSessions as string[])],
     delivered: { ...(delivered as Record<string, number>) },
     sent: { ...(sent as Record<string, number>) },
-    turns: turns.map((token) => ({ turn: token.turn, session: token.session, member: token.member, kind: token.kind, count: token.count })),
+    turns: turns.map((token) => ({ turn: token.turn, session: token.session, member: token.member, count: token.count })),
   };
 }

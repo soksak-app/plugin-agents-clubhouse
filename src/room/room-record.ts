@@ -1,7 +1,7 @@
 // The room record (docs/spec/room.md#room-record): the lines of the owner, the answers of the members and the lines of the room in the
-// order in which the room took them, and for each member session the number of record lines that it has received. Each turn line and each
-// record line of a session carries the lines from that number to the end of the record, and the number rises only when the answer or the
-// acknowledgement of the token of the line arrives, so every member reads the whole record once and in order.
+// order in which the room took them, and for each member session the number of record lines that it has received. Each turn line of a
+// session carries the lines from its sent number to the end of the record, and the delivered number rises only when the answer of the
+// token of the line arrives, so every member reads the whole record once and in order (docs/spec/room.md#conversation-first).
 
 export interface RecordLine {
   // `owner` or the identifier of a member.
@@ -18,7 +18,7 @@ export interface PendingLines {
   text: string;
   // The speakers of those lines in the order of their first line.
   speakers: string[];
-  // The length of the record when the text was built: the delivered number after the answer or the acknowledgement of the line.
+  // The length of the record when the text was built: the delivered number after the answer of the line.
   count: number;
 }
 
@@ -37,7 +37,7 @@ export interface RoomRecord {
   now(): number;
   // The lines from the sent number of `session` of the member `self` to the end, without its own lines; null when there is none.
   pending(session: string, self: string): PendingLines | null;
-  // Raises the delivered number of the session to its sent number, at least count, at the answer or the acknowledgement of a token;
+  // Raises the delivered number of the session to its sent number, at least count, at the answer of a token;
   // a delivered number never falls.
   markDelivered(session: string, count: number): void;
   // Removes the line at `index` when it is the last line of the record and no session has received it. Returns whether it removed the line.

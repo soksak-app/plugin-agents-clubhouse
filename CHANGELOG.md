@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- C87: The record reaches a member only in its turn lines, which start with `[@clubhouse] 네 차례야.`; the closing delivery, the passive report injection and the record acknowledgement command `record.ack` are removed, open tokens of the tab state have no `kind`, a member with unreceived lines other than settled answers takes one more turn before the conversation settles, a turn ends on its answer, the room types no line into a `blocked` session, and `conversation.stop` ends a turn that waits for its answer (`docs/spec/room.md#conversation-first`, `docs/spec/room.md#turn-end`).
 - C85: The protocol line requires a turn to end with no terminal text and forbids closing words that look like a state (`docs/spec/room.md#room-protocol`).
 - C84: A turn of a member that has received every record line runs with a room line in place of record lines, so its answer settles the conversation (`docs/spec/room.md#room-record`).
 - C83: The protocol line tells a member to run `sok skill print` once first and to check a web page or a local server in a soksak browser tab first, and states the preface of an owner instruction (`docs/spec/room.md#soksak-knowledge`).

@@ -8,14 +8,14 @@ import { createRoomRecord, type RecordLine } from "./room-record";
 const NAME = "soksak-plugin-agents-clubhouse.conversation";
 
 describe("conversation status", () => {
-  it("is declared in plugin.json with the entries, the waits with the step record, and the delivery", () => {
+  it("is declared in plugin.json with the entries, the waits with their steps, and the delivery with the unreceived lines", () => {
     const status = manifest.exposes.status.find((entry) => entry.name === NAME);
     expect(status?.schema).toMatchObject({
       type: "object",
       properties: {
         entries: { type: "array", items: { required: ["speaker", "text", "at", "elapsedMs", "sections"] } },
-        waiting: { type: "array", items: { required: ["member", "session", "step", "program"], properties: { step: { enum: ["protocol", "turn", "answer", "record"] } } } },
-        delivery: { type: "array", items: { required: ["member", "session", "sent", "delivered", "length", "pending"] } },
+        waiting: { type: "array", items: { required: ["member", "session", "step", "program"], properties: { step: { enum: ["protocol", "turn", "answer"] } } } },
+        delivery: { type: "array", items: { required: ["member", "session", "sent", "delivered", "length", "unreceived"] } },
       },
       required: ["entries", "waiting", "delivery"],
     });
@@ -44,8 +44,8 @@ describe("conversation status", () => {
     expect(values).toHaveLength(4);
   });
 
-  it("carries the delivery entries of the closing delivery (docs/spec/room.md#conversation-status)", () => {
-    const entry = { member: "reviewer", session: "s-1", sent: 1, delivered: 1, length: 2, pending: true };
+  it("carries the delivery entries of the members (docs/spec/room.md#conversation-status)", () => {
+    const entry = { member: "reviewer", session: "s-1", sent: 1, delivered: 1, length: 2, unreceived: 1 };
     const status = createConversationStatus([], () => [], () => [entry]);
     expect(status.read().delivery).toEqual([entry]);
   });

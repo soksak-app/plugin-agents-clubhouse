@@ -27,7 +27,6 @@ import { createMemberSessionStore } from "./room/session-store";
 import { serialRunner, summonAndArrange, type TriggerDeps } from "./room/trigger";
 import { createOpenedSessions } from "./room/summon";
 import { conversationTurnsOf, relayInMode, type RelayPorts } from "./room/room-relay";
-import { createClosingDelivery, type ClosingDelivery } from "./room/closing-delivery";
 import { createSubmitQueue } from "./room/submit-queue";
 import { CLAIM_COMMAND, RELEASE_COMMAND, REPORT_COMMAND, createWorkReports, type WorkReports } from "./room/work-reports";
 import { answerSections } from "./room/sections";
@@ -39,7 +38,7 @@ import { ownedSessionIds, shownByOf } from "./room/session-channel";
 import { reattachedChecks, rosterFrom, type RosterEntry } from "./room/roster";
 import { measuredCardSize } from "./room/card-size";
 import { createRoomOperations } from "./room/operations";
-import { ANSWER_COMMAND, RECORD_ACK_COMMAND, createAnswerChannel } from "./room/answer";
+import { ANSWER_COMMAND, createAnswerChannel } from "./room/answer";
 import { createMacroStore } from "./tower/macro";
 import { setupTower } from "./tower/header";
 import { TOWER_LIVE_TOPIC } from "./tower/modal";
@@ -511,27 +510,29 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
         persist();
       })
       .then(teachMembers)
-      // A session whose lines were not all delivered before the restart receives them (docs/spec/room.md#closing-delivery).
-      .then(() => delivery!.run())
       .catch((error: unknown) => report("room summon", String((error as Error)?.message ?? error)));
   };
 
   // A message goes to the checked members whose session is open, by the mode of the room and the mentions of the message
   // (docs/spec/room.md). Each member delivers its answer with the answer command, and the conversation shows it as text.
-  // The closing delivery of the room; it is created after the record and the protocol that it reads.
-  let delivery: ClosingDelivery | null = null;
   let work: WorkReports | null = null;
-  // The answer or the acknowledgement of a token raises the delivered number of its session; an answer of a turn kept from before a
-  // restart is the answer of its member (docs/spec/room.md#restart).
+  // The end of the conversation-status wait of each token kept from before a restart, by token (docs/spec/room.md#restart).
+  const keptWaits = new Map<string, () => void>();
+  const keptOpen = (): boolean => keptWaits.size > 0;
+  // The answer of a token raises the delivered number of its session; an answer of a turn kept from before a restart is the answer of
+  // its member (docs/spec/room.md#restart).
   const answers = createAnswerChannel({
     restored: saved?.turns ?? [],
     delivered: (session, count) => record.markDelivered(session, count),
     restoredAnswer: (token, text) => record.append(token.member, text),
-    closed: (token) => work?.closed(token),
+    closed: (token) => {
+      work?.closed(token);
+      keptWaits.get(token.turn)?.();
+      keptWaits.delete(token.turn);
+    },
     changed: () => {
       persist();
-      delivery?.tokensChanged();
-      stopState.update(busy, delivery?.waits() ?? false);
+      stopState.update(busy, keptOpen());
     },
   });
   // One submit queue per member session, so each line is built from the sent number that the previous submit left.
@@ -637,12 +638,11 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   // The declared conversation status carries the entries that the page shows and the members that the room waits for; the page draws
   // each value, and each value of core.sessions publishes the program states again (docs/spec/room.md#conversation-status).
   // The sections of an answer name the addressees by the mention rules among the roster (docs/spec/room.md#sections).
-  const conversationStatus = createConversationStatus(conversation, () => sessionsValue, () => delivery?.entries() ?? [], (entry) =>
+  const conversationStatus = createConversationStatus(conversation, () => sessionsValue, () => deliveryEntries(), (entry) =>
     entry.speaker === "owner" || entry.speaker === "clubhouse" ? [] : answerSections(entry.text, roster),
   );
   conversationStatus.subscribe(() => showConversation());
   sessionListeners.add((value) => {
-    delivery?.sessionsChanged(value);
     work?.inject();
     try {
       conversationStatus.changed();
@@ -670,25 +670,27 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
       // The stored relation is read again after each change of core.sessions; until then a session that has ended is left out.
       .filter((entry) => entry.checked && memberSessions.has(entry.id) && openSessionIds.has(memberSessions.get(entry.id)!))
       .map((entry) => ({ id: entry.id, name: entry.name, session: memberSessions.get(entry.id)!, role: entry.role, mcp: !isolatedMember(entry.id) }));
-  // After each relay every checked member session with the protocol receives the record lines that it has not received
-  // (docs/spec/room.md#closing-delivery).
-  delivery = createClosingDelivery(
-    { commands: room.commands, answers, lines, sessions: () => sessionsValue, waiting: relayPorts.waiting, report, changed: () => {
-      stopState.update(busy, delivery!.waits());
-      try {
-        conversationStatus.changed();
-      } catch (error) {
-        report("room conversation", String((error as Error)?.message ?? error));
-      }
-    } },
-    record,
-    speakerName,
-    () => openMembers().filter((member) => taughtSessions.has(member.session)),
-  );
-  // The work reports, claims and releases of the members, injected into the working sessions (docs/spec/room.md#work-reports).
-  work = createWorkReports({ answers, lines, sessions: () => sessionsValue, report }, record, () =>
-    openMembers().filter((member) => taughtSessions.has(member.session)),
-  );
+  // The members of the room whose session received the protocol, and the record lines that each has not received, which its next turn
+  // line carries (docs/spec/room.md#conversation-status).
+  const roomMembers = () => openMembers().filter((member) => taughtSessions.has(member.session));
+  const deliveryEntries = () =>
+    roomMembers().map((member) => {
+      const sent = record.sent()[member.session] ?? 0;
+      return {
+        member: member.id,
+        session: member.session,
+        sent,
+        delivered: record.delivered()[member.session] ?? 0,
+        length: record.lines.length,
+        unreceived: record.lines.slice(sent).filter((line) => line.speaker !== member.id).length,
+      };
+    });
+  // A token kept from before a restart shows its member as waiting for the answer until the answer or conversation.stop closes it.
+  for (const token of answers.tokens()) keptWaits.set(token.turn, relayPorts.waiting({ id: token.member, session: token.session }, "answer"));
+  stopState.update(busy, keptOpen());
+  // The work reports, claims and releases of the members, and the owner follow-ups injected into the working sessions
+  // (docs/spec/room.md#work-reports, docs/spec/room.md#owner-follow-up).
+  work = createWorkReports({ answers, lines, sessions: () => sessionsValue, report }, record, roomMembers);
   // Resolves with the members whose protocol turn has ended; a refused member receives no relayed message.
   const taughtMembers = async (members: OpenMember[]): Promise<OpenMember[]> => {
     const outcomes = await Promise.all(
@@ -703,23 +705,21 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   };
   // A message runs message.send from the send button and from Enter without Shift in the input (docs/spec/room.md#commands).
   // The relay resolves with the answer of each member in relay order.
-  // A relay in which core accepted no submit withdraws the line of the owner, any other failed relay appends the failure line, and the
-  // closing delivery runs after it (docs/spec/room.md#room-record).
-  // conversation.stop ends each turn that waits for the idle of its session (docs/spec/room.md#modes).
+  // A relay in which core accepted no submit withdraws the line of the owner, and any other failed relay appends the failure line
+  // (docs/spec/room.md#room-record).
+  // conversation.stop ends each turn that waits for a blocked session or for its answer (docs/spec/room.md#turn-end).
   const stopListeners = new Set<() => void>();
   const stopping = (listener: () => void): (() => void) => {
     stopListeners.add(listener);
     return () => void stopListeners.delete(listener);
   };
   const relayMessage = (text: string, stopped: () => boolean): Promise<{ id: string; text: string }[]> =>
-    delivery!.relay(() =>
-      settledRelay(record, async (accepted) => {
-        const taught = await taughtMembers(openMembers());
-        if (taught.length === 0) throw new Error("no member has the room protocol");
-        const answers = await relayInMode(relayPorts, mode, taught, text, record, { limit: conversationTurns, stopped, accepted, stopping });
-        return answers.map((answer) => ({ id: answer.id, text: answer.text }));
-      }),
-    );
+    settledRelay(record, async (accepted) => {
+      const taught = await taughtMembers(openMembers());
+      if (taught.length === 0) throw new Error("no member has the room protocol");
+      const answers = await relayInMode(relayPorts, mode, taught, text, record, { limit: conversationTurns, stopped, accepted, stopping });
+      return answers.map((answer) => ({ id: answer.id, text: answer.text }));
+    });
   const operations = createRoomOperations({
     roster,
     mode: () => mode,
@@ -742,13 +742,13 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
       // A relay in progress keeps the tab loaded: an unload would end the page that waits for the turns.
       bridge!.calls.request("tab.keep", { reason: "busy", on: value }).catch((error: unknown) => report("tab keep", String((error as Error)?.message ?? error)));
       send.disabled = value || transport.state !== "ready";
-      stopState.update(value, delivery!.waits());
+      stopState.update(value, keptOpen());
     },
     relay: relayMessage,
-    followUp: () => work?.inject(),
+    followUp: () => work?.followUp(),
     stopWaits: () => {
       for (const listener of [...stopListeners]) listener();
-      return delivery!.stopWaits();
+      return answers.closeWaits().length;
     },
     failed: (reason) => report("room relay", reason),
   });
@@ -796,7 +796,6 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
       ...createRoomCommands({ tower, trace, mode: () => mode, state }),
       ...operations,
       [ANSWER_COMMAND]: async (params: unknown) => answers.deliver(params),
-      [RECORD_ACK_COMMAND]: async (params: unknown) => answers.ack(params),
       [REPORT_COMMAND]: async (params: unknown) => work!.reportCommand(params),
       [CLAIM_COMMAND]: async (params: unknown) => work!.claim(params),
       [RELEASE_COMMAND]: async (params: unknown) => work!.release(params),

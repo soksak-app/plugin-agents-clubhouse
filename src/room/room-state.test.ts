@@ -14,7 +14,7 @@ const state: RoomState = {
   protocolSessions: ["owned-1"],
   delivered: { "owned-1": 2 },
   sent: { "owned-1": 2 },
-  turns: [{ turn: "t-1", session: "owned-1", member: "harness-harness", kind: "record", count: 2 }],
+  turns: [{ turn: "t-1", session: "owned-1", member: "harness-harness", count: 2 }],
 };
 
 describe("parseRoomState", () => {
@@ -23,8 +23,8 @@ describe("parseRoomState", () => {
     expect(() => parseRoomState(rest)).toThrow("room tab state: turns must be an array of open tokens, got undefined");
   });
 
-  it("refuses an open token of another kind or a count beyond the conversation", () => {
-    expect(() => parseRoomState({ ...state, turns: [{ ...state.turns[0], kind: "other" }] })).toThrow("room tab state: turns must hold");
+  it("refuses an open token of the earlier form with a kind, or a count beyond the conversation", () => {
+    expect(() => parseRoomState({ ...state, turns: [{ ...state.turns[0], kind: "answer" }] })).toThrow("room tab state: turns must hold");
     expect(() => parseRoomState({ ...state, turns: [{ ...state.turns[0], count: 3 }] })).toThrow("count from 0 to 2");
   });
 

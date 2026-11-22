@@ -1,11 +1,10 @@
 // The room protocol (docs/spec/room.md#room-protocol). Each member session receives one line before its first relayed message: the
 // speaker labels, the quoted-data rule, the mention rule, the turn rule and the other members. The line goes in when the session first
-// reports idle, and its turn ends before the room relays a message to the member. core.session.submit refuses CR and LF, so the
+// reports idle, and its turn ends when core accepts the submit (docs/spec/room.md#turn-end). core.session.submit refuses CR and LF, so the
 // protocol is one line.
-import { relayMemberMessage, type SessionRelayPort } from "./relay";
 import type { RelayPorts } from "./room-relay";
 import { sessionProgram, sessionSubmit } from "./session-channel";
-import { ANSWER_COMMAND, RECORD_ACK_COMMAND } from "./answer";
+import { ANSWER_COMMAND } from "./answer";
 import { CLAIM_COMMAND, RELEASE_COMMAND, REPORT_COMMAND } from "./work-reports";
 
 export interface ProtocolMember {
@@ -40,8 +39,8 @@ export function roomProtocolLine(self: string, peers: string[], surface: string,
     "A mention @<name> gives that member the next turn; mention a member only when you want it to answer.",
     `A line that ends with [@clubhouse] turn <token> is your turn: end it with ${text(ANSWER_COMMAND, " --status <continue or settled>")}` +
       (mcp ? `, or the MCP tool command_run with name ${ANSWER_COMMAND}, surface ${surface} and params {"turn": "<token>", "status": "continue or settled", "text": "<your answer>"}.` : "."),
-    "A turn without this command fails; each token takes one answer.",
-    "Run each room command (answer, report, claim, release, record.ack) as a command of its own in the foreground, never chained with ;, && or |.",
+    "Your turn line holds every record line you have not seen; only your answer ends the turn, and each token takes one answer.",
+    "Run each room command (answer, report, claim, release) as a command of its own in the foreground, never chained with ;, && or |.",
     "When a room command times out or goes to the background, report it with report and never say that it was sent.",
     "Answer continue while a question, a disagreement or work remains; settled only when your part is done and verified.",
     "Work rules: agree on the plan and the contracts before coding.",
@@ -49,9 +48,7 @@ export function roomProtocolLine(self: string, peers: string[], surface: string,
     "A claim ends with its turn: claim each file in the turn in which you write it, before you write it, and release it when you are done.",
     `Claim with ${sok(CLAIM_COMMAND, '{"turn": "<token>", "paths": ["<path>"]}')} and release with ${RELEASE_COMMAND} and the same params; a refused claim names its holder: coordinate with @<name>.`,
     `Before and after each change of a file, a contract or an API, report it with ${sok(REPORT_COMMAND, '{"turn": "<token>", "text": "<what and why>", "paths": ["<path>"]}')}, naming the claimed files it changes.`,
-    "A line starting 답하지 말고 하던 작업을 계속해. takes no answer: read it and go on.",
-    "A line starting 방장의 새 지시야. is an owner instruction: apply it and answer it in your next answer.",
-    `A line that ends with [@clubhouse] record <token> takes no answer: acknowledge it with sok ${RECORD_ACK_COMMAND} --surface ${surface} --turn <token>.`,
+    "A line starting [@clubhouse] 방장의 새 지시야. is an owner instruction during your work: apply it, and answer it in your next answer.",
     ...(role === "" ? [] : [`Your role: ${role}.`]),
     `Other members: ${peers.length > 0 ? peers.join(", ") : "none"}.`,
     "This protocol line takes no answer.",
@@ -103,34 +100,21 @@ export function createProtocolInjector(
   const listed = (session: string): boolean =>
     Array.isArray(ports.sessions()) && (ports.sessions() as { session?: unknown }[]).some((entry) => entry?.session === session);
   const inject = async (member: ProtocolMember, peers: string[]): Promise<ProtocolOutcome> => {
-    const controller = new AbortController();
-    let failure: unknown = null;
     // The room waits for the member from the start of its protocol turn, which waits for the first idle, until the turn ends; a
     // program that stops at a question of its own before that idle keeps the member in the wait (docs/spec/room.md#conversation-status).
     const endWait = ports.waiting(member, "protocol");
     try {
       await firstIdle(member.session);
-      const port: SessionRelayPort = {
-        submit: sessionSubmit(ports, member.session),
-        program: () => sessionProgram(ports.sessions(), member.session),
-        watch: (listener) => ports.watchSessions((value) => {
-          try {
-            listener(sessionProgram(value, member.session));
-          } catch (error) {
-            failure = error;
-            controller.abort();
-          }
-        }),
-      };
-      await relayMemberMessage(port, roomProtocolLine(member.name, peers, ports.surface, member.role ?? "", member.mcp ?? true), { signal: controller.signal });
+      // The protocol turn ends when core accepts the submit: the program queues the first turn line if it still works on this line
+      // (docs/spec/room.md#turn-end).
+      await sessionSubmit(ports, member.session)(roomProtocolLine(member.name, peers, ports.surface, member.role ?? "", member.mcp ?? true));
       memory.onTaught(member.session);
       return { ok: true };
     } catch (error) {
       if (!listed(member.session)) {
         return { ok: false, reason: `member ${member.id}: session ${member.session} ended before its protocol turn` };
       }
-      const cause = failure ?? error;
-      const reason = `member ${member.id}: ${cause instanceof Error ? cause.message : String(cause)}`;
+      const reason = `member ${member.id}: ${error instanceof Error ? error.message : String(error)}`;
       report("room protocol", reason);
       return { ok: false, reason };
     } finally {

@@ -60,10 +60,11 @@ describe("roomProtocolLine", () => {
     expect(roomProtocolLine("Claude", [], "room-1")).toContain("A mention @<name> gives that member the next turn; mention a member only when you want it to answer.");
   });
 
-  it("states that a record line takes no answer and its acknowledgement command (docs/spec/room.md#closing-delivery)", () => {
+  it("states that the turn line holds every unseen record line and that only the answer ends the turn (docs/spec/room.md#conversation-first)", () => {
     const line = roomProtocolLine("Claude", ["Codex"], "room-1");
-    expect(line).toContain("A line that ends with [@clubhouse] record <token> takes no answer");
-    expect(line).toContain("sok soksak-plugin-agents-clubhouse.record.ack --surface room-1 --turn <token>");
+    expect(line).toContain("Your turn line holds every record line you have not seen; only your answer ends the turn, and each token takes one answer.");
+    expect(line).not.toContain("record.ack");
+    expect(line).not.toContain("답하지 말고");
   });
 
   it("states the answer command with the room surface and the turn token, the shell form first (docs/spec/room.md#answer)", () => {
@@ -114,18 +115,25 @@ describe("createProtocolInjector", () => {
     expect(reports).toEqual([]);
   });
 
-  it("ends without an error when the session ends during its protocol turn", async () => {
+  it("ends without an error when the session ends before its protocol turn", async () => {
+    const core = fakeCore({ "s-1": "working" });
+    const reports: string[] = [];
+    const injector = createProtocolInjector(core.ports, (where, text) => void reports.push(`${where}: ${text}`));
+    const outcome = injector.ensure(claude, []);
+    core.end("s-1");
+    expect(await outcome).toEqual({ ok: false, reason: "member reviewer: session s-1 ended before its protocol turn" });
+    expect(reports).toEqual([]);
+  });
+
+  it("ends the protocol turn when core accepts the submit, while the program still works on it (docs/spec/room.md#turn-end)", async () => {
     const core = fakeCore({ "s-1": "idle" });
     core.ports.commands.execute = async (_name, params) => {
       core.submitted.push({ session: params.session as string, text: params.text as string });
       core.set("s-1", "working");
-      core.end("s-1");
       return {};
     };
-    const reports: string[] = [];
-    const injector = createProtocolInjector(core.ports, (where, text) => void reports.push(`${where}: ${text}`));
-    expect(await injector.ensure(claude, [])).toEqual({ ok: false, reason: "member reviewer: session s-1 ended before its protocol turn" });
-    expect(reports).toEqual([]);
+    const injector = createProtocolInjector(core.ports, () => {});
+    expect(await injector.ensure(claude, [])).toEqual({ ok: true });
   });
 });
 
@@ -193,7 +201,7 @@ describe("the work rules of the protocol (docs/spec/room.md#room-protocol)", () 
 describe("the room commands run alone (docs/spec/room.md#room-protocol)", () => {
   it("states that each room command runs alone in the foreground and that a timed-out command is reported, not claimed as sent", () => {
     const line = roomProtocolLine("Claude", [], "room-1");
-    expect(line).toContain("Run each room command (answer, report, claim, release, record.ack) as a command of its own in the foreground, never chained with ;, && or |.");
+    expect(line).toContain("Run each room command (answer, report, claim, release) as a command of its own in the foreground, never chained with ;, && or |.");
     expect(line).toContain("When a room command times out or goes to the background, report it with report and never say that it was sent.");
   });
 });
@@ -211,7 +219,7 @@ describe("soksak knowledge", () => {
     }
   });
   it("the protocol line tells how to read an injected owner instruction", () => {
-    expect(roomProtocolLine("Claude", ["Codex"], "room-1")).toContain("A line starting 방장의 새 지시야. is an owner instruction: apply it and answer it in your next answer.");
+    expect(roomProtocolLine("Claude", ["Codex"], "room-1")).toContain("A line starting [@clubhouse] 방장의 새 지시야. is an owner instruction during your work: apply it, and answer it in your next answer.");
   });
 });
 

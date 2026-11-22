@@ -124,7 +124,7 @@ describe("conversation.stop (docs/spec/room.md#conversation)", () => {
     await expect(r.commands[`${P}.conversation.stop`]({})).rejects.toThrow("the room is relaying no message");
   });
 
-  it("ends the record waits without a relay and answers that it stopped (docs/spec/room.md#closing-delivery)", async () => {
+  it("ends the waits of the kept tokens without a relay and answers that it stopped (docs/spec/room.md#commands)", async () => {
     let stops = 0;
     const r = room({ stopWaits: () => (stops += 1, 2) });
     expect(await r.commands[`${P}.conversation.stop`]({})).toEqual({ stopped: true });

@@ -68,7 +68,7 @@
       },
       {
         "name": "soksak-plugin-agents-clubhouse.conversation",
-        "description": "The conversation that the room shows: the entries of the room record in record order, speaker being owner, the identifier of a member, or clubhouse for a line of the room, and each member whose turn the room waits for, with its step (protocol until the protocol turn ends, turn while a turn waits for its working session to become idle, answer until the answer arrives, record until the record acknowledgement arrives) and the program state of its session in core.sessions (null while core reports none, ended when core.sessions no longer lists it), and each session of the closing delivery with its sent and delivered numbers; each entry carries the sections of its answer, one per addressee, or [] without them, the record length and whether it waits for its next idle.",
+        "description": "The conversation that the room shows: the entries of the room record in record order, speaker being owner, the identifier of a member, or clubhouse for a line of the room, and each member whose turn the room waits for, with its step (protocol until the protocol turn ends, turn while a turn line waits for a blocked session, answer until the answer arrives) and the program state of its session in core.sessions (null while core reports none, ended when core.sessions no longer lists it), and the session of each member with its sent and delivered numbers and the record lines that it has not received; each entry carries the sections of its answer, one per addressee, or [] without them, the record length and the number of record lines that its next turn line carries.",
         "schema": {
           "type": "object",
           "properties": {
@@ -100,7 +100,7 @@
                 "properties": {
                   "member": { "type": "string" },
                   "session": { "type": "string" },
-                  "step": { "type": "string", "enum": ["protocol", "turn", "answer", "record"] },
+                  "step": { "type": "string", "enum": ["protocol", "turn", "answer"] },
                   "program": { "type": ["string", "null"], "enum": ["idle", "working", "blocked", "ended", null] }
                 },
                 "required": ["member", "session", "step", "program"]
@@ -116,9 +116,9 @@
                   "sent": { "type": "integer" },
                   "delivered": { "type": "integer" },
                   "length": { "type": "integer" },
-                  "pending": { "type": "boolean" }
+                  "unreceived": { "type": "integer" }
                 },
-                "required": ["member", "session", "sent", "delivered", "length", "pending"]
+                "required": ["member", "session", "sent", "delivered", "length", "unreceived"]
               }
             }
           },
@@ -127,7 +127,7 @@
       },
       {
         "name": "soksak-plugin-agents-clubhouse.view",
-        "description": "The follow mode of the conversation view: following while the view is at the bottom and follows new entries, and unseen, the number (0 or more) of entries below the viewport that have not been visible since the person scrolled up; stopEnabled, whether the stop button is enabled, which it is only while a relay or a record wait runs.",
+        "description": "The follow mode of the conversation view: following while the view is at the bottom and follows new entries, and unseen, the number (0 or more) of entries below the viewport that have not been visible since the person scrolled up; stopEnabled, whether the stop button is enabled, which it is only while a relay runs or a kept token is open.",
         "schema": {
           "type": "object",
           "properties": {
@@ -265,7 +265,7 @@
       },
       {
         "name": "soksak-plugin-agents-clubhouse.conversation.stop",
-        "description": "End the conversation of the message that the room relays after the turns that have started, and end each wait for a record acknowledgement; refused when no message is relayed and no record wait is open. A second call changes nothing.",
+        "description": "End the conversation of the message that the room relays: no further turn starts and a turn that waits for its answer ends without it; also end the wait of each token kept from before a restart. Refused when no message is relayed and no kept token is open. A second call changes nothing.",
         "params": { "type": "object", "properties": {} },
         "result": {
           "type": "object",
@@ -303,7 +303,7 @@
       },
       {
         "name": "soksak-plugin-agents-clubhouse.report",
-        "description": "Report the work of a member during its open turn with the token of the turn and the paths it changed; a path outside the claims of the member in this turn is refused. The room records it as (report) and injects it into the working sessions of the other members at once. The turn goes on.",
+        "description": "Report the work of a member during its open turn with the token of the turn and the paths it changed; a path outside the claims of the member in this turn is refused. The room records it as (report), and each other member reads it in its next turn line. The turn goes on.",
         "params": {
           "type": "object",
           "properties": { "turn": { "type": "string" }, "text": { "type": "string" }, "paths": { "type": "array", "items": { "type": "string" } } },
@@ -341,20 +341,6 @@
           "type": "object",
           "properties": { "turn": { "type": "string" }, "paths": { "type": "array", "items": { "type": "string" } } },
           "required": ["turn", "paths"]
-        }
-      },
-      {
-        "name": "soksak-plugin-agents-clubhouse.record.ack",
-        "description": "Acknowledge a record line of the room whose token it carries as [@clubhouse] record <token>; run it with the surface of the room and answer nothing. Each token takes one acknowledgement while it is open.",
-        "params": {
-          "type": "object",
-          "properties": { "turn": { "type": "string" } },
-          "required": ["turn"]
-        },
-        "result": {
-          "type": "object",
-          "properties": { "turn": { "type": "string" } },
-          "required": ["turn"]
         }
       },
       {
@@ -479,7 +465,7 @@
       },
       {
         "name": "soksak-plugin-agents-clubhouse.stop",
-        "description": "Stop button: runs conversation.stop, which ends the conversation after the turns that have started and the record waits. Enabled only while a message is relayed or a record wait is open."
+        "description": "Stop button: runs conversation.stop, which ends the conversation and the waits of the kept tokens. Enabled only while a message is relayed or a kept token is open."
       },
       {
         "name": "soksak-plugin-agents-clubhouse.pill",

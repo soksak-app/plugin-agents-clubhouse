@@ -1,6 +1,6 @@
 // The conversation status of the room (docs/spec/room.md#conversation-status): the entries {speaker, text} of the room record that
 // the page shows, each member whose turn the room waits for, with its step and the program state of its session in core.sessions, and
-// the delivered number of each session of the closing delivery beside the length of the record.
+// the sent and delivered numbers of the session of each member beside the length of the record and its unreceived lines.
 // The room calls changed after each change of the record and at each value of core.sessions; a wait publishes when it begins and
 // when it ends. Each subscriber receives the new value, so the status follows these events without a timer.
 import { sessionProgram } from "./session-channel";
@@ -21,10 +21,9 @@ export interface StatusEntry extends ConversationEntry {
   sections: AnswerSection[];
 }
 
-// `turn` while a turn waits for the idle of a working session (docs/spec/room.md#modes);
-// `protocol` from the start of the protocol turn, which waits for the first idle, to its end; `answer` from the submit of a relayed
-// line to its answer or its failure; `record` from the submit of a record line to its acknowledgement or the stop of its wait.
-export type WaitingStep = "protocol" | "turn" | "answer" | "record";
+// `turn` while a turn line waits for a blocked session (docs/spec/room.md#turn-end); `protocol` from the start of the protocol turn,
+// which waits for the first idle, to its end; `answer` from the submit of a turn line to its answer, its failure or the stop.
+export type WaitingStep = "protocol" | "turn" | "answer";
 
 export interface WaitingMember {
   member: string;
@@ -34,8 +33,8 @@ export interface WaitingMember {
   program: "idle" | "working" | "blocked" | "ended" | null;
 }
 
-// A session of the closing delivery (docs/spec/room.md#closing-delivery); delivered below length outside a relay and a wait is a line
-// that the session has not received.
+// The session of a member of the room and the record lines that it has not received, which its next turn line carries
+// (docs/spec/room.md#conversation-status).
 export interface DeliveryEntry {
   member: string;
   session: string;
@@ -43,8 +42,8 @@ export interface DeliveryEntry {
   sent: number;
   delivered: number;
   length: number;
-  // Whether the room waits for the next idle of the session to deliver its lines.
-  pending: boolean;
+  // The record lines from sent to the end that its member did not speak.
+  unreceived: number;
 }
 
 export interface ConversationValue {
@@ -68,7 +67,7 @@ function programOf(sessions: { session?: unknown }[], session: string): WaitingM
   return sessionProgram(sessions, session);
 }
 
-// `sessions` gives the current value of core.sessions, and `delivery` the entries of the closing delivery.
+// `sessions` gives the current value of core.sessions, and `delivery` the delivery entries of the members.
 export function createConversationStatus(
   lines: readonly ConversationEntry[],
   sessions: () => unknown,

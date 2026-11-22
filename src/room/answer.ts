@@ -1,14 +1,12 @@
-// The token channel of the room (docs/spec/room.md#answer, docs/spec/room.md#closing-delivery). A member delivers its answer with the
-// declared command soksak-plugin-agents-clubhouse.answer {turn, text}, not through its screen: a program on the alternate screen writes
-// only the rows of its visible viewport to the terminal, so no read of the screen or of the retained rows holds an answer taller than the
-// member tab. A member acknowledges a record line with soksak-plugin-agents-clubhouse.record.ack {turn}. Each line carries the token of
-// its turn, and the room accepts each token once, only while it is open, because core gives the handler of a command no caller and
-// answers the owner surface for every process of an owned session. The answer or the acknowledgement of a token raises the delivered
+// The token channel of the room (docs/spec/room.md#answer). A member delivers its answer with the declared command
+// soksak-plugin-agents-clubhouse.answer {turn, text}, not through its screen: a program on the alternate screen writes only the rows of
+// its visible viewport to the terminal, so no read of the screen or of the retained rows holds an answer taller than the member tab. Each
+// turn line carries the token of its turn, and the room accepts each token once, only while it is open, because core gives the handler of
+// a command no caller and answers the owner surface for every process of an owned session. The answer of a token raises the delivered
 // number of its session to the record length of the line (docs/spec/room.md#room-record), because an accepted submit tells nothing of
 // the reading. The open tokens are kept in the tab state, so a token opened before a restart is accepted after it.
 
 export const ANSWER_COMMAND = "soksak-plugin-agents-clubhouse.answer";
-export const RECORD_ACK_COMMAND = "soksak-plugin-agents-clubhouse.record.ack";
 
 // The state that an answer declares (docs/spec/room.md#settling): `continue` while an open question, a disagreement or work remains, and
 // `settled` when the member agrees and its work is done.
@@ -17,12 +15,8 @@ const STATUSES: readonly string[] = ["continue", "settled"];
 
 export interface Reply {
   text: string;
-  // null for the acknowledgement of a record line.
-  status: AnswerStatus | null;
+  status: AnswerStatus;
 }
-
-// `answer` for the token of a turn, `record` for the token of a record line of the closing delivery.
-export type TokenKind = "answer" | "record";
 
 // An open token as the tab state keeps it.
 export interface OpenToken {
@@ -30,33 +24,30 @@ export interface OpenToken {
   session: string;
   // The identifier of the member of the session.
   member: string;
-  kind: TokenKind;
-  // The length of the record when the line was built: the delivered number of the session after the answer or the acknowledgement.
+  // The length of the record when the line was built: the delivered number of the session after the answer.
   count: number;
 }
 
 export interface OpenTurn {
-  // The token that the line carries as `[@clubhouse] turn <token>` or `[@clubhouse] record <token>`.
+  // The token that the line carries as `[@clubhouse] turn <token>`.
   turn: string;
-  // Resolves with the answer, or with {text: "", status: null} for the acknowledgement of a record line.
+  // Resolves with the answer.
   answer: Promise<Reply>;
-  // Ends the token: a later answer or acknowledgement of it is refused.
+  // Ends the token: a later answer of it is refused.
   close(): void;
 }
 
 export interface AnswerChannel {
-  open(session: string, member: string, kind: TokenKind, count: number): OpenTurn;
+  open(session: string, member: string, count: number): OpenTurn;
   // The handler of the answer command; it throws each refusal.
   deliver(params: unknown): { turn: string };
-  // The handler of the record acknowledgement command; it throws each refusal.
-  ack(params: unknown): { turn: string };
   // The open tokens in the order in which they opened.
   tokens(): OpenToken[];
   // Whether the session has an open token.
   has(session: string): boolean;
   // Resolves when the session has no open token.
   settled(session: string): Promise<void>;
-  // Closes the open record tokens and the tokens kept from before a restart, and returns them; the tokens of a running relay stay.
+  // Closes the tokens kept from before a restart, and returns them; the tokens of a running relay stay.
   closeWaits(): OpenToken[];
   // The open turn token of `turn` for a work report, a claim or a release; it throws the refusal for any other token.
   turnOf(params: unknown): OpenToken;
@@ -64,7 +55,7 @@ export interface AnswerChannel {
 
 export interface AnswerChannelOptions {
   newTurn?: () => string;
-  // The open tokens of the tab state; their answers and acknowledgements are accepted although no relay waits for them.
+  // The open tokens of the tab state; their answers are accepted although no relay waits for them.
   restored?: OpenToken[];
   // Raises the delivered number of the session to count.
   delivered: (session: string, count: number) => void;
@@ -72,7 +63,7 @@ export interface AnswerChannelOptions {
   restoredAnswer: (token: OpenToken, text: string) => void;
   // Runs after each change of the open tokens.
   changed: () => void;
-  // Runs when a token closes, by its answer, its acknowledgement or its close.
+  // Runs when a token closes, by its answer or its close.
   closed?: (token: OpenToken) => void;
 }
 
@@ -93,50 +84,34 @@ export function createAnswerChannel(options: AnswerChannelOptions): AnswerChanne
     options.changed();
     for (const listener of [...settleListeners]) listener();
   };
-  const take = (params: unknown, kind: TokenKind): { entry: Entry; reply: Reply } => {
+  const take = (params: unknown): { entry: Entry; reply: Reply } => {
     const { turn, text, status } = (params ?? {}) as { turn?: unknown; text?: unknown; status?: unknown };
     if (typeof turn !== "string" || turn === "") throw new Error(`turn must be a non-empty string, got ${JSON.stringify(turn)}`);
-    if (kind === "answer" && (typeof text !== "string" || text.trim() === "")) {
-      throw new Error(`text must be a non-empty string, got ${JSON.stringify(text)}`);
-    }
-    if (kind === "answer" && !STATUSES.includes(status as string)) {
-      throw new Error(`status must be continue or settled, got ${JSON.stringify(status)}`);
-    }
+    if (typeof text !== "string" || text.trim() === "") throw new Error(`text must be a non-empty string, got ${JSON.stringify(text)}`);
+    if (!STATUSES.includes(status as string)) throw new Error(`status must be continue or settled, got ${JSON.stringify(status)}`);
     const entry = open.get(turn);
-    if (!entry) throw new Error(kind === "answer" ? `turn ${turn} is not an open turn of this room` : `turn ${turn} is not an open record line of this room`);
-    if (entry.kind !== kind) {
-      throw new Error(
-        entry.kind === "record"
-          ? `turn ${turn} is a record line: acknowledge it with ${RECORD_ACK_COMMAND}`
-          : `turn ${turn} is a turn: answer it with ${ANSWER_COMMAND}`,
-      );
-    }
-    return { entry, reply: kind === "answer" ? { text: text as string, status: status as AnswerStatus } : { text: "", status: null } };
+    if (!entry) throw new Error(`turn ${turn} is not an open turn of this room`);
+    return { entry, reply: { text, status: status as AnswerStatus } };
   };
   const settle = (entry: Entry, reply: Reply): void => {
     options.delivered(entry.session, entry.count);
     removed(entry.turn);
     if (entry.resolve) entry.resolve(reply);
-    else if (entry.kind === "answer") options.restoredAnswer(tokenOf(entry), reply.text);
+    else options.restoredAnswer(tokenOf(entry), reply.text);
   };
   return {
-    open(session, member, kind, count) {
+    open(session, member, count) {
       for (const entry of open.values()) if (entry.session === session) throw new Error(`session ${session} has an open turn`);
       const turn = newTurn();
       let resolve: (reply: Reply) => void = () => {};
       const answer = new Promise<Reply>((done) => (resolve = done));
-      open.set(turn, { turn, session, member, kind, count, resolve });
+      open.set(turn, { turn, session, member, count, resolve });
       options.changed();
       return { turn, answer, close: () => removed(turn) };
     },
     deliver(params) {
-      const { entry, reply } = take(params, "answer");
+      const { entry, reply } = take(params);
       settle(entry, reply);
-      return { turn: entry.turn };
-    },
-    ack(params) {
-      const { entry } = take(params, "record");
-      settle(entry, { text: "", status: null });
       return { turn: entry.turn };
     },
     tokens: () => [...open.values()].map(tokenOf),
@@ -145,7 +120,6 @@ export function createAnswerChannel(options: AnswerChannelOptions): AnswerChanne
       if (typeof turn !== "string" || turn === "") throw new Error(`turn must be a non-empty string, got ${JSON.stringify(turn)}`);
       const entry = open.get(turn);
       if (!entry) throw new Error(`turn ${turn} is not an open turn of this room`);
-      if (entry.kind !== "answer") throw new Error(`turn ${turn} is a record line: only the token of a turn reports, claims or releases`);
       return tokenOf(entry);
     },
     has: (session) => [...open.values()].some((entry) => entry.session === session),
@@ -161,7 +135,7 @@ export function createAnswerChannel(options: AnswerChannelOptions): AnswerChanne
       });
     },
     closeWaits() {
-      const closed = [...open.values()].filter((entry) => entry.kind === "record" || entry.resolve === null).map(tokenOf);
+      const closed = [...open.values()].filter((entry) => entry.resolve === null).map(tokenOf);
       for (const token of closed) removed(token.turn);
       return closed;
     },
@@ -169,5 +143,5 @@ export function createAnswerChannel(options: AnswerChannelOptions): AnswerChanne
 }
 
 function tokenOf(entry: Entry): OpenToken {
-  return { turn: entry.turn, session: entry.session, member: entry.member, kind: entry.kind, count: entry.count };
+  return { turn: entry.turn, session: entry.session, member: entry.member, count: entry.count };
 }

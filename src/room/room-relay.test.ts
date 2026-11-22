@@ -81,7 +81,10 @@ function fakeCore(
     },
   };
   ports.lines = createSubmitQueue(ports);
-  return { ports, submitted, submits, finish, status, bound, setState };
+  // The member runs the answer command with the status; its program state stays as it is (docs/spec/room.md#turn-end).
+  const answer = (session: string, status: "continue" | "settled", text = `answer of ${session}`) =>
+    answers.deliver({ status, turn: turns.get(session)!, text });
+  return { ports, submitted, submits, finish, status, bound, setState, answer };
 }
 
 // A conversation bound that never ends a relay early.
@@ -121,12 +124,26 @@ describe("relayInMode one member at a time", () => {
     expect(answers).toMatchObject([{ id: "reviewer", text: reply, status: "settled" }]);
   });
 
-  it("fails the turn of a member whose program reports idle without an answer, and the members after it receive nothing", async () => {
+  it("keeps the turn open when the program reports idle without an answer, and conversation.stop ends it (docs/spec/room.md#turn-end)", async () => {
+    const stops = new Set<() => void>();
+    let stopped = false;
     const core = fakeCore([IDLE("s-1"), IDLE("s-2")], { replies: { "s-1": null } });
-    await expect(relayInMode(core.ports, "turn", MEMBERS, "hi", roomRecord("hi"), OPEN)).rejects.toThrow(
-      "member reviewer: the member ended its turn without an answer: it ran no soksak-plugin-agents-clubhouse.answer",
-    );
+    const record = roomRecord("hi");
+    const relay = relayInMode(core.ports, "turn", MEMBERS, "hi", record, {
+      limit: 8,
+      stopped: () => stopped,
+      accepted: () => {},
+      stopping: (listener) => (stops.add(listener), () => void stops.delete(listener)),
+    });
+    await core.submits(1);
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(core.status.read().waiting).toEqual([{ member: "reviewer", session: "s-1", step: "answer", program: "idle" }]);
+    stopped = true;
+    for (const listener of [...stops]) listener();
+    expect(await relay).toEqual([]);
     expect(core.submitted.map((entry) => entry.session)).toEqual(["s-1"]);
+    expect(record.lines.at(-1)).toMatchObject({ speaker: "clubhouse", text: "the conversation ended: the owner stopped it" });
+    expect(core.status.read().waiting).toEqual([]);
   });
 
   it("closes the turn after the answer, so a later answer of the same session is refused", async () => {
@@ -135,21 +152,21 @@ describe("relayInMode one member at a time", () => {
     expect(() => core.ports.answers.deliver({ status: "settled", turn: "t-1", text: "again" })).toThrow("turn t-1 is not an open turn of this room");
   });
 
-  it("waits for a working member to become idle, shows the wait with the step turn, and then relays (docs/spec/room.md#modes)", async () => {
-    const core = fakeCore([{ session: "s-1", program: { state: "working" } }]);
+  it("waits for a blocked member to leave the block, shows the wait with the step turn, and then relays (docs/spec/room.md#turn-end)", async () => {
+    const core = fakeCore([{ session: "s-1", program: { state: "blocked" } }]);
     const relay = relayInMode(core.ports, "turn", [MEMBERS[0]], "hi", roomRecord("hi"), OPEN);
     await new Promise<void>((resolve) => setImmediate(resolve));
     expect(core.submitted).toEqual([]);
-    expect(core.status.read().waiting).toEqual([{ member: "reviewer", session: "s-1", step: "turn", program: "working" }]);
+    expect(core.status.read().waiting).toEqual([{ member: "reviewer", session: "s-1", step: "turn", program: "blocked" }]);
     core.setState("s-1", "idle");
     expect((await relay).map((answer) => answer.text)).toEqual(["answer of s-1"]);
     expect(core.status.read().waiting).toEqual([]);
   });
 
-  it("conversation.stop ends the wait for a working member and records the stop", async () => {
+  it("conversation.stop ends the wait for a blocked member and records the stop", async () => {
     const stops = new Set<() => void>();
     let stopped = false;
-    const core = fakeCore([{ session: "s-1", program: { state: "working" } }]);
+    const core = fakeCore([{ session: "s-1", program: { state: "blocked" } }]);
     const record = roomRecord("hi");
     const relay = relayInMode(core.ports, "turn", [MEMBERS[0]], "hi", record, {
       limit: 8,
@@ -199,7 +216,7 @@ describe("relayInMode waiting (docs/spec/room.md#conversation-status)", () => {
   });
 
   it("ends the wait of a failed turn", async () => {
-    const core = fakeCore([IDLE("s-1")], { replies: { "s-1": null } });
+    const core = fakeCore([IDLE("s-1")], { vanishOn: "s-1" });
     await expect(relayInMode(core.ports, "turn", [MEMBERS[0]], "hi", roomRecord("hi"), OPEN)).rejects.toThrow("member reviewer");
     expect(core.status.read().waiting).toEqual([]);
   });
@@ -210,8 +227,8 @@ describe("relayInMode (docs/spec/room.md#modes)", () => {
     const core = fakeCore([IDLE("s-1"), IDLE("s-2")]);
     const answers = await relayInMode(core.ports, "turn", MEMBERS, "hello", roomRecord("hello"), OPEN);
     expect(core.submitted).toEqual([
-      { session: "s-1", text: "[@owner] hello | [@clubhouse] answer through the room only: reply to the speakers, put a message to the owner in @owner:, write nothing in your terminal | [@clubhouse] turn t-1" },
-      { session: "s-2", text: "[@owner] hello | [@Claude] answer of s-1 | [@clubhouse] answer through the room only: reply to the speakers, put a message to the owner in @owner:, write nothing in your terminal | [@clubhouse] turn t-2" },
+      { session: "s-1", text: "[@clubhouse] 네 차례야. 아래는 네가 아직 못 본 기록이야. | [@owner] hello | [@clubhouse] answer through the room only: reply to the speakers, put a message to the owner in @owner:, write nothing in your terminal | [@clubhouse] turn t-1" },
+      { session: "s-2", text: "[@clubhouse] 네 차례야. 아래는 네가 아직 못 본 기록이야. | [@owner] hello | [@Claude] answer of s-1 | [@clubhouse] answer through the room only: reply to the speakers, put a message to the owner in @owner:, write nothing in your terminal | [@clubhouse] turn t-2" },
     ]);
     expect(answers.map((answer) => answer.id)).toEqual(["reviewer", "writer"]);
   });
@@ -220,21 +237,21 @@ describe("relayInMode (docs/spec/room.md#modes)", () => {
     const core = fakeCore([IDLE("s-1"), IDLE("s-2")]);
     await relayInMode(core.ports, "turn", MEMBERS, "@codex first, then @claude", roomRecord("@codex first, then @claude"), OPEN);
     expect(core.submitted).toEqual([
-      { session: "s-2", text: "[@owner] @codex first, then @claude | [@clubhouse] answer through the room only: reply to the speakers, put a message to the owner in @owner:, write nothing in your terminal | [@clubhouse] turn t-1" },
-      { session: "s-1", text: "[@owner] @codex first, then @claude | [@Codex] answer of s-2 | [@clubhouse] answer through the room only: reply to the speakers, put a message to the owner in @owner:, write nothing in your terminal | [@clubhouse] turn t-2" },
+      { session: "s-2", text: "[@clubhouse] 네 차례야. 아래는 네가 아직 못 본 기록이야. | [@owner] @codex first, then @claude | [@clubhouse] answer through the room only: reply to the speakers, put a message to the owner in @owner:, write nothing in your terminal | [@clubhouse] turn t-1" },
+      { session: "s-1", text: "[@clubhouse] 네 차례야. 아래는 네가 아직 못 본 기록이야. | [@owner] @codex first, then @claude | [@Codex] answer of s-2 | [@clubhouse] answer through the room only: reply to the speakers, put a message to the owner in @owner:, write nothing in your terminal | [@clubhouse] turn t-2" },
     ]);
   });
 
   it("turn: an earlier answer of several lines reaches the next member as one line", async () => {
     const core = fakeCore([IDLE("s-1"), IDLE("s-2")], { replies: { "s-1": "one\ntwo" } });
     await relayInMode(core.ports, "turn", MEMBERS, "hello", roomRecord("hello"), OPEN);
-    expect(core.submitted[1]).toEqual({ session: "s-2", text: "[@owner] hello | [@Claude] one two | [@clubhouse] answer through the room only: reply to the speakers, put a message to the owner in @owner:, write nothing in your terminal | [@clubhouse] turn t-2" });
+    expect(core.submitted[1]).toEqual({ session: "s-2", text: "[@clubhouse] 네 차례야. 아래는 네가 아직 못 본 기록이야. | [@owner] hello | [@Claude] one two | [@clubhouse] answer through the room only: reply to the speakers, put a message to the owner in @owner:, write nothing in your terminal | [@clubhouse] turn t-2" });
   });
 
   it("facil: relays to the first idle member in roster order only", async () => {
     const core = fakeCore([{ session: "s-1", program: { state: "working" } }, IDLE("s-2")]);
     const answers = await relayInMode(core.ports, "facil", MEMBERS, "who takes this", roomRecord("who takes this"), OPEN);
-    expect(core.submitted).toEqual([{ session: "s-2", text: "[@owner] who takes this | [@clubhouse] answer through the room only: reply to the speakers, put a message to the owner in @owner:, write nothing in your terminal | [@clubhouse] turn t-1" }]);
+    expect(core.submitted).toEqual([{ session: "s-2", text: "[@clubhouse] 네 차례야. 아래는 네가 아직 못 본 기록이야. | [@owner] who takes this | [@clubhouse] answer through the room only: reply to the speakers, put a message to the owner in @owner:, write nothing in your terminal | [@clubhouse] turn t-1" }]);
     expect(answers.map((answer) => answer.id)).toEqual(["writer"]);
   });
 
@@ -259,17 +276,17 @@ describe("relayInMode (docs/spec/room.md#modes)", () => {
     core.finish("s-1");
     const answers = await relay;
     expect(answers.map((answer) => answer.id)).toEqual(["reviewer", "writer"]);
-    expect(core.submitted.map((entry) => entry.text)).toEqual(["[@owner] all at once | [@clubhouse] answer through the room only: reply to the speakers, put a message to the owner in @owner:, write nothing in your terminal | [@clubhouse] turn t-1", "[@owner] all at once | [@clubhouse] answer through the room only: reply to the speakers, put a message to the owner in @owner:, write nothing in your terminal | [@clubhouse] turn t-2"]);
+    expect(core.submitted.map((entry) => entry.text)).toEqual(["[@clubhouse] 네 차례야. 아래는 네가 아직 못 본 기록이야. | [@owner] all at once | [@clubhouse] answer through the room only: reply to the speakers, put a message to the owner in @owner:, write nothing in your terminal | [@clubhouse] turn t-1", "[@clubhouse] 네 차례야. 아래는 네가 아직 못 본 기록이야. | [@owner] all at once | [@clubhouse] answer through the room only: reply to the speakers, put a message to the owner in @owner:, write nothing in your terminal | [@clubhouse] turn t-2"]);
   });
 
   it("simul: lets the other turns end and rejects with the first failure in member order", async () => {
-    const core = fakeCore([{ session: "s-1", program: { state: "blocked" } }, IDLE("s-2")]);
+    const core = fakeCore([IDLE("s-1"), IDLE("s-2")], { vanishOn: "s-1" });
     await expect(relayInMode(core.ports, "simul", MEMBERS, "hi", roomRecord("hi"), OPEN)).rejects.toThrow("member reviewer:");
-    expect(core.submitted.map((entry) => entry.session)).toEqual(["s-2"]);
+    expect(core.submitted.map((entry) => entry.session)).toEqual(["s-1", "s-2"]);
   });
 
-  it("simul: waits for a working member to become idle and then relays to it", async () => {
-    const core = fakeCore([{ session: "s-1", program: { state: "working" } }, IDLE("s-2")]);
+  it("simul: types into a working member at once and waits for a blocked member to leave the block", async () => {
+    const core = fakeCore([{ session: "s-1", program: { state: "blocked" } }, { session: "s-2", program: { state: "working" } }]);
     const relay = relayInMode(core.ports, "simul", MEMBERS, "hi", roomRecord("hi"), OPEN);
     await core.submits(1);
     expect(core.submitted.map((entry) => entry.session)).toEqual(["s-2"]);
@@ -285,9 +302,9 @@ describe("the room record across turns (docs/spec/room.md#room-record)", () => {
     await send(core, "turn", THREE, record, "introduce yourselves");
     await send(core, "turn", THREE, record, "what did the others say");
     expect(core.submitted.slice(3)).toEqual([
-      { session: "s-1", text: "[@Codex] answer of s-2 | [@Tester] answer of s-3 | [@clubhouse] the conversation settled | [@owner] what did the others say | [@clubhouse] answer through the room only: reply to the speakers, put a message to the owner in @owner:, write nothing in your terminal | [@clubhouse] turn t-4" },
-      { session: "s-2", text: "[@Tester] answer of s-3 | [@clubhouse] the conversation settled | [@owner] what did the others say | [@Claude] answer of s-1 | [@clubhouse] answer through the room only: reply to the speakers, put a message to the owner in @owner:, write nothing in your terminal | [@clubhouse] turn t-5" },
-      { session: "s-3", text: "[@clubhouse] the conversation settled | [@owner] what did the others say | [@Claude] answer of s-1 | [@Codex] answer of s-2 | [@clubhouse] answer through the room only: reply to the speakers, put a message to the owner in @owner:, write nothing in your terminal | [@clubhouse] turn t-6" },
+      { session: "s-1", text: "[@clubhouse] 네 차례야. 아래는 네가 아직 못 본 기록이야. | [@Codex] answer of s-2 | [@Tester] answer of s-3 | [@clubhouse] the conversation settled | [@owner] what did the others say | [@clubhouse] answer through the room only: reply to the speakers, put a message to the owner in @owner:, write nothing in your terminal | [@clubhouse] turn t-4" },
+      { session: "s-2", text: "[@clubhouse] 네 차례야. 아래는 네가 아직 못 본 기록이야. | [@Tester] answer of s-3 | [@clubhouse] the conversation settled | [@owner] what did the others say | [@Claude] answer of s-1 | [@clubhouse] answer through the room only: reply to the speakers, put a message to the owner in @owner:, write nothing in your terminal | [@clubhouse] turn t-5" },
+      { session: "s-3", text: "[@clubhouse] 네 차례야. 아래는 네가 아직 못 본 기록이야. | [@clubhouse] the conversation settled | [@owner] what did the others say | [@Claude] answer of s-1 | [@Codex] answer of s-2 | [@clubhouse] answer through the room only: reply to the speakers, put a message to the owner in @owner:, write nothing in your terminal | [@clubhouse] turn t-6" },
     ]);
     expect(record.delivered()).toEqual({ "s-1": 6, "s-2": 7, "s-3": 8 });
   });
@@ -298,8 +315,8 @@ describe("the room record across turns (docs/spec/room.md#room-record)", () => {
     await send(core, "simul", MEMBERS, record, "first");
     await send(core, "simul", MEMBERS, record, "second");
     expect(core.submitted.slice(2).map((entry) => entry.text)).toEqual([
-      "[@Codex] answer of s-2 | [@clubhouse] the conversation settled | [@owner] second | [@clubhouse] answer through the room only: reply to the speakers, put a message to the owner in @owner:, write nothing in your terminal | [@clubhouse] turn t-3",
-      "[@Claude] answer of s-1 | [@clubhouse] the conversation settled | [@owner] second | [@clubhouse] answer through the room only: reply to the speakers, put a message to the owner in @owner:, write nothing in your terminal | [@clubhouse] turn t-4",
+      "[@clubhouse] 네 차례야. 아래는 네가 아직 못 본 기록이야. | [@Codex] answer of s-2 | [@clubhouse] the conversation settled | [@owner] second | [@clubhouse] answer through the room only: reply to the speakers, put a message to the owner in @owner:, write nothing in your terminal | [@clubhouse] turn t-3",
+      "[@clubhouse] 네 차례야. 아래는 네가 아직 못 본 기록이야. | [@Claude] answer of s-1 | [@clubhouse] the conversation settled | [@owner] second | [@clubhouse] answer through the room only: reply to the speakers, put a message to the owner in @owner:, write nothing in your terminal | [@clubhouse] turn t-4",
     ]);
   });
 
@@ -308,7 +325,7 @@ describe("the room record across turns (docs/spec/room.md#room-record)", () => {
     const record = roomRecord();
     await send(core, "turn", THREE, record, "@Codex 정리해 줘. 나머지는 보태 줘.");
     expect(core.submitted.map((entry) => entry.session)).toEqual(["s-2", "s-1", "s-3"]);
-    expect(core.submitted[1].text).toBe("[@owner] @Codex 정리해 줘. 나머지는 보태 줘. | [@Codex] answer of s-2 | [@clubhouse] answer through the room only: reply to the speakers, put a message to the owner in @owner:, write nothing in your terminal | [@clubhouse] turn t-2");
+    expect(core.submitted[1].text).toBe("[@clubhouse] 네 차례야. 아래는 네가 아직 못 본 기록이야. | [@owner] @Codex 정리해 줘. 나머지는 보태 줘. | [@Codex] answer of s-2 | [@clubhouse] answer through the room only: reply to the speakers, put a message to the owner in @owner:, write nothing in your terminal | [@clubhouse] turn t-2");
   });
 
   it("a send whose submit core refused leaves no owner line, so repeated refused sends leave none", async () => {
@@ -323,18 +340,18 @@ describe("the room record across turns (docs/spec/room.md#room-record)", () => {
   });
 
   it("a send whose submit core accepted keeps the owner line and appends the failure line, and the delivered number stays without an answer", async () => {
-    const core = fakeCore([IDLE("s-1")], { replies: { "s-1": null } });
+    const core = fakeCore([IDLE("s-1")], { vanishOn: "s-1" });
     const record = roomRecord();
-    await expect(send(core, "turn", [MEMBERS[0]], record, "hello")).rejects.toThrow("member reviewer: the member ended its turn");
+    await expect(send(core, "turn", [MEMBERS[0]], record, "hello")).rejects.toThrow("member reviewer: session s-1 is not open");
     expect(record.lines).toMatchObject([
       { speaker: "owner", text: "hello" },
-      { speaker: "clubhouse", text: "the relay failed: member reviewer: the member ended its turn without an answer: it ran no soksak-plugin-agents-clubhouse.answer" },
+      { speaker: "clubhouse", text: "the relay failed: member reviewer: session s-1 is not open" },
     ]);
     expect(record.delivered()).toEqual({});
   });
 
   it("a send that fails after an answer keeps the owner line, the answers that arrived and the failure line", async () => {
-    const core = fakeCore([IDLE("s-1"), IDLE("s-2")], { replies: { "s-2": null } });
+    const core = fakeCore([IDLE("s-1"), IDLE("s-2")], { vanishOn: "s-2" });
     const record = roomRecord();
     await expect(send(core, "turn", MEMBERS, record, "hello")).rejects.toThrow("member writer");
     expect(record.lines.map((line) => line.speaker)).toEqual(["owner", "reviewer", "clubhouse"]);
@@ -355,10 +372,10 @@ describe("the conversation of the members (docs/spec/room.md#conversation)", () 
       { id: "reviewer", text: "agreed", status: "settled" },
     ]);
     expect(core.submitted.map((entry) => entry.text)).toEqual([
-      "[@owner] @claude start | [@clubhouse] answer through the room only: reply to the speakers, put a message to the owner in @owner:, write nothing in your terminal | [@clubhouse] turn t-1",
-      "[@owner] @claude start | [@Claude] @Codex and @tester, your view? | [@clubhouse] answer through the room only: reply to the speakers, put a message to the owner in @owner:, write nothing in your terminal | [@clubhouse] turn t-2",
-      "[@owner] @claude start | [@Claude] @Codex and @tester, your view? | [@Codex] @Claude I disagree | [@clubhouse] answer through the room only: reply to the speakers, put a message to the owner in @owner:, write nothing in your terminal | [@clubhouse] turn t-3",
-      "[@Codex] @Claude I disagree | [@Tester] fine | [@clubhouse] answer through the room only: reply to the speakers, put a message to the owner in @owner:, write nothing in your terminal | [@clubhouse] turn t-4",
+      "[@clubhouse] 네 차례야. 아래는 네가 아직 못 본 기록이야. | [@owner] @claude start | [@clubhouse] answer through the room only: reply to the speakers, put a message to the owner in @owner:, write nothing in your terminal | [@clubhouse] turn t-1",
+      "[@clubhouse] 네 차례야. 아래는 네가 아직 못 본 기록이야. | [@owner] @claude start | [@Claude] @Codex and @tester, your view? | [@clubhouse] answer through the room only: reply to the speakers, put a message to the owner in @owner:, write nothing in your terminal | [@clubhouse] turn t-2",
+      "[@clubhouse] 네 차례야. 아래는 네가 아직 못 본 기록이야. | [@owner] @claude start | [@Claude] @Codex and @tester, your view? | [@Codex] @Claude I disagree | [@clubhouse] answer through the room only: reply to the speakers, put a message to the owner in @owner:, write nothing in your terminal | [@clubhouse] turn t-3",
+      "[@clubhouse] 네 차례야. 아래는 네가 아직 못 본 기록이야. | [@Codex] @Claude I disagree | [@Tester] fine | [@clubhouse] answer through the room only: reply to the speakers, put a message to the owner in @owner:, write nothing in your terminal | [@clubhouse] turn t-4",
     ]);
   });
 
@@ -435,14 +452,14 @@ describe("roles in the turn lines (docs/spec/room.md#roles)", () => {
     const core = fakeCore([IDLE("s-1"), IDLE("s-2"), IDLE("s-3")]);
     const roles = THREE.map((member, index) => ({ ...member, role: ["frontend", "server", "server"][index] }));
     await send(core, "turn", roles, roomRecord(), "build it");
-    expect(core.submitted[0].text).toBe("[@owner] build it | [@clubhouse] roles: you are frontend; Codex: server, Tester: server | [@clubhouse] answer through the room only: reply to the speakers, put a message to the owner in @owner:, write nothing in your terminal | [@clubhouse] turn t-1");
+    expect(core.submitted[0].text).toBe("[@clubhouse] 네 차례야. 아래는 네가 아직 못 본 기록이야. | [@owner] build it | [@clubhouse] roles: you are frontend; Codex: server, Tester: server | [@clubhouse] answer through the room only: reply to the speakers, put a message to the owner in @owner:, write nothing in your terminal | [@clubhouse] turn t-1");
     expect(core.submitted[1].text).toContain("[@clubhouse] roles: you are server; Claude: frontend, Tester: server | [@clubhouse] answer through the room only: reply to the speakers, put a message to the owner in @owner:, write nothing in your terminal | [@clubhouse] turn t-2");
   });
 
   it("states no roles when no member has one", async () => {
     const core = fakeCore([IDLE("s-1")]);
     await send(core, "turn", [MEMBERS[0]], roomRecord(), "hi");
-    expect(core.submitted[0].text).toBe("[@owner] hi | [@clubhouse] answer through the room only: reply to the speakers, put a message to the owner in @owner:, write nothing in your terminal | [@clubhouse] turn t-1");
+    expect(core.submitted[0].text).toBe("[@clubhouse] 네 차례야. 아래는 네가 아직 못 본 기록이야. | [@owner] hi | [@clubhouse] answer through the room only: reply to the speakers, put a message to the owner in @owner:, write nothing in your terminal | [@clubhouse] turn t-1");
   });
 });
 
@@ -514,6 +531,111 @@ describe("a turn without new lines (docs/spec/room.md#room-record)", () => {
     expect(core.submitted[0].text).toBe(`[@clubhouse] ${EMPTY_TURN_TEXT} | [@clubhouse] ${TURN_RULE} | [@clubhouse] turn t-1`);
     for (const entry of core.submitted) expect(entry.text).not.toContain("build it");
     expect(record.lines.at(-1)).toMatchObject({ speaker: "clubhouse", text: "the conversation settled" });
+  });
+});
+
+// The turn lines of a conversation (docs/spec/room.md#conversation-first): the record reaches a member only in the line of its turn, a
+// turn ends on its answer (docs/spec/room.md#turn-end), and no line is lost before the conversation settles.
+describe("conversation first", () => {
+  const WORKING = (session: string): FakeSession => ({ session, program: { state: "working" } });
+  const tokenLine = /\| \[@clubhouse\] turn \S+$/;
+
+  for (const mode of ["turn", "simul"] as const) {
+    it(`submits only turn lines in ${mode}, each starting with the turn preface`, async () => {
+      const core = fakeCore([IDLE("s-1"), IDLE("s-2")], { script: { "s-1": ["first of s-1"], "s-2": ["first of s-2"] } });
+      const record = roomRecord("build it");
+      core.bound.record = record;
+      await relayInMode(core.ports, mode, MEMBERS, "build it", record, OPEN);
+      expect(core.submitted.length).toBeGreaterThan(0);
+      for (const entry of core.submitted) {
+        expect(entry.text).toMatch(tokenLine);
+        expect(entry.text.startsWith("[@clubhouse] 네 차례야.")).toBe(true);
+      }
+    });
+  }
+
+  it("ends a turn on its answer while the session stays working, and types the next turn line into the working session", async () => {
+    const core = fakeCore([IDLE("s-1"), IDLE("s-2")], { manual: true });
+    const record = roomRecord("build it");
+    core.bound.record = record;
+    const relay = relayInMode(core.ports, "turn", MEMBERS, "build it", record, OPEN);
+    await core.submits(1);
+    core.answer("s-1", "continue");
+    await core.submits(2);
+    expect(core.submitted[1].session).toBe("s-2");
+    core.answer("s-2", "settled");
+    // The round of the continuing member types into s-1, whose program still reports working.
+    await core.submits(3);
+    expect(core.submitted[2].session).toBe("s-1");
+    core.answer("s-1", "settled");
+    // The round gives every member a turn.
+    await core.submits(4);
+    core.answer("s-2", "settled");
+    await relay;
+    expect(record.lines.at(-1)).toMatchObject({ speaker: "clubhouse", text: "the conversation settled" });
+  });
+
+  it("types no line into a blocked session until core.sessions shows it not blocked", async () => {
+    const core = fakeCore([IDLE("s-1"), { session: "s-2", program: { state: "blocked" } }], { manual: true });
+    const record = roomRecord("build it");
+    core.bound.record = record;
+    const relay = relayInMode(core.ports, "turn", MEMBERS, "build it", record, OPEN);
+    await core.submits(1);
+    core.answer("s-1", "settled");
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(core.submitted.map((entry) => entry.session)).toEqual(["s-1"]);
+    expect(core.status.read().waiting).toMatchObject([{ member: "writer", step: "turn" }]);
+    core.setState("s-2", "working");
+    await core.submits(2);
+    expect(core.submitted[1].session).toBe("s-2");
+    core.answer("s-2", "settled");
+    await relay;
+  });
+
+  it("gives a member with an unreceived report one more turn before the conversation settles", async () => {
+    const core = fakeCore([IDLE("s-1"), IDLE("s-2")], { manual: true });
+    const record = roomRecord("build it");
+    core.bound.record = record;
+    const relay = relayInMode(core.ports, "turn", MEMBERS, "build it", record, OPEN);
+    await core.submits(1);
+    core.answer("s-1", "settled");
+    await core.submits(2);
+    record.append("writer", "(report) changed src/api.ts");
+    core.answer("s-2", "settled");
+    await core.submits(3);
+    expect(core.submitted[2].session).toBe("s-1");
+    expect(core.submitted[2].text).toContain("[@Codex] (report) changed src/api.ts");
+    core.answer("s-1", "settled");
+    await relay;
+    // The settled answer of s-1 in its extra turn takes no turn of s-2; it reaches s-2 in its next turn.
+    expect(core.submitted).toHaveLength(3);
+    expect(record.lines.at(-1)).toMatchObject({ speaker: "clubhouse", text: "the conversation settled" });
+  });
+
+  it("delivers each record line once to each member over a whole conversation", async () => {
+    const core = fakeCore([WORKING("s-1"), IDLE("s-2")], { manual: true });
+    const record = roomRecord("build it");
+    core.bound.record = record;
+    const relay = relayInMode(core.ports, "turn", MEMBERS, "build it", record, OPEN);
+    await core.submits(1);
+    core.answer("s-1", "continue", "plan of s-1");
+    await core.submits(2);
+    record.append("writer", "(report) step of s-2");
+    core.answer("s-2", "continue", "plan of s-2");
+    await core.submits(3);
+    core.answer("s-1", "settled", "done of s-1");
+    await core.submits(4);
+    core.answer("s-2", "settled", "done of s-2");
+    await relay;
+    for (const member of MEMBERS) {
+      const received = core.submitted.filter((entry) => entry.session === member.session).map((entry) => entry.text).join(" | ");
+      for (const line of record.lines) {
+        if (line.speaker === member.id) continue;
+        expect(received.split(line.text).length - 1, `${member.id}: ${line.text}`).toBeLessThanOrEqual(1);
+      }
+    }
+    const firstOfS1 = core.submitted.filter((entry) => entry.session === "s-1").map((entry) => entry.text).join(" | ");
+    for (const text of ["build it", "plan of s-2", "(report) step of s-2"]) expect(firstOfS1).toContain(text);
   });
 });
 
