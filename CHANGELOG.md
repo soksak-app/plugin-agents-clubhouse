@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- C83: The protocol line tells a member to run `sok skill print` once first and to check a web page or a local server in a soksak browser tab first, and states the preface of an owner instruction (`docs/spec/room.md#soksak-knowledge`).
 - C82: `message.send` during a relay appends the owner line to the running conversation: a working member receives it injected as an owner instruction, an idle member in its next turn, and a member that answered before it takes one more turn (`docs/spec/room.md#owner-follow-up`).
 - C81: The isolation entry of claude adds `--settings '{"env":{"CLAUDE_CODE_SHELL":"/bin/bash"}}'`, so the Bash tool of a member sources no `~/.zshrc` of the person and takes none of its aliases (`docs/spec/room.md#isolation`).
 - C80: The protocol states that each room command runs alone in the foreground, never chained with `;`, `&&` or `|`, and that a room command that times out or goes to the background is reported with `report` (`docs/spec/room.md#room-protocol`).

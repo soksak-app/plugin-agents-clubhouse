@@ -2,6 +2,7 @@
 
 ## 미출시
 
+- C83: Protocol 줄은 member에게 먼저 `sok skill print`를 한 번 실행하고 web page나 local server를 먼저 soksak browser tab에서 확인하라고 하며, owner 지시의 preface를 밝힌다(`docs/spec/room.md#soksak-knowledge`).
 - C82: Relay 중 `message.send`는 owner 줄을 진행 중인 대화에 더한다. Working member는 owner 지시로 inject 받고, idle member는 다음 turn에 받으며, 그 전에 답한 member는 turn을 한 번 더 받는다(`docs/spec/room.md#owner-follow-up`).
 - C81: Claude의 isolation 항목에 `--settings '{"env":{"CLAUDE_CODE_SHELL":"/bin/bash"}}'`를 더하므로 member의 Bash tool은 사람의 `~/.zshrc`를 source하지 않고 그 alias를 받지 않는다(`docs/spec/room.md#isolation`).
 - C80: Protocol은 각 room 명령을 `;`, `&&`, `|`로 잇지 않고 foreground에서 단독으로 실행하고, 시간 초과로 끝나거나 background로 넘어간 room 명령은 `report`로 알린다고 말한다(`docs/spec/room.md#room-protocol`).

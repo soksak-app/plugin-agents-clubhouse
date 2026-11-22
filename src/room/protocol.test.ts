@@ -172,9 +172,10 @@ describe("nothing said outside the room", () => {
     expect(line).toContain("Put a message to the owner in your answer as a section @owner:.");
     expect(line).toContain("Do not narrate what you are about to do, and do not confirm that you sent the answer.");
     expect(line).toContain("Respond to what the speakers said");
-    // The bound holds the line near its size after the rules of subagents, the terminal and per-turn claims (docs/spec/room.md#room-protocol)
-    // were added; the earlier bound of 2400 characters held only the rules before them.
-    expect(line.length).toBeLessThan(3000);
+    // The bound holds the line near its size after the rules of the soksak skill, the browser tab and the owner instruction were added
+    // (docs/spec/room.md#soksak-knowledge); the earlier bound of 3000 characters held only the rules before them, and the line is the only
+    // carrier of these rules because no launch argument carries the skill.
+    expect(line.length).toBeLessThan(3500);
   });
 });
 
@@ -195,3 +196,21 @@ describe("the room commands run alone (docs/spec/room.md#room-protocol)", () => 
     expect(line).toContain("When a room command times out or goes to the background, report it with report and never say that it was sent.");
   });
 });
+
+// The soksak knowledge of a member (docs/spec/room.md#soksak-knowledge): the isolation removes the personal settings of the person,
+// and with them the user-scope soksak skill, so the protocol line gives the member the skill and the rule of the browser tab.
+describe("soksak knowledge", () => {
+  it("the protocol line tells the member to read the soksak skill and to check web pages in a soksak browser tab", () => {
+    for (const mcp of [true, false]) {
+      const line = roomProtocolLine("Claude", ["Codex"], "room-1", "", mcp);
+      expect(line).toContain("First run sok skill print once and follow it: it is the skill of soksak, which runs this room.");
+      expect(line).toContain("Check a web page or local server in a soksak browser tab first (core.layout.open with plugin browser, then browser.navigate {url});");
+      expect(line).toContain("use another browser only when no browser plugin is installed, and report which case applied.");
+      expect(line.length).toBeLessThan(3500);
+    }
+  });
+  it("the protocol line tells how to read an injected owner instruction", () => {
+    expect(roomProtocolLine("Claude", ["Codex"], "room-1")).toContain("A line starting 방장의 새 지시야. is an owner instruction: apply it and answer it in your next answer.");
+  });
+});
+
