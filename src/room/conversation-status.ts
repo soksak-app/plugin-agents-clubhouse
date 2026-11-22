@@ -1,5 +1,6 @@
 // The conversation status of the room (docs/spec/room.md#conversation-status): the entries {speaker, text} of the room record that
-// the page shows, and each member whose turn the room waits for, with its step and the program state of its session in core.sessions.
+// the page shows, each member whose turn the room waits for, with its step and the program state of its session in core.sessions, and
+// the delivered number of each session of the closing delivery beside the length of the record.
 // The room calls changed after each change of the record and at each value of core.sessions; a wait publishes when it begins and
 // when it ends. Each subscriber receives the new value, so the status follows these events without a timer.
 import { sessionProgram } from "./session-channel";
@@ -11,8 +12,8 @@ export interface ConversationEntry {
 }
 
 // `protocol` from the start of the protocol turn, which waits for the first idle, to its end; `answer` from the submit of a relayed
-// line to its answer or its failure.
-export type WaitingStep = "protocol" | "answer";
+// line to its answer or its failure; `record` from the submit of a record line to its acknowledgement or the stop of its wait.
+export type WaitingStep = "protocol" | "answer" | "record";
 
 export interface WaitingMember {
   member: string;
@@ -22,9 +23,21 @@ export interface WaitingMember {
   program: "idle" | "working" | "blocked" | "ended" | null;
 }
 
+// A session of the closing delivery (docs/spec/room.md#closing-delivery); delivered below length outside a relay and a wait is a line
+// that the session has not received.
+export interface DeliveryEntry {
+  member: string;
+  session: string;
+  delivered: number;
+  length: number;
+  // Whether the room waits for the next idle of the session to deliver its lines.
+  pending: boolean;
+}
+
 export interface ConversationValue {
   entries: ConversationEntry[];
   waiting: WaitingMember[];
+  delivery: DeliveryEntry[];
 }
 
 // Begins a wait for the member and returns the function that ends it; ending it again changes nothing.
@@ -42,8 +55,12 @@ function programOf(sessions: { session?: unknown }[], session: string): WaitingM
   return sessionProgram(sessions, session);
 }
 
-// `sessions` gives the current value of core.sessions.
-export function createConversationStatus(lines: readonly ConversationEntry[], sessions: () => unknown): ConversationStatus {
+// `sessions` gives the current value of core.sessions, and `delivery` the entries of the closing delivery.
+export function createConversationStatus(
+  lines: readonly ConversationEntry[],
+  sessions: () => unknown,
+  delivery: () => DeliveryEntry[],
+): ConversationStatus {
   const listeners = new Set<(value: ConversationValue) => void>();
   const waits = new Set<{ member: string; session: string; step: WaitingStep }>();
   const read = (): ConversationValue => {
@@ -52,6 +69,7 @@ export function createConversationStatus(lines: readonly ConversationEntry[], se
     return {
       entries: lines.map((line) => ({ speaker: line.speaker, text: line.text })),
       waiting: [...waits].map((wait) => ({ ...wait, program: programOf(value as { session?: unknown }[], wait.session) })),
+      delivery: delivery().map((entry) => ({ ...entry })),
     };
   };
   const changed = (): void => {

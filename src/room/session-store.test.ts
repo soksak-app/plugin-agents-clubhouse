@@ -20,11 +20,11 @@ const session = { agentId: "claude", sessionId: "s-1", cwd: "/work/app", savedAt
 
 describe("createMemberSessionStore — errors reach the caller", () => {
   it("a missing document reads as null", async () => {
-    const s = createMemberSessionStore(fakeData())!;
+    const s = createMemberSessionStore(fakeData(), "room-1");
     await expect(s.get("claude")).resolves.toBeNull();
   });
   it("a write then a read returns the stored session", async () => {
-    const s = createMemberSessionStore(fakeData())!;
+    const s = createMemberSessionStore(fakeData(), "room-1");
     await s.put(session);
     await expect(s.get("claude")).resolves.toEqual(session);
   });
@@ -33,7 +33,7 @@ describe("createMemberSessionStore — errors reach the caller", () => {
     data.get = async () => {
       throw new Error("project data unreadable");
     };
-    const s = createMemberSessionStore(data)!;
+    const s = createMemberSessionStore(data, "room-1");
     await expect(s.get("claude")).rejects.toThrow("project data unreadable");
   });
   it("a failed data write rejects", async () => {
@@ -41,7 +41,7 @@ describe("createMemberSessionStore — errors reach the caller", () => {
     data.put = async () => {
       throw new Error("project data full");
     };
-    const s = createMemberSessionStore(data)!;
+    const s = createMemberSessionStore(data, "room-1");
     await expect(s.put(session)).rejects.toThrow("project data full");
   });
   it("a failed define rejects, and the next call defines again", async () => {
@@ -51,9 +51,26 @@ describe("createMemberSessionStore — errors reach the caller", () => {
       defined.push(coll);
       if (defined.length === 1) throw new Error("define refused");
     };
-    const s = createMemberSessionStore(data)!;
+    const s = createMemberSessionStore(data, "room-1");
     await expect(s.get("claude")).rejects.toThrow("define refused");
     await expect(s.get("claude")).resolves.toBeNull();
     expect(defined).toEqual([MEMBER_SESSIONS, MEMBER_SESSIONS]);
+  });
+});
+
+describe("createMemberSessionStore — the document form (docs/spec/room.md#restart)", () => {
+  it("stores the relation as <room surface>/<agentId> with the surface", async () => {
+    const data = fakeData();
+    await createMemberSessionStore(data, "room-1").put(session);
+    expect([...data.docs.entries()]).toEqual([["room-1/claude", { surface: "room-1", ...session }]]);
+    await expect(createMemberSessionStore(data, "room-2").get("claude")).resolves.toBeNull();
+  });
+
+  it("refuses a document of another form with the document and the field", async () => {
+    const data = fakeData();
+    data.docs.set("room-1/claude", { id: "room-1/claude", agentId: "claude", sessionId: "s-1", cwd: "/work/app", savedAt: 1 });
+    await expect(createMemberSessionStore(data, "room-1").get("claude")).rejects.toThrow(
+      'room_member_sessions room-1/claude: surface must be room-1, got undefined',
+    );
   });
 });

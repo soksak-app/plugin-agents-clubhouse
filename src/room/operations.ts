@@ -21,6 +21,8 @@ export interface OperationDeps {
   busy: (value: boolean) => void;
   // Relays the text; `stopped` tells whether the owner stopped the conversation of this relay (docs/spec/room.md#conversation).
   relay: (text: string, stopped: () => boolean) => Promise<{ id: string; text: string }[]>;
+  // Ends the record waits of the closing delivery and returns their number (docs/spec/room.md#closing-delivery).
+  stopWaits: () => number;
   // Shows a refusal or a failed relay of message.send through the error display of the window (docs/spec/room.md#commands).
   failed: (reason: string) => void;
 }
@@ -79,10 +81,11 @@ export function createRoomOperations(deps: OperationDeps): Record<string, (param
       }
       return { mode };
     },
-    // conversation.stop ends the relay after the turns that have started; a second call changes nothing.
+    // conversation.stop ends the relay after the turns that have started and ends the record waits; a second call changes nothing.
     [`${P}.conversation.stop`]: async () => {
-      if (!relaying) throw new Error("the room is relaying no message");
-      stopped = true;
+      const waits = deps.stopWaits();
+      if (!relaying && waits === 0) throw new Error("the room is relaying no message");
+      if (relaying) stopped = true;
       return { stopped: true };
     },
     // message.send reports each refusal and failure itself, so a command call that no element started shows it in the room too.

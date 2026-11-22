@@ -17,7 +17,7 @@ function fakeCore(initial: Record<string, State | null>) {
     for (const listener of [...listeners]) listener(value());
   };
   // The conversation status of the room is the tracker of the awaited members (docs/spec/room.md#conversation-status).
-  const status = createConversationStatus([], value);
+  const status = createConversationStatus([], value, () => []);
   const ports: Omit<RelayPorts, "answers"> = {
     waiting: status.waiting,
     commands: {
@@ -60,6 +60,13 @@ describe("roomProtocolLine", () => {
     expect(roomProtocolLine("Claude", [], "room-1")).toContain(
       "A mention @<name> of another member in your answer passes the next turn of the room to that member, so mention a member only when you want it to answer.",
     );
+  });
+
+  it("states that a record line takes no answer and its acknowledgement command in the MCP and shell forms (docs/spec/room.md#closing-delivery)", () => {
+    const line = roomProtocolLine("Claude", ["Codex"], "room-1");
+    expect(line).toContain("A room line that ends with [@clubhouse] record <token> takes no answer");
+    expect(line).toContain('command_run with name soksak-plugin-agents-clubhouse.record.ack, surface room-1 and params {"turn": "<token>"}');
+    expect(line).toContain("sok soksak-plugin-agents-clubhouse.record.ack --surface room-1 --turn <token>");
   });
 
   it("states the answer command with the room surface, the turn token, the MCP form and the shell form (docs/spec/room.md#answer)", () => {

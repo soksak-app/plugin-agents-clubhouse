@@ -43,12 +43,41 @@ function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+// Resolves when the session has no open line: a session with an open token waits for its answer or acknowledgement and then for a
+// program state that is not working, so the next line never lands in a turn of the program (docs/spec/room.md#room-record). A session
+// without an open token resolves at once, and the relay refuses its program state as before.
+async function lineFree(ports: RelayPorts, session: string): Promise<void> {
+  if (!ports.answers.has(session)) return;
+  await ports.answers.settled(session);
+  await new Promise<void>((resolve) => {
+    let stop: (() => void) | null = null;
+    let done = false;
+    const check = (value: unknown): void => {
+      if (done) return;
+      let state: string | null;
+      try {
+        state = sessionProgram(value, session);
+      } catch {
+        // A session that core.sessions no longer lists, or a value that the relay cannot read, ends the wait; the relay reports it.
+        state = "unreadable";
+      }
+      if (state === "working") return;
+      done = true;
+      stop?.();
+      resolve();
+    };
+    check(ports.sessions());
+    if (!done) stop = ports.watchSessions(check);
+  });
+}
+
 // Sends one member the record lines that it has not received, followed by the token of its turn, and resolves with the text of its
-// answer command (docs/spec/room.md#room-record). An accepted submit sets the delivered number of the session. A refusal, a turn that is
-// blocked, a session that leaves core.sessions, or a program that reports idle without an answer rejects with the member identifier and
-// the reason. The member runs the answer command during its turn, and core answers that command after the handler of the room ran, so
-// the answer arrives before the program reports idle.
-async function relayToMember(ports: RelayPorts, member: RelayMember, record: RoomRecord): Promise<MemberAnswer> {
+// answer command (docs/spec/room.md#room-record). The answer raises the delivered number of the session; `accepted` runs after core
+// accepted the submit. A refusal, a turn that is blocked, a session that leaves core.sessions, or a program that reports idle without an
+// answer rejects with the member identifier and the reason. The member runs the answer command during its turn, and core answers that
+// command after the handler of the room ran, so the answer arrives before the program reports idle.
+async function relayToMember(ports: RelayPorts, member: RelayMember, record: RoomRecord, accepted: () => void): Promise<MemberAnswer> {
+  await lineFree(ports, member.session);
   const pending = record.pending(member.session, member.id);
   if (pending === null) throw new Error(`member ${member.id}: the room record holds no line that the member has not received`);
   const controller = new AbortController();
@@ -58,7 +87,7 @@ async function relayToMember(ports: RelayPorts, member: RelayMember, record: Roo
   const port: SessionRelayPort = {
     submit: async (line) => {
       await submit(line);
-      record.markDelivered(member.session, pending.count);
+      accepted();
     },
     program: () => sessionProgram(ports.sessions(), member.session),
     watch: (listener) => ports.watchSessions((value) => {
@@ -72,7 +101,7 @@ async function relayToMember(ports: RelayPorts, member: RelayMember, record: Roo
   };
   let turn;
   try {
-    turn = ports.answers.open(member.session);
+    turn = ports.answers.open(member.session, member.id, "answer", pending.count);
   } catch (error) {
     throw new Error(`member ${member.id}: ${messageOf(error)}`);
   }
@@ -95,10 +124,12 @@ async function relayToMember(ports: RelayPorts, member: RelayMember, record: Roo
 }
 
 // The bound of the conversation of one message (docs/spec/room.md#conversation): the largest number of turns that answers start, and
-// whether the owner stopped the conversation.
+// whether the owner stopped the conversation. `accepted` runs after each submit of the relay that core accepted
+// (docs/spec/room.md#room-record).
 export interface ConversationBound {
   limit: number;
   stopped(): boolean;
+  accepted(): void;
 }
 
 const LIMIT_MAX = 64;
@@ -149,7 +180,7 @@ async function runTurns(
     }
     const turn = queue.shift()!;
     if (turn.byAnswer) started += 1;
-    const answer = await relayToMember(ports, turn.member, record);
+    const answer = await relayToMember(ports, turn.member, record, bound.accepted);
     record.append(turn.member.id, answer.text);
     answers.push(answer);
     queueMentions(queue, answer.text, turn.member, members);
@@ -175,7 +206,7 @@ export async function relayInMode(
   const mentioned = mentionedMembers(message, members);
   if (mode === "simul") {
     const targets = mentioned.length > 0 ? mentioned : members;
-    const results = await Promise.allSettled(targets.map((member) => relayToMember(ports, member, record)));
+    const results = await Promise.allSettled(targets.map((member) => relayToMember(ports, member, record, bound.accepted)));
     // The answers that arrived are record lines in member order, also when another turn failed.
     for (const [index, result] of results.entries()) if (result.status === "fulfilled") record.append(targets[index].id, result.value.text);
     const failed = results.find((result): result is PromiseRejectedResult => result.status === "rejected");

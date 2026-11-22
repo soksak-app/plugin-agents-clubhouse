@@ -6,7 +6,7 @@ import { summonAndArrange, serialRunner } from "./trigger";
 import { createArrangementStatus } from "./arrangement";
 import { createMemberSessionStore } from "./session-store";
 import type { RoomDataApi } from "./session-store";
-import type { MemberDefinition } from "./summon";
+import { createOpenedSessions, type MemberDefinition } from "./summon";
 
 const SIZE = { width: 480, height: 320, scale: 2 };
 
@@ -55,11 +55,12 @@ function deps(room: ReturnType<typeof fakeRoom>["room"]) {
   return {
     summon: {
       room,
-      sessions: createMemberSessionStore(fakeData())!,
+      sessions: createMemberSessionStore(fakeData(), "room-1"),
       now: () => 1,
       openSessions: async () => [],
+      opened: createOpenedSessions(),
     },
-    arrange: { commands: room.commands, report: room.report },
+    arrange: { commands: room.commands, report: room.report, shownBy: () => null },
     status: createArrangementStatus(),
     size: async () => SIZE,
     ended: () => false,

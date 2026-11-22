@@ -37,6 +37,13 @@ export interface ArrangementStatus {
 export interface ArrangementPort {
   commands: { execute(name: string, params: Record<string, unknown>): Promise<any> };
   report(where: string, text: string): void;
+  // The tab that shows the session in core.sessions (`shownBy`), or null when no tab shows it.
+  shownBy(session: string): string | null;
+}
+
+// The tabs of a plan that reuse an existing tab, by the session of their params.
+function plannedTabs(plan: any): { tab?: unknown; params?: { session?: unknown } | null }[] {
+  return (plan?.cards ?? []).flatMap((card: any) => card?.tabs ?? []);
 }
 
 // A group whose tree is a row of the room card and a column of the member cards. A single member takes the row beside the room card.
@@ -68,13 +75,26 @@ export async function arrangeMembers(
 ): Promise<ArrangementState> {
   const tree = arrangementTree(members);
   try {
-    const plan = await port.commands.execute("core.layout.plan", { tree });
+    let plan = await port.commands.execute("core.layout.plan", { tree });
+    // A tab that shows a member session but that no entry of the plan reuses holds other params, such as an earlier form of the entry;
+    // core would open a new tab whose view cannot attach to the session that the old tab shows, so the room closes the old tab first
+    // and plans again (docs/spec/room.md#arrangement). The session stays open.
+    const reused = new Set(plannedTabs(plan).map((entry) => entry.tab).filter((tab): tab is string => typeof tab === "string"));
+    let replaced = false;
+    for (const member of members) {
+      const showing = port.shownBy(member.session);
+      // Only a plan with cards names the tabs that it reuses; a plan that is not feasible lists none and closes nothing.
+      if (Array.isArray(plan?.cards) && showing !== null && !reused.has(showing)) {
+        await port.commands.execute("core.layout.close", { tab: showing });
+        replaced = true;
+      }
+    }
+    if (replaced) plan = await port.commands.execute("core.layout.plan", { tree });
     if (plan.feasible === true) {
       await port.commands.execute("core.layout.apply", { tree });
       // The apply reuses each tab whose plugin and params an entry of the tree names; a tab of an ended member session of this room
       // names no entry and stays as an inactive tab, so the room closes it. Tabs of the person are kept.
-      const planned: { tab?: unknown; params?: { session?: unknown } | null }[] = (plan.cards ?? []).flatMap((card: any) => card?.tabs ?? []);
-      for (const entry of planned) {
+      for (const entry of plannedTabs(plan)) {
         const session = entry.params?.session;
         if (typeof entry.tab === "string" && typeof session === "string" && ended(session)) {
           await port.commands.execute("core.layout.close", { tab: entry.tab });

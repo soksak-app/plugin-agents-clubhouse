@@ -1,6 +1,7 @@
-// The room record (docs/spec/room.md#room-record): the lines of the owner and the answers of the members in the order in which the room
-// took them, and for each member session the number of record lines that the room delivered to it. At the start of each turn a member
-// receives every record line that it has not received, so every member reads the whole record.
+// The room record (docs/spec/room.md#room-record): the lines of the owner, the answers of the members and the lines of the room in the
+// order in which the room took them, and for each member session the number of record lines that it has received. Each turn line and each
+// record line of a session carries the lines from that number to the end of the record, and the number rises only when the answer or the
+// acknowledgement of the token of the line arrives, so every member reads the whole record once and in order.
 
 export interface RecordLine {
   // `owner` or the identifier of a member.
@@ -13,7 +14,7 @@ export interface PendingLines {
   text: string;
   // The speakers of those lines in the order of their first line.
   speakers: string[];
-  // The length of the record when the text was built: the delivered number after an accepted submit.
+  // The length of the record when the text was built: the delivered number after the answer or the acknowledgement of the line.
   count: number;
 }
 
@@ -24,9 +25,9 @@ export interface RoomRecord {
   append(speaker: string, text: string): void;
   // The lines that `session` of the member `self` has not received; null when there is none.
   pending(session: string, self: string): PendingLines | null;
+  // Raises the delivered number of the session to count; a delivered number never falls.
   markDelivered(session: string, count: number): void;
-  // Removes the line at `index` when it is the last line of the record, and lowers each delivered number to the new length. Returns
-  // whether it removed the line.
+  // Removes the line at `index` when it is the last line of the record and no session has received it. Returns whether it removed the line.
   withdrawLast(index: number): boolean;
 }
 
@@ -58,27 +59,38 @@ export function createRoomRecord(
       };
     },
     markDelivered(session, count) {
+      if (!Number.isInteger(count) || count < 0 || count > lines.length) {
+        throw new Error(`delivered ${session} must be an integer from 0 to ${lines.length}, got ${JSON.stringify(count)}`);
+      }
+      const current = counts.get(session) ?? 0;
+      if (count < current) throw new Error(`delivered ${session} cannot fall from ${current} to ${count}`);
+      if (count === current && counts.has(session)) return;
       counts.set(session, count);
       changed();
     },
     withdrawLast(index) {
       if (index !== lines.length - 1) return false;
+      for (const [session, count] of counts) if (count > index) throw new Error(`record line ${index} was delivered to session ${session}`);
       lines.pop();
-      for (const [session, count] of counts) if (count > lines.length) counts.set(session, lines.length);
       changed();
       return true;
     },
   };
 }
 
-// Runs the relay of the last line of the owner. A relay that fails before any answer is in the record withdraws that line, so the
-// record holds no message that no member answered; a relay that fails after an answer keeps it (docs/spec/room.md#room-record).
-export async function withdrawnOnFailure<T>(record: RoomRecord, relay: () => Promise<T>): Promise<T> {
+// Runs the relay of the last line of the owner; the relay calls `accepted` after each submit that core accepted. A relay that fails before
+// core accepted any submit withdraws the line of the owner, because no session received it; any other failed relay keeps it and appends
+// the line of the room `the relay failed: <reason>`, so every member reads that the relay failed (docs/spec/room.md#room-record).
+export async function settledRelay<T>(record: RoomRecord, relay: (accepted: () => void) => Promise<T>): Promise<T> {
   const index = record.lines.length - 1;
+  let accepted = false;
   try {
-    return await relay();
+    return await relay(() => {
+      accepted = true;
+    });
   } catch (error) {
-    record.withdrawLast(index);
+    if (accepted) record.append("clubhouse", `the relay failed: ${error instanceof Error ? error.message : String(error)}`);
+    else record.withdrawLast(index);
     throw error;
   }
 }

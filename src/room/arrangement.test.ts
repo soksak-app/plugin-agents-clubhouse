@@ -12,7 +12,7 @@ const members: Member[] = [
   { plugin: FIXTURE_PLUGIN, session: "s-codex", title: "manager-lead" },
 ];
 
-function port(plan: unknown, options: { applyRejects?: boolean; planRejects?: boolean } = {}) {
+function port(plan: unknown, options: { applyRejects?: boolean; planRejects?: boolean; shownBy?: Record<string, string> } = {}) {
   const calls: Array<[string, Record<string, unknown>]> = [];
   const reports: Array<[string, string]> = [];
   const execute = vi.fn(async (name: string, params: Record<string, unknown>) => {
@@ -30,7 +30,11 @@ function port(plan: unknown, options: { applyRejects?: boolean; planRejects?: bo
   return {
     calls,
     reports,
-    port: { commands: { execute }, report: (where: string, text: string) => reports.push([where, text]) },
+    port: {
+      commands: { execute },
+      report: (where: string, text: string) => reports.push([where, text]),
+      shownBy: (session: string) => options.shownBy?.[session] ?? null,
+    },
   };
 }
 
@@ -93,6 +97,37 @@ describe("arrangementTree", () => {
     expect(arrangementTree([{ plugin: FIXTURE_PLUGIN, session: "s-claude", title }]).tree).toMatchObject({
       children: [{}, { tabs: [{ params: { session: "s-claude", title } }] }],
     });
+  });
+});
+
+describe("arrangeMembers replaces a showing tab of other params (docs/spec/room.md#arrangement)", () => {
+  // The old member tab tab-old shows s-claude with the params {session} of an earlier entry form, so the plan reuses no tab for it.
+  const planWith = (tabs: { tab: string | null; params: unknown }[]) => ({ ...feasible, cards: [{ card: null, tabs, active: null, group: null }] });
+
+  it("closes the tab that shows a member session with an earlier entry form before the apply, and plans again", async () => {
+    const plan = planWith([{ tab: null, params: { session: "s-claude", title: "harness" } }, { tab: "tab-codex", params: { session: "s-codex", title: "manager-lead" } }]);
+    const { port: p, calls } = port(plan, { shownBy: { "s-claude": "tab-old", "s-codex": "tab-codex" } });
+    const result = await arrangeMembers(p, members, createArrangementStatus());
+    expect(result).toEqual({ state: "group" });
+    expect(calls.map(([name, params]) => (name === "core.layout.close" ? `${name} ${params.tab}` : name))).toEqual([
+      "core.layout.plan",
+      "core.layout.close tab-old",
+      "core.layout.plan",
+      "core.layout.apply",
+    ]);
+  });
+
+  it("closes no tab that the plan reuses for an entry", async () => {
+    const plan = planWith([{ tab: "tab-claude", params: { session: "s-claude", title: "harness" } }]);
+    const { port: p, calls } = port(plan, { shownBy: { "s-claude": "tab-claude" } });
+    await arrangeMembers(p, members, createArrangementStatus());
+    expect(calls.map(([name]) => name)).toEqual(["core.layout.plan", "core.layout.apply"]);
+  });
+
+  it("closes no tab for a plan that is not feasible, which names no tabs", async () => {
+    const { port: p, calls } = port(infeasible, { shownBy: { "s-claude": "tab-old" } });
+    await arrangeMembers(p, members, createArrangementStatus());
+    expect(calls.some(([name]) => name === "core.layout.close")).toBe(false);
   });
 });
 

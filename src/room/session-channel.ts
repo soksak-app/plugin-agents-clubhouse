@@ -46,3 +46,12 @@ export function sessionProgram(sessions: unknown, session: string): ProgramState
   }
   return state as ProgramState;
 }
+
+// The tab that shows the session in a value of core.sessions (`shownBy`), or null when no tab shows it or the list does not hold it.
+export function shownByOf(sessions: unknown, session: string): string | null {
+  if (!Array.isArray(sessions)) throw new Error("core.sessions is not a list");
+  const shown = sessions.find((entry) => entry?.session === session)?.shownBy;
+  if (shown === undefined || shown === null) return null;
+  if (typeof shown !== "string" || shown === "") throw new Error(`core.sessions shownBy of ${session} is not a tab identifier: ${JSON.stringify(shown)}`);
+  return shown;
+}

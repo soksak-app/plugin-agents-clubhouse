@@ -8,44 +8,51 @@ import { createRoomRecord } from "./room-record";
 const NAME = "soksak-plugin-agents-clubhouse.conversation";
 
 describe("conversation status", () => {
-  it("is declared in plugin.json with the entries {speaker, text}", () => {
+  it("is declared in plugin.json with the entries, the waits with the step record, and the delivery", () => {
     const status = manifest.exposes.status.find((entry) => entry.name === NAME);
     expect(status?.schema).toMatchObject({
       type: "object",
       properties: {
         entries: { type: "array", items: { required: ["speaker", "text"] } },
-        waiting: { type: "array", items: { required: ["member", "session", "step", "program"] } },
+        waiting: { type: "array", items: { required: ["member", "session", "step", "program"], properties: { step: { enum: ["protocol", "answer", "record"] } } } },
+        delivery: { type: "array", items: { required: ["member", "session", "delivered", "length", "pending"] } },
       },
-      required: ["entries", "waiting"],
+      required: ["entries", "waiting", "delivery"],
     });
   });
 
   it("carries the record entries and publishes each change, also a withdrawn line", () => {
     const lines: { speaker: string; text: string }[] = [];
-    const status = createConversationStatus(lines, () => []);
+    const status = createConversationStatus(lines, () => [], () => []);
     const record = createRoomRecord(lines, {}, (speaker) => speaker, () => status.changed());
     const values: unknown[] = [];
     const stop = status.subscribe((value) => values.push(value));
-    expect(status.read()).toEqual({ entries: [], waiting: [] });
+    expect(status.read()).toEqual({ entries: [], waiting: [], delivery: [] });
     record.append("owner", "hello");
     record.append("reviewer", "hi");
-    expect(status.read()).toEqual({ entries: [{ speaker: "owner", text: "hello" }, { speaker: "reviewer", text: "hi" }], waiting: [] });
+    expect(status.read()).toEqual({ entries: [{ speaker: "owner", text: "hello" }, { speaker: "reviewer", text: "hi" }], waiting: [], delivery: [] });
     record.append("owner", "again");
     record.withdrawLast(2);
     expect(values).toEqual([
-      { entries: [{ speaker: "owner", text: "hello" }], waiting: [] },
-      { entries: [{ speaker: "owner", text: "hello" }, { speaker: "reviewer", text: "hi" }], waiting: [] },
-      { entries: [{ speaker: "owner", text: "hello" }, { speaker: "reviewer", text: "hi" }, { speaker: "owner", text: "again" }], waiting: [] },
-      { entries: [{ speaker: "owner", text: "hello" }, { speaker: "reviewer", text: "hi" }], waiting: [] },
+      { entries: [{ speaker: "owner", text: "hello" }], waiting: [], delivery: [] },
+      { entries: [{ speaker: "owner", text: "hello" }, { speaker: "reviewer", text: "hi" }], waiting: [], delivery: [] },
+      { entries: [{ speaker: "owner", text: "hello" }, { speaker: "reviewer", text: "hi" }, { speaker: "owner", text: "again" }], waiting: [], delivery: [] },
+      { entries: [{ speaker: "owner", text: "hello" }, { speaker: "reviewer", text: "hi" }], waiting: [], delivery: [] },
     ]);
     stop();
     record.append("owner", "after");
     expect(values).toHaveLength(4);
   });
 
+  it("carries the delivery entries of the closing delivery (docs/spec/room.md#conversation-status)", () => {
+    const entry = { member: "reviewer", session: "s-1", delivered: 1, length: 2, pending: true };
+    const status = createConversationStatus([], () => [], () => [entry]);
+    expect(status.read().delivery).toEqual([entry]);
+  });
+
   it("gives copies, so a reader cannot change the record", () => {
     const lines = [{ speaker: "owner", text: "hello" }];
-    const status = createConversationStatus(lines, () => []);
+    const status = createConversationStatus(lines, () => [], () => []);
     const value = status.read() as { entries: { text: string }[] };
     value.entries[0].text = "changed";
     expect(lines[0].text).toBe("hello");
@@ -56,7 +63,7 @@ describe("conversation status", () => {
       { session: "s-1", program: { state: "blocked" } },
       { session: "s-2", program: null },
     ];
-    const status = createConversationStatus([], () => sessions);
+    const status = createConversationStatus([], () => sessions, () => []);
     const values: unknown[] = [];
     status.subscribe((value) => values.push((value as { waiting: unknown }).waiting));
     const endFirst = status.waiting({ id: "reviewer", session: "s-1" }, "protocol");
@@ -91,7 +98,7 @@ describe("conversation status", () => {
   });
 
   it("refuses a value of core.sessions that is not a list", () => {
-    const status = createConversationStatus([], () => "x");
+    const status = createConversationStatus([], () => "x", () => []);
     expect(() => status.read()).toThrow("core.sessions is not a list");
     expect(() => status.waiting({ id: "reviewer", session: "s-1" }, "protocol")).toThrow("core.sessions is not a list");
   });

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- C66: Before the arrangement applies, the room closes each tab that shows a member session with params that no entry of the plan reuses, such as the earlier entry form `{session}`, and plans again, so the new tab of the entry shows the session (`docs/spec/room.md#arrangement`).
+- C64: Every open member session receives every room record line once and in order: the delivered number rises only on the answer or the acknowledgement `record.ack` of the token of a line, each relay ends with a closing delivery of record lines that replaces the shared record, a session has one open line, a session that is not idle is pending until its next idle, a relay that core accepted keeps the owner line with the line `the relay failed`, the open tokens survive a restart in the tab state field `turns`, the conversation status carries `delivery` and the step `record`, and the member session store is keyed by `<room surface>/<agentId>` (`docs/spec/room.md#room-record`, `docs/spec/room.md#closing-delivery`).
 - C63: The version is 0.0.15, which releases C62.
 - C62: An answer that mentions other members of the relay gives each of them a turn of the same `message.send` relay in mention order, up to the setting `conversationTurns` (0 to 64, default 8); the limit and the new command `conversation.stop` with its stop button end the relay with a `[@clubhouse]` record line, and the protocol line states that a mention passes the next turn (`docs/spec/room.md#conversation`).
 - C61: The version is 0.0.14, which releases C39.

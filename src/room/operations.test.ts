@@ -26,6 +26,7 @@ function room(overrides: Partial<OperationDeps> = {}) {
     accept: (text) => void log.push(`accept ${text}`),
     busy: (value) => void log.push(`busy ${value}`),
     relay: async (text) => [{ id: "b", text: `answer to ${text}` }],
+    stopWaits: () => 0,
     failed: (reason) => void log.push(`failed ${reason}`),
     ...overrides,
   };
@@ -117,6 +118,13 @@ describe("conversation.stop (docs/spec/room.md#conversation)", () => {
   it("refuses a stop without a relay", async () => {
     const r = room();
     await expect(r.commands[`${P}.conversation.stop`]({})).rejects.toThrow("the room is relaying no message");
+  });
+
+  it("ends the record waits without a relay and answers that it stopped (docs/spec/room.md#closing-delivery)", async () => {
+    let stops = 0;
+    const r = room({ stopWaits: () => (stops += 1, 2) });
+    expect(await r.commands[`${P}.conversation.stop`]({})).toEqual({ stopped: true });
+    expect(stops).toBe(1);
   });
 
   it("tells the running relay to stop, idempotently, and a later send starts unstopped", async () => {

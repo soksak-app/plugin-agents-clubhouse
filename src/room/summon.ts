@@ -27,6 +27,28 @@ export interface SummonDeps {
   now: () => number;
   // The identifiers of the sessions that core.sessions lists as open.
   openSessions: () => Promise<string[]>;
+  // The sessions that a summon opened and that core.sessions has not listed yet.
+  opened: OpenedSessions;
+}
+
+// The sessions that the room opened before core.sessions listed them (docs/spec/room.md#restart). A summon counts them as open, so a
+// summon that runs before core.sessions lists a session opens no second session for its member.
+export interface OpenedSessions {
+  add(session: string): void;
+  // Removes the sessions that a value of core.sessions lists.
+  listed(sessions: Iterable<string>): void;
+  unlisted(): string[];
+}
+
+export function createOpenedSessions(): OpenedSessions {
+  const unlisted = new Set<string>();
+  return {
+    add: (session) => void unlisted.add(session),
+    listed(sessions) {
+      for (const session of sessions) unlisted.delete(session);
+    },
+    unlisted: () => [...unlisted],
+  };
 }
 
 // The size of a session: the width and height of its card in points and the backing scale of the window
@@ -69,7 +91,7 @@ export async function summonMembers(deps: SummonDeps, request: SummonRequest): P
   if (new Set(ids).size !== ids.length) throw new Error("member definitions must have unique ids");
 
   const summoned: SummonedMember[] = [];
-  const open = new Set(await deps.openSessions());
+  const open = new Set([...(await deps.openSessions()), ...deps.opened.unlisted()]);
   for (const definition of request.definitions) {
     if (!request.checked.includes(definition.id)) continue;
     const stored = await deps.sessions.get(definition.id);
@@ -84,7 +106,19 @@ export async function summonMembers(deps: SummonDeps, request: SummonRequest): P
     });
     const session = (reply as { session?: unknown } | null | undefined)?.session;
     if (typeof session !== "string" || session === "") throw new Error("core.session.open reply has no session");
-    await deps.sessions.put({ agentId: definition.id, sessionId: session, cwd: definition.cwd, savedAt: deps.now() });
+    deps.opened.add(session);
+    try {
+      await deps.sessions.put({ agentId: definition.id, sessionId: session, cwd: definition.cwd, savedAt: deps.now() });
+    } catch (error) {
+      // A session whose relation is not stored belongs to no member after a restart, so the room ends it.
+      const reason = error instanceof Error ? error.message : String(error);
+      try {
+        await deps.room.commands.execute("core.session.end", { session });
+      } catch (end) {
+        throw new Error(`member ${definition.id}: the relation was not stored: ${reason}; core.session.end ${session} failed: ${end instanceof Error ? end.message : String(end)}`);
+      }
+      throw new Error(`member ${definition.id}: the relation was not stored: ${reason}; session ${session} ended`);
+    }
     summoned.push({ id: definition.id, session, opened: true });
   }
   return summoned;

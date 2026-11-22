@@ -5,7 +5,7 @@
 import { relayMemberMessage, type SessionRelayPort } from "./relay";
 import type { RelayPorts } from "./room-relay";
 import { sessionProgram, sessionSubmit } from "./session-channel";
-import { ANSWER_COMMAND } from "./answer";
+import { ANSWER_COMMAND, RECORD_ACK_COMMAND } from "./answer";
 
 export interface ProtocolMember {
   id: string;
@@ -27,6 +27,8 @@ export function roomProtocolLine(self: string, peers: string[], surface: string)
     `the MCP tool command_run with name ${ANSWER_COMMAND}, surface ${surface} and params {"turn": "<token>", "text": "<your answer>"},`,
     `or in a shell sok ${ANSWER_COMMAND} --surface ${surface} --turn <token> --text="$(cat <<'EOF'` + " <your answer, one or more lines> EOF)\".",
     "A turn whose program ends without this command fails, and each token takes one answer.",
+    `A room line that ends with [@clubhouse] record <token> takes no answer: read it and acknowledge it only with ${RECORD_ACK_COMMAND},`,
+    `the MCP tool command_run with name ${RECORD_ACK_COMMAND}, surface ${surface} and params {"turn": "<token>"}, or in a shell sok ${RECORD_ACK_COMMAND} --surface ${surface} --turn <token>.`,
     `Other members: ${peers.length > 0 ? peers.join(", ") : "none"}.`,
     "This protocol line takes no answer.",
   ].join(" ");

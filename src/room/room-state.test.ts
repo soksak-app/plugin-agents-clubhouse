@@ -1,7 +1,7 @@
 // The state of a room tab (docs/spec/room.md#restart): the roster order and checks, the mode, the conversation, the sessions that the
 // room opened, the sessions that received the room protocol and the delivered numbers of the room record, written through the tab state of the view and read back at start.
 import { describe, expect, it } from "vitest";
-import { parseRoomState, type RoomState } from "./room-state";
+import { parseRoomState, serializedRoomState, type RoomState } from "./room-state";
 
 const state: RoomState = {
   roster: [{ id: "harness-harness", checked: true }, { id: "moai-manager-lead", checked: false }],
@@ -13,9 +13,26 @@ const state: RoomState = {
   sessions: ["owned-1"],
   protocolSessions: ["owned-1"],
   delivered: { "owned-1": 2 },
+  turns: [{ turn: "t-1", session: "owned-1", member: "harness-harness", kind: "record", count: 2 }],
 };
 
 describe("parseRoomState", () => {
+  it("refuses a state of the earlier form without the open tokens", () => {
+    const { turns: _current, ...rest } = state;
+    expect(() => parseRoomState(rest)).toThrow("room tab state: turns must be an array of open tokens, got undefined");
+  });
+
+  it("refuses an open token of another kind or a count beyond the conversation", () => {
+    expect(() => parseRoomState({ ...state, turns: [{ ...state.turns[0], kind: "other" }] })).toThrow("room tab state: turns must hold");
+    expect(() => parseRoomState({ ...state, turns: [{ ...state.turns[0], count: 3 }] })).toThrow("count from 0 to 2");
+  });
+
+  it("refuses to write a state over the 1048576 bytes of surface.unload, with its size", () => {
+    const big = { ...state, conversation: [{ speaker: "owner", text: "x".repeat(1048576) }] };
+    expect(() => serializedRoomState(big)).toThrow(/^the state is \d+ bytes, over the limit of 1048576 bytes$/);
+    expect(JSON.parse(serializedRoomState(state))).toEqual(state);
+  });
+
   it("refuses a state without the delivered numbers of the room record", () => {
     const { delivered: _current, ...rest } = state;
     expect(() => parseRoomState(rest)).toThrow("room tab state: delivered must be an object of session counts, got undefined");

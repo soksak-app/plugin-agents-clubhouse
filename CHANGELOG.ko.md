@@ -2,6 +2,8 @@
 
 ## 미출시
 
+- C66: Arrangement가 apply하기 전에 방은 이전 entry 형식 `{session}`처럼 plan의 어떤 entry도 재사용하지 않는 params로 member session을 보이는 tab을 닫고 다시 plan하므로, entry의 새 tab이 session을 보인다(`docs/spec/room.md#arrangement`).
+- C64: 열린 모든 member session이 room record의 모든 줄을 순서대로 한 번 받는다. delivered number는 줄의 token에 대한 답이나 acknowledgement `record.ack`가 올 때만 오르고, relay마다 shared record를 대신하는 record line의 closing delivery로 끝나며, session은 열린 줄을 하나만 가지고, idle이 아닌 session은 다음 idle까지 pending이며, core가 받아들인 relay는 owner 줄과 `the relay failed` 줄을 남기고, 열린 token은 tab state field `turns`로 restart 뒤에도 남으며, conversation status는 `delivery`와 step `record`를 담고, member session store의 key는 `<room surface>/<agentId>`다(`docs/spec/room.md#room-record`, `docs/spec/room.md#closing-delivery`).
 - C63: 버전은 0.0.15이며 C62를 출시한다.
 - C62: Relay의 다른 member를 mention하는 answer는 그 member마다 같은 `message.send` relay의 turn을 mention 순서로 setting `conversationTurns`(0에서 64, 기본값 8)까지 준다. 한도와 새 command `conversation.stop` 및 그 중지 button은 `[@clubhouse]` record line으로 relay를 끝내고, protocol line은 mention이 다음 turn을 넘긴다고 알린다(`docs/spec/room.md#conversation`).
 - C61: 버전은 0.0.14이며 C39를 출시한다.
