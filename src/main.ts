@@ -17,7 +17,9 @@ import type { RoomPort } from "./room/port";
 import { createTrace } from "./tower/trace";
 import { createRoomReport } from "./room/report";
 import { createArrangementStatus } from "./room/arrangement";
-import { parseAgentDefinitions } from "./room/definitions";
+import { parseAgentDefinitions, toMemberDefinition, type AgentDefinition } from "./room/definitions";
+import { createMemberSessionStore } from "./room/session-store";
+import { serialRunner, summonAndArrange, type TriggerDeps } from "./room/trigger";
 import { rosterFrom, type RosterEntry } from "./room/roster";
 import { createMacroStore } from "./tower/macro";
 import { setupTower } from "./tower/header";
@@ -174,6 +176,10 @@ function buildRoom({ settings, collections }: RoomContext): RoomHandlers {
   let mode: RoomMode = modeSetting;
   // The roster lists the agent definitions of the agents plugin (C13); it is empty until the status arrives.
   const roster: RosterEntry[] = [];
+  let definitions: AgentDefinition[] = [];
+  // The ids of the sessions that core.sessions lists as open, and the summons that run one after the other (C3, C4).
+  const openSessionIds = new Set<string>();
+  const runTrigger = serialRunner();
   const transport = { state: "unavailable" as const, reason: t("transportUnavailable", lang) };
   const arrangement = createArrangementStatus();
   const state = (): RoomState => ({
@@ -222,6 +228,7 @@ function buildRoom({ settings, collections }: RoomContext): RoomHandlers {
       tab.addEventListener("click", () => {
         entry.checked = !entry.checked;
         renderTabs();
+        summon();
       });
       tab.addEventListener("pointerdown", (down) => {
         const startX = down.clientX;
@@ -270,12 +277,32 @@ function buildRoom({ settings, collections }: RoomContext): RoomHandlers {
   // Each change of the status agents.definitions replaces the roster, and a value of another form is reported as an error.
   Promise.resolve(bridge!.runtime.status.watch("agents.definitions", (value: unknown) => {
     try {
-      roster.splice(0, roster.length, ...rosterFrom(parseAgentDefinitions(value), roster));
+      definitions = parseAgentDefinitions(value);
+      roster.splice(0, roster.length, ...rosterFrom(definitions, roster));
       renderTabs();
     } catch (error) {
       report("agents.definitions", String((error as Error)?.message ?? error));
     }
   })).catch((error: unknown) => report("agents.definitions", `status watch: ${String((error as Error)?.message ?? error)}`));
+  Promise.resolve(bridge!.runtime.status.watch("core.sessions", (value: unknown) => {
+    openSessionIds.clear();
+    if (Array.isArray(value)) for (const entry of value) openSessionIds.add(String((entry as { session?: unknown }).session));
+  })).catch((error: unknown) => report("core.sessions", `status watch: ${String((error as Error)?.message ?? error)}`));
+
+  // A check of the roster summons the checked members and arranges the opened ones (C3-1, C4). Each run waits for the previous one.
+  const sessions = createMemberSessionStore(collections);
+  if (sessions === undefined) throw new Error("the room needs project data for its member sessions");
+  const trigger: TriggerDeps = {
+    summon: { room, sessions, now: () => Date.now(), openSessions: async () => [...openSessionIds] },
+    arrange: { commands: room.commands, report },
+    status: arrangement,
+    size: () => ({ width: window.innerWidth, height: window.innerHeight, scale: window.devicePixelRatio }),
+  };
+  const summon = (): void => {
+    const checked = roster.filter((entry) => entry.checked).map((entry) => entry.id);
+    runTrigger(() => summonAndArrange(trigger, definitions.map(toMemberDefinition), checked)).catch((error: unknown) =>
+      report("room summon", String((error as Error)?.message ?? error)));
+  };
 
   // The trace and the macros of the tower are project data of the room, kept per project root.
   const trace = createTrace(collections, { sessionId: sessionIdOf(), report });
