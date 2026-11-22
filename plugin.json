@@ -14,7 +14,7 @@
     "ink": "--fg"
   },
   "dependencies": {
-    "@soksak/plugin-agents": "^0.0.1"
+    "@soksak/plugin-agents": ">=0.0.1"
   },
   "settings": {
     "kibitzDefault": {
