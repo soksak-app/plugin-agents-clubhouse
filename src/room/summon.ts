@@ -39,7 +39,8 @@ export interface SummonRequest {
   definitions: MemberDefinition[];
   // The identifiers of the checked members of the roster.
   checked: string[];
-  size: SessionSize;
+  // The measured card size; read only before the first session that opens, so a reattach needs no laid-out card.
+  size: () => Promise<SessionSize>;
 }
 
 export interface SummonedMember {
@@ -52,10 +53,16 @@ export interface SummonedMember {
 // Opens the sessions of the checked members in definition order. Each failure rejects with its text; the members opened before
 // it keep their stored relation, and the refused member stores nothing.
 export async function summonMembers(deps: SummonDeps, request: SummonRequest): Promise<SummonedMember[]> {
-  const { size } = request;
-  if (![size.width, size.height, size.scale].every((value) => Number.isFinite(value) && value > 0)) {
-    throw new Error("size width, height and scale must be positive numbers");
-  }
+  let size: SessionSize | null = null;
+  const measured = async (): Promise<SessionSize> => {
+    if (size !== null) return size;
+    const value = await request.size();
+    if (![value.width, value.height, value.scale].every((one) => Number.isFinite(one) && one > 0)) {
+      throw new Error("size width, height and scale must be positive numbers");
+    }
+    size = value;
+    return value;
+  };
   const ids = request.definitions.map((definition) => definition.id);
   if (new Set(ids).size !== ids.length) throw new Error("member definitions must have unique ids");
 
@@ -71,7 +78,7 @@ export async function summonMembers(deps: SummonDeps, request: SummonRequest): P
     const reply = await deps.room.commands.execute("core.session.open", {
       plugin: definition.plugin,
       params: definition.params,
-      size,
+      size: await measured(),
     });
     const session = (reply as { session?: unknown } | null | undefined)?.session;
     if (typeof session !== "string" || session === "") throw new Error("core.session.open reply has no session");

@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- C49: A reattach measures no size, and a session opens only with the measured positive size of the room card, after the first resize event that gives one (`docs/spec/room.md#restart`).
 - C48: The version is 0.0.8, which releases C46.
 - C46: The screen fixtures of the answer tests hold neutral words of the same width in place of a personal form of address, and two checklist items state the window verification without a person.
 - C45: The version is 0.0.7, which releases C41 to C44.

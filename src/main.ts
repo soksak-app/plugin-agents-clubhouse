@@ -28,6 +28,7 @@ import { createProtocolInjector } from "./room/protocol";
 import { parseRoomState, type RoomState as RoomTabState } from "./room/room-state";
 import { ownedSessionIds } from "./room/session-channel";
 import { rosterFrom, type RosterEntry } from "./room/roster";
+import { measuredCardSize } from "./room/card-size";
 import { createRoomOperations } from "./room/operations";
 import { createMacroStore } from "./tower/macro";
 import { setupTower } from "./tower/header";
@@ -369,7 +370,14 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
     summon: { room, sessions, now: () => Date.now(), openSessions: async () => [...openSessionIds] },
     arrange: { commands: room.commands, report },
     status: arrangement,
-    size: () => ({ width: window.innerWidth, height: window.innerHeight, scale: window.devicePixelRatio }),
+    size: () =>
+      measuredCardSize({
+        size: () => ({ width: window.innerWidth, height: window.innerHeight, scale: window.devicePixelRatio }),
+        onResize: (listener) => {
+          addEventListener("resize", listener);
+          return () => removeEventListener("resize", listener);
+        },
+      }),
     ended: (session) => roomSessions.has(session) && !openSessionIds.has(session),
   };
   const summon = (): void => {

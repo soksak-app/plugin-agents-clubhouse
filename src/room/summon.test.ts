@@ -51,7 +51,7 @@ describe("summonMembers — one owned session per checked member", () => {
     const data = fakeData();
     const sessions = createMemberSessionStore(data)!;
     const { room, calls } = roomPort(openedSession);
-    const out = await summonMembers({ room, sessions, now: () => 42, openSessions: openSessions() }, { definitions: DEFINITIONS, checked: ["alpha", "beta"], size: SIZE });
+    const out = await summonMembers({ room, sessions, now: () => 42, openSessions: openSessions() }, { definitions: DEFINITIONS, checked: ["alpha", "beta"], size: async () => SIZE });
     expect(calls).toEqual([
       { name: "core.session.open", params: { plugin: FIXTURE_PLUGIN, params: { program: "alpha-cli", args: [] }, size: SIZE } },
       { name: "core.session.open", params: { plugin: FIXTURE_PLUGIN, params: { program: "beta-cli", args: ["--fast"] }, size: SIZE } },
@@ -65,7 +65,7 @@ describe("summonMembers — one owned session per checked member", () => {
   it("opens no session for a member that is not checked", async () => {
     const sessions = createMemberSessionStore(fakeData())!;
     const { room, calls } = roomPort(openedSession);
-    await summonMembers({ room, sessions, now: () => 1, openSessions: openSessions() }, { definitions: DEFINITIONS, checked: ["beta"], size: SIZE });
+    await summonMembers({ room, sessions, now: () => 1, openSessions: openSessions() }, { definitions: DEFINITIONS, checked: ["beta"], size: async () => SIZE });
     expect(calls.map((c) => c.params.params.program)).toEqual(["beta-cli"]);
   });
 
@@ -74,7 +74,7 @@ describe("summonMembers — one owned session per checked member", () => {
     const sessions = createMemberSessionStore(data)!;
     await sessions.put({ agentId: "alpha", sessionId: "s-existing", cwd: "/work/app", savedAt: 1 });
     const { room, calls } = roomPort(openedSession);
-    const out = await summonMembers({ room, sessions, now: () => 2, openSessions: openSessions("s-existing") }, { definitions: DEFINITIONS, checked: ["alpha"], size: SIZE });
+    const out = await summonMembers({ room, sessions, now: () => 2, openSessions: openSessions("s-existing") }, { definitions: DEFINITIONS, checked: ["alpha"], size: async () => SIZE });
     expect(calls).toEqual([]);
     expect(out).toEqual([{ id: "alpha", session: "s-existing", opened: false }]);
   });
@@ -84,7 +84,7 @@ describe("summonMembers — one owned session per checked member", () => {
     const sessions = createMemberSessionStore(data)!;
     await sessions.put({ agentId: "alpha", sessionId: "s-ended", cwd: "/work/app", savedAt: 1 });
     const { room, calls } = roomPort(openedSession);
-    const out = await summonMembers({ room, sessions, now: () => 3, openSessions: openSessions("s-other") }, { definitions: DEFINITIONS, checked: ["alpha"], size: SIZE });
+    const out = await summonMembers({ room, sessions, now: () => 3, openSessions: openSessions("s-other") }, { definitions: DEFINITIONS, checked: ["alpha"], size: async () => SIZE });
     expect(calls.map((c) => c.name)).toEqual(["core.session.open"]);
     expect(out).toEqual([{ id: "alpha", session: out[0].session, opened: true }]);
     expect(out[0].session).not.toBe("s-ended");
@@ -99,7 +99,7 @@ describe("summonMembers — one owned session per checked member", () => {
       return openedSession(_name, params);
     });
     await expect(
-      summonMembers({ room, sessions, now: () => 3, openSessions: openSessions() }, { definitions: DEFINITIONS, checked: ["alpha", "beta"], size: SIZE }),
+      summonMembers({ room, sessions, now: () => 3, openSessions: openSessions() }, { definitions: DEFINITIONS, checked: ["alpha", "beta"], size: async () => SIZE }),
     ).rejects.toThrow("plugin FIXTURE_PLUGIN declares no sessions");
     expect(data.docs.has("alpha")).toBe(true);
     expect(data.docs.has("beta")).toBe(false);
@@ -110,7 +110,7 @@ describe("summonMembers — one owned session per checked member", () => {
     const sessions = createMemberSessionStore(data)!;
     const { room } = roomPort(() => ({ ok: true }));
     await expect(
-      summonMembers({ room, sessions, now: () => 4, openSessions: openSessions() }, { definitions: DEFINITIONS, checked: ["alpha"], size: SIZE }),
+      summonMembers({ room, sessions, now: () => 4, openSessions: openSessions() }, { definitions: DEFINITIONS, checked: ["alpha"], size: async () => SIZE }),
     ).rejects.toThrow("core.session.open reply has no session");
     expect(data.docs.size).toBe(0);
   });
@@ -120,9 +120,27 @@ describe("summonMembers — one owned session per checked member", () => {
     const { room, calls } = roomPort(openedSession);
     for (const size of [{ ...SIZE, width: 0 }, { ...SIZE, height: -1 }, { ...SIZE, scale: Number.NaN }]) {
       await expect(
-        summonMembers({ room, sessions, now: () => 5, openSessions: openSessions() }, { definitions: DEFINITIONS, checked: ["alpha"], size }),
+        summonMembers({ room, sessions, now: () => 5, openSessions: openSessions() }, { definitions: DEFINITIONS, checked: ["alpha"], size: async () => size }),
       ).rejects.toThrow("size width, height and scale must be positive numbers");
     }
+    expect(calls).toEqual([]);
+  });
+});
+
+describe("summonMembers — the size is measured only for a session that opens", () => {
+  it("a member whose stored session is open is reattached without a size, so a room without a laid-out card reattaches", async () => {
+    const sessions = createMemberSessionStore(fakeData())!;
+    await sessions.put({ agentId: "alpha", sessionId: "s-kept", cwd: "/work/app", savedAt: 1 });
+    const { room, calls } = roomPort(openedSession);
+    const out = await summonMembers(
+      { room, sessions, now: () => 8, openSessions: openSessions("s-kept") },
+      {
+        definitions: DEFINITIONS,
+        checked: ["alpha"],
+        size: async () => ({ width: 0, height: 0, scale: 2 }),
+      },
+    );
+    expect(out).toEqual([{ id: "alpha", session: "s-kept", opened: false }]);
     expect(calls).toEqual([]);
   });
 });
@@ -132,7 +150,7 @@ describe("summonMembers — the relation survives a restart", () => {
     const data = fakeData();
     const first = createMemberSessionStore(data)!;
     const { room } = roomPort(openedSession);
-    const out = await summonMembers({ room, sessions: first, now: () => 6, openSessions: openSessions() }, { definitions: DEFINITIONS, checked: ["alpha"], size: SIZE });
+    const out = await summonMembers({ room, sessions: first, now: () => 6, openSessions: openSessions() }, { definitions: DEFINITIONS, checked: ["alpha"], size: async () => SIZE });
     const restarted = createMemberSessionStore(data)!;
     await expect(restarted.get("alpha")).resolves.toMatchObject({ sessionId: out[0].session });
   });
@@ -143,7 +161,7 @@ describe("summonMembers — definitions are validated at the boundary", () => {
     const sessions = createMemberSessionStore(fakeData())!;
     const { room, calls } = roomPort(openedSession);
     await expect(
-      summonMembers({ room, sessions, now: () => 7, openSessions: openSessions() }, { definitions: [DEFINITIONS[0], DEFINITIONS[0]], checked: ["alpha"], size: SIZE }),
+      summonMembers({ room, sessions, now: () => 7, openSessions: openSessions() }, { definitions: [DEFINITIONS[0], DEFINITIONS[0]], checked: ["alpha"], size: async () => SIZE }),
     ).rejects.toThrow("member definitions must have unique ids");
     expect(calls).toEqual([]);
   });

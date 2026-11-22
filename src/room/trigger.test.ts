@@ -61,7 +61,7 @@ function deps(room: ReturnType<typeof fakeRoom>["room"]) {
     },
     arrange: { commands: room.commands, report: room.report },
     status: createArrangementStatus(),
-    size: () => SIZE,
+    size: async () => SIZE,
     ended: () => false,
   };
 }

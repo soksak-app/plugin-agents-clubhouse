@@ -2,6 +2,7 @@
 
 ## 미출시
 
+- C49: 다시 붙기는 크기를 측정하지 않고, session은 방 card의 측정한 양수 크기로만, 그 크기를 주는 첫 resize event 뒤에 열린다(`docs/spec/room.md#restart`).
 - C48: 버전은 0.0.8이며 C46을 출시한다.
 - C46: 답 test의 화면 fixture는 개인 호칭 대신 같은 너비의 중립 단어를 담고, checklist item 두 개는 사람 없이 window 검증을 밝힌다.
 - C45: 버전은 0.0.7이며 C41부터 C44까지를 출시한다.

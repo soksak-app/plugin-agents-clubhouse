@@ -7,8 +7,9 @@ export interface TriggerDeps {
   summon: SummonDeps;
   arrange: ArrangementPort;
   status: ArrangementStatus;
-  // The size of the sessions that open now: the card size of the window (core docs/spec/plugins.md#owned-sessions).
-  size: () => SessionSize;
+  // The measured card size of the room for the sessions that open (core docs/spec/plugins.md#owned-sessions); it waits for a
+  // positive size.
+  size: () => Promise<SessionSize>;
   // Whether a session is a member session that this room opened and that has ended.
   ended: (session: string) => boolean;
 }
@@ -19,7 +20,7 @@ export async function summonAndArrange(
   definitions: MemberDefinition[],
   checked: string[],
 ): Promise<ArrangementState> {
-  const summoned = await summonMembers(deps.summon, { definitions, checked, size: deps.size() });
+  const summoned = await summonMembers(deps.summon, { definitions, checked, size: deps.size });
   const members: Member[] = summoned.map((member) => {
     const definition = definitions.find((entry) => entry.id === member.id);
     if (definition === undefined) throw new Error(`summoned member ${member.id} has no definition`);
