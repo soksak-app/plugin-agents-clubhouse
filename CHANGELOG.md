@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- C65: The version is 0.0.16, which releases C64 and C66 to C96.
 - C96: The room page starts without the error `Cannot access 'deliveryEntries' before initialization`: the delivery entries are declared before the conversation status, and the core.sessions listener is added after the record. A page start test loads the built page into the view test host.
 - C95-1: The input placeholder names `@all` for every member.
 - C95: `@all` addresses every checked member; an owner message and a leader answer start turns with it, a leader batch holding every worker, and a worker answer starts none. A worker answer that mentions the leader gives the leader the next turn, the leader limit line names the continuing members, and facil runs every member for an owner `@all`. Mentions in code spans, code blocks and quote lines are no mentions, a mention followed by Hangul is that mention, and definitions named `all`, `owner` or `clubhouse` are refused and reported
