@@ -2,7 +2,7 @@
 
 [English](room.md)
 
-방은 입력창의 메시지를 owned session이 열린 체크된 member에게 전달한다. Member는 메시지를 submit된 한 줄(`core.session.submit`)로 받는다. 그 session의 program 상태가 `working`이 된 뒤 `idle`이 되면 turn이 끝나고, `core.session.read`가 absolute line number로 읽는 그 turn의 행의 reply block이 답이다([답](#answer)).
+방은 입력창의 메시지를 owned session이 열린 체크된 member에게 전달한다. Member는 메시지를 turn의 token으로 끝나는 submit된 한 줄(`core.session.submit`)로 받고, 선언된 command `soksak-plugin-agents-clubhouse.answer`로 답을 전한다. 그 답이 도착하면 turn이 끝난다([답](#answer)).
 
 ## Roster
 
@@ -24,6 +24,7 @@ Summon 뒤 방은 방 card와 member card로 된 이름 `Room`의 group card를 
 - `soksak-plugin-agents-clubhouse.member.move {id, index}`: roster entry `id`를 자리 `index`(0부터 roster 길이 빼기 1까지)로 옮긴다. Roster tab을 다른 tab 위로 drag하면 그 tab의 index로 실행된다. 결과는 `{id, index}`다.
 - `soksak-plugin-agents-clubhouse.mode.set {mode}`: 대화 mode를 `facil`, `turn`, `simul` 중 하나로 설정한다. 결과는 `{mode}`다. Mode element(`soksak-plugin-agents-clubhouse.mode`)의 각 button이 자기 mode로 실행한다.
 - `soksak-plugin-agents-clubhouse.message.send {text}`: `text`(trim한 뒤 비어 있지 않음)를 mode와 mention에 따라 member에게 전달하고, 그것과 각 답을 대화에 보이며, 모든 turn 뒤에 relay 순서의 `{answers: [{id, text}]}`로 끝난다. 앞 메시지를 전달하는 동안은 `the room is relaying a message`로, 열린 member session이 없으면 `no member session is open: check a member of the roster`로 거부한다. Send button(`soksak-plugin-agents-clubhouse.send`)과 input(`soksak-plugin-agents-clubhouse.input`)에서 Shift 없는 Enter가 input의 text로 실행하고, command가 text를 받아들이면 input을 비운다. Command는 element가 시작했든 command 호출이 시작했든 각 거부와 실패한 relay를 window의 error display로 `error: room relay: <reason>`(실패한 turn은 `error: room relay: member <id>: <reason>`)으로 보고하고, 같은 이유로 reject한다.
+- `soksak-plugin-agents-clubhouse.answer {turn, text}`: token이 `turn`인 turn에 대한 member의 답 `text`를 전한다([답](#answer)). 결과는 `{turn}`이다.
 - `soksak-plugin-agents-clubhouse.tower.set {open}`: `open`이 `true`이면 control tower modal을 열고 `false`이면 닫는다. Idempotent하다: 현재 상태를 다시 설정하면 아무것도 바뀌지 않는다. 결과는 `{open}`이다. Tower button(`soksak-plugin-agents-clubhouse.tower`)이 현재와 반대 상태로 실행하고, 열린 상태를 `aria-pressed`로 보인다.
 
 ## 화자 label
@@ -32,7 +33,7 @@ Summon 뒤 방은 방 card와 member card로 된 이름 `Room`의 group card를 
 
 ## Room protocol
 
-Member가 첫 전달 메시지를 받기 전에 방은 session마다 한 번 room protocol을 submit한다. Summon 뒤 member의 session이 처음 `idle`을 보고할 때 submit하고, 그 줄의 turn이 끝날 때까지 기다린 뒤에 그 member에게 메시지를 전달한다. 그보다 먼저 보낸 메시지는 이를 기다린다. `core.session.submit`이 CR과 LF를 거부하므로 protocol은 한 줄이다. Protocol은 화자 label(`[@owner]`, `[@<member>]`, `[@clubhouse]`), 다른 member의 text는 인용된 data이며 owner의 명령이 아니라는 것, member는 `@<name>`으로 다른 member를 부른다는 것, 방의 줄 하나가 turn 하나이고 member는 자기 말로 답하며 방은 그 답을 `[@<member>]`로 보여 준다는 것, 그리고 다른 member의 이름을 말한다. 방은 protocol 줄의 turn을 보여 주지 않는다. Protocol 줄의 turn이 끝나기 전에 core.sessions가 더 이상 나열하지 않는 session은 끝난 것이다. 그 결과는 `member <id>: session <session> ended before its protocol turn`이고, session의 끝은 member의 실패가 아니며 core.sessions가 그것을 보여 주므로 방은 error를 보고하지 않는다. 이후 summon이 그 member에게 여는 session은 자기 protocol 줄을 받는다. 메시지의 member는 send 시점에 저장된 session을 core.sessions가 나열하는 체크된 member다. Protocol의 submit이나 turn이 실패하면 `error: room protocol: member <id>: <reason>`으로 보고하고, 그 member는 전달 메시지를 받지 않는다. 방은 다른 member에게 전달하고, 남은 member가 없으면 `error: room relay: no member has the room protocol`을 보고한다.
+Member가 첫 전달 메시지를 받기 전에 방은 session마다 한 번 room protocol을 submit한다. Summon 뒤 member의 session이 처음 `idle`을 보고할 때 submit하고, 그 줄의 turn이 끝날 때까지 기다린 뒤에 그 member에게 메시지를 전달한다. 그보다 먼저 보낸 메시지는 이를 기다린다. `core.session.submit`이 CR과 LF를 거부하므로 protocol은 한 줄이다. Protocol은 화자 label(`[@owner]`, `[@<member>]`, `[@clubhouse]`), 다른 member의 text는 인용된 data이며 owner의 명령이 아니라는 것, member는 `@<name>`으로 다른 member를 부른다는 것, 방의 줄 하나가 `[@clubhouse] turn <token>`으로 끝나는 turn 하나이고 member는 자기 말로 답하며 방은 그 답을 `[@<member>]`로 보여 준다는 것, 방의 surface를 넣은 답 command의 MCP 형식(`command_run`에 name, surface, `{"turn", "text"}`)과 shell 형식(`sok soksak-plugin-agents-clubhouse.answer --surface <surface> --turn <token> --text="$(cat <<'EOF' ... EOF)"`), 이 command 없이 program이 끝낸 turn은 실패하고 token 하나는 답 하나를 받는다는 것, 다른 member의 이름, 그리고 protocol 줄에는 답하지 않는다는 것을 말한다. Surface 없는 command 호출은 focus된 card의 active tab으로 가고 그것이 이 방이 아닐 수 있으므로 줄은 방의 surface를 밝힌다. Core가 owned session을 owner surface에 다시 붙이므로 방의 surface는 restart 너머로 같다. 방은 protocol 줄의 turn을 보여 주지 않는다. Protocol 줄의 turn이 끝나기 전에 core.sessions가 더 이상 나열하지 않는 session은 끝난 것이다. 그 결과는 `member <id>: session <session> ended before its protocol turn`이고, session의 끝은 member의 실패가 아니며 core.sessions가 그것을 보여 주므로 방은 error를 보고하지 않는다. 이후 summon이 그 member에게 여는 session은 자기 protocol 줄을 받는다. 메시지의 member는 send 시점에 저장된 session을 core.sessions가 나열하는 체크된 member다. Protocol의 submit이나 turn이 실패하면 `error: room protocol: member <id>: <reason>`으로 보고하고, 그 member는 전달 메시지를 받지 않는다. 방은 다른 member에게 전달하고, 남은 member가 없으면 `error: room relay: no member has the room protocol`을 보고한다.
 
 ## Mention
 
@@ -46,35 +47,44 @@ Mention은 `@` 뒤의 member 이름이나 identifier이며 대소문자를 구�
 - `facil`: member 하나, 즉 roster 순서에서 session이 `idle`인 첫 member가 받는다. `idle`인 member가 없으면 send는 `no member is idle`로 거부된다. Mention된 member들은 차례로 받는다.
 - `simul`: 모든 member가 동시에 받는다. 방은 어떤 turn이 끝나기 전에 모든 member에게 submit하고, 모든 turn이 끝나면 resolve한다. 답은 roster 순서(또는 mention 순서)를 지킨다.
 
-Member들이 메시지를 차례로 받을 때(`turn`, 그리고 `turn`과 `facil`에서 mention된 member) 각 member는 자기 turn 전에 나온 말을 읽도록 메시지와 함께 앞 member들의 답을 받는다. 줄은 `[@owner] <message>`이고, relay 순서로 앞의 각 member마다 ` | [@<name>] <answer>`가 뒤따른다. `core.session.submit`이 CR과 LF를 거부하므로 답 안의 각 줄바꿈은 공백으로 바뀐다. `simul`에서는 방이 submit할 때 끝난 turn이 없으므로 모든 member가 `[@owner] <message>`만 받는다.
+Member들이 메시지를 차례로 받을 때(`turn`, 그리고 `turn`과 `facil`에서 mention된 member) 각 member는 자기 turn 전에 나온 말을 읽도록 메시지와 함께 앞 member들의 답을 받는다. 줄은 `[@owner] <message>`이고, relay 순서로 앞의 각 member마다 ` | [@<name>] <answer>`가 뒤따른다. `core.session.submit`이 CR과 LF를 거부하므로 답 안의 각 줄바꿈은 공백으로 바뀐다. `simul`에서는 방이 submit할 때 끝난 turn이 없으므로 모든 member가 `[@owner] <message>`만 받는다. 각 줄은 그 member의 turn token인 ` | [@clubhouse] turn <token>`으로 끝난다([답](#answer)).
 
 실패한 turn은 member와 이유로 relay를 reject하고, `message.send`가 그것을 보고한다([command](#command)). `turn`과 `facil`에서는 그 뒤의 member가 아무것도 받지 않는다. `simul`에서는 다른 turn이 끝까지 진행되고, relay는 member 순서로 첫 실패로 reject한다.
 
 ## Answer
 
-Member의 답은 그 turn의 행의 마지막 reply block이다. Core는 session의 owner에게 화면의 행과 retained row를 text로 주고(core `docs/spec/plugins.md#owned-sessions`), program의 reply text를 전하는 channel을 선언하지 않는다. `core.sessions`의 program status는 상태만 전한다. 그래서 방은 turn의 행을 absolute line number로 읽고 다음 규칙으로 답을 얻는다.
+Member는 화면이 아니라 선언된 command `soksak-plugin-agents-clubhouse.answer {turn, text}`로 답을 전한다. Claude Code처럼 alternate screen에 그리는 program은 보이는 viewport의 행만 terminal에 쓰고, viewport를 벗어난 행은 쓰이지 않는다. 그래서 화면도 `core.session.read`가 읽는 retained row도 member tab보다 긴 답이나 viewport를 벗어난 submit된 줄을 담지 않으며, 방은 그것에서 답을 읽지 않는다.
 
-- 줄을 submit한 뒤 방은 `core.session.read {session}`으로 화면을 읽고, 이 read는 `{from, rows, cursor}`로 답한다. Submit된 줄은 prompt marker `❯ ` 뒤에 비어 있지 않고 submit된 text가 그것으로 시작하는 text가 오는 마지막 행이므로, terminal이 wrap한 줄도 첫 행으로 찾는다. 그 absolute line number는 `from`에 그 행의 index를 더한 값이다. 그런 행이 없는 화면은 `the screen shows no submitted line: no row starts with the prompt marker and the submitted text`로 거부된다.
-- Turn 뒤 방은 화면을 다시 읽는다. 마지막 absolute line은 `from`에 행 수를 더하고 1을 뺀 값이다. 방은 submit된 줄 뒤의 행부터 그 줄까지를 `core.session.read {session, from, count}`로 최대 200행씩 page로 읽으므로, 화면보다 긴 답도 전부 읽는다. Retained row를 벗어난 줄 같은 core의 거부는 그 text로 답을 실패시킨다.
-- Turn의 행은 submit된 줄 뒤의 행부터 prompt marker `❯`로 시작하는 첫 행, 즉 program의 다음 prompt 앞까지다. 그 행과 그 뒤의 행은 turn에 속하지 않는다. 그런 행이 없으면 `the rows of the turn show no prompt row after the submitted line`으로 거부된다.
-- Reply block은 turn의 행 중 reply marker `⏺ `로 시작하는 마지막 행에서 시작하고, 이어지는 행 중 공백 두 개로 시작하는 각 행과 각 빈 행으로 이어진다. 공백 두 개로 시작하지 않으면서 빈 행 뒤에 오는 행에서 끝난다. 그 행과 그 뒤의 행, 즉 program의 status line과 separator는 답에 속하지 않는다.
-- Block의 text는 marker를 뺀 첫 행과 공백 두 개를 뺀 다른 각 행을 각각 끝 공백 없이 줄바꿈으로 이은 것이며, 끝의 빈 행은 제거된다.
-- Reply marker로 시작하는 행이 없는 turn의 행은 `the rows of the turn show no reply row: no row starts with the reply marker`로 거부된다.
-- 공백 두 개로 시작하지 않으면서 block의 행 바로 뒤에 오는 행은 block을 깨뜨린다. 방은 답을 `the reply rows are broken at turn row <row>: <text>`로 거부하고(`<row>`는 turn의 행에서 0부터 센 index) 아무것도 고치지 않는다. 그런 행은 program과 terminal이 서로 다른 너비로 행을 배치해서 생기며, 행에 더 이상 program이 쓴 그대로의 reply가 없기 때문이다.
+- 전달하는 줄마다 방은 새 random token으로 turn을 열고 줄을 ` | [@clubhouse] turn <token>`으로 끝낸다. Session 하나에는 열린 turn이 많아야 하나다.
+- 답 command는 trim한 뒤 비어 있지 않은 string `text`를 `turn`의 열린 turn에 대해 받고, 답은 `text` 그대로다. Command는 그 turn을 끝낸다. Token은 한 번만 받으며, 열린 turn이 없는 token(turn이 이미 끝난 token 포함)은 `turn <token> is not an open turn of this room`으로 거부된다. 잘못된 parameter는 `turn must be a non-empty string, got <value>` 또는 `text must be a non-empty string, got <value>`로 거부된다.
+- Member의 turn은 답이 도착하면 끝난다. Member는 자기 turn 중에 command를 실행하고 core는 방의 handler가 실행된 뒤 command에 답하므로, 답은 program이 `idle`을 보고하기 전에 도착한다. 답 없이 program이 `working`을 거쳐 `idle`이 된 turn은 `the member ended its turn without an answer: it ran no soksak-plugin-agents-clubhouse.answer`로 실패한다. 방은 program의 질문에 답하지 않으므로 program이 `blocked`를 보고한 turn은 이전처럼 실패한다([mode](#mode)). 답 command에 permission을 묻는 program의 member는 사람에게서 그 permission을 받아야 한다.
 
-거부된 답은 member의 turn을 `member <id>: <reason>`으로 실패시킨다([mode](#mode)).
+실패한 turn은 `member <id>: <reason>`으로 실패한다([mode](#mode)).
+
+### Decision
+
+답은 turn의 token을 실어 호출하는 선언된 방 command로 온다. 그 이유와, adversarial review가 이 결정에 대해 제기한 objection은 다음과 같다.
+
+- 화면과 retained row는 답을 담을 수 없다. 기록된 Claude Code의 출력은 보이는 viewport의 행만 담으므로, submit된 줄 뒤의 행에서 reply block을 얻던 이전 규칙은 tab보다 긴 모든 답에서 실패했다.
+- Member의 identity. Core는 command의 handler에 caller를 주지 않고, `agent.surface`는 owned session의 모든 process에 owner surface를 답한다(core `docs/spec/persistent-services.md#owned-sessions`). 그래서 core의 어떤 identity도 한 방의 member를 구별하지 못하며, 그런 identity에는 terminal sidecar와 모든 host의 변경이 필요하다. Objection: `core.sessions`가 모든 session을 나열하고 `simul`에서는 모든 member에게 열린 turn이 있으므로 session parameter는 증명이 아니며, 한 member가 다른 member의 답을 낼 수 있다. Answer: token은 random이고 전달하는 줄마다 새로우며 그 member의 줄에만 쓰이므로, token을 가진 답은 그 줄을 받은 terminal에서 오고 방에는 core의 identity가 필요 없다.
+- Objection: 두 번째 답이나 늦은 답이 같은 member의 다음 turn을 끝낼 수 있다. Answer: 각 token은 한 번만, 그 turn이 열려 있는 동안만 받는다.
+- Objection: member가 답하기 전에 program이 `idle`을 보고할 수 있다. Answer: permission을 기다리는 program은 `blocked`를 보고하고 이는 자기 이유로 turn을 실패시키며, `idle`은 program이 turn을 끝냈다는 뜻이다. 줄은 member에게 답을 turn의 마지막 단계로 전하라고 한다.
+- Objection: 이전 protocol 줄을 받은 session은 답 command를 모른다. Answer: tab state는 현재 protocol의 session을 `protocolSessions`라 부르고 이전 field `taught`를 거부하므로, 그 session은 protocol 줄을 다시 받는다([restart](#restart)).
+- Objection: 여러 줄의 긴 답은 shell에서 quote하기 어렵다. Answer: protocol 줄은 parameter가 JSON인 MCP tool `command_run`을 먼저 말하고, quote된 here-document를 쓰는 shell 형식을 준다.
+- 기각한 대안: `sok message send`는 terminal의 folder에 메시지를 쓰며, 방은 terminal folder가 아니다.
+- 기각한 대안: `sok conversation read`는 agent의 대화 파일을 읽지만 session이 아니라 working directory로 파일을 고르므로 한 folder의 member들을 구별하지 못하고, 답의 끝을 알리는 event가 없는 read다.
 
 ## Restart
 
-Application의 restart, 방 tab의 unload, view의 restart 뒤에도 방은 입력 없이 이전과 같은 상태를 보여 준다. 방은 `surface.unload` `{format: 1, maxBytes: 1048576}`을 선언하고, 바뀔 때마다 view의 tab state(`tab.state.write`)로 tab의 상태를 쓴다. Core는 이를 tab마다 restart 너머로 보관한다(core `docs/spec/plugins.md#memory-saver`). 상태는 `{roster, mode, conversation, sessions, taught}`다.
+Application의 restart, 방 tab의 unload, view의 restart 뒤에도 방은 입력 없이 이전과 같은 상태를 보여 준다. 방은 `surface.unload` `{format: 1, maxBytes: 1048576}`을 선언하고, 바뀔 때마다 view의 tab state(`tab.state.write`)로 tab의 상태를 쓴다. Core는 이를 tab마다 restart 너머로 보관한다(core `docs/spec/plugins.md#memory-saver`). 상태는 `{roster, mode, conversation, sessions, protocolSessions}`다.
 
 - `roster`: roster 순서의 entry `{id, checked}`. 시작할 때 definition이 주는 첫 roster는 이 순서와 check를 지킨다. 여기에 없는 definition은 끝에 체크되지 않은 채로 들어오고, definition이 없는 entry는 빠진다.
 - `mode`: 대화 mode. 설정 `kibitzDefault`는 상태가 없는 방 tab의 mode만 정한다.
 - `conversation`: 대화가 보여 주는 entry `{speaker, text}`. `speaker`는 `owner` 또는 member의 identifier이고 `text`는 메시지 또는 member의 [답](#answer)이므로, restart 뒤에도 대화는 같은 답을 보여 준다.
 - `sessions`: 이 방이 연 member session.
-- `taught`: [room protocol](#room-protocol)을 받은 session. 여기에 있는 session은 protocol 줄을 다시 받지 않는다.
+- `protocolSessions`: 답 command가 든 [room protocol](#room-protocol)을 받은 session. 여기에 있는 session은 protocol 줄을 다시 받지 않는다.
 
-Reader는 이 형식만 받으며, 다른 값은 field와 찾은 것을 밝히는 `room tab state: <field> ...`로 거부한다. 상태가 없는 tab은 `null`을 읽는다. 거부된 쓰기는 `error: room tab state: <reason>`으로 보고된다.
+Reader는 이 형식만 받으며, 다른 값은 field와 찾은 것을 밝히는 `room tab state: <field> ...`로, 이전 `taught`처럼 이 형식 밖의 field는 `room tab state: unknown field <field>`로 거부한다. 상태가 없는 tab은 `null`을 읽는다. 거부된 쓰기는 `error: room tab state: <reason>`으로 보고된다.
 
 시작할 때 방은 `core.sessions`의 첫 값을 기다린 뒤 상태의 체크된 member를 summon한다. 방은 `core.sessions`가 이 방 surface를 `owner`로 나열하는 session에만 다시 붙는다. 저장된 session이 그중 하나인 member는 그 session을 유지하고, 그런 session이 없는 member만 session을 연다. Arrangement는 같은 tree를 apply하므로 core는 각 entry `{plugin, params: {session}}`을 이미 그 session을 보여 주는 member tab으로 resolve한다. `params.session`이 `core.sessions`가 더 이상 나열하지 않는 `sessions`의 session을 가리키는 plane의 tab은 session이 끝난 이 방의 member tab이다. 방은 apply 뒤 이를 `core.layout.close {tab}`으로 닫고, 그다음 `sessions`에 열린 session만 남긴다. 방은 다른 tab을 닫지 않는다.
 

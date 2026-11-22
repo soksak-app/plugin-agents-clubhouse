@@ -1,52 +1,51 @@
-// The answer of a member (docs/spec/room.md#answer). Core gives the owner of a session the rows of its screen and its retained rows by
-// absolute line number, and declares no channel that carries the reply text of a program, so the room finds the submitted line on the
-// screen by the prompt marker, reads the rows after it, and takes the answer from the rows of the turn by the rule of the spec: the
-// last reply block before the next prompt, which starts at a row with the reply marker and continues with the rows indented by two
-// spaces. Rows that break the block, which a program and a terminal that laid out the rows at different widths leave, are refused,
-// not repaired.
+// The answer channel of the room (docs/spec/room.md#answer). A member delivers its answer with the declared command
+// soksak-plugin-agents-clubhouse.answer {turn, text}, not through its screen: a program on the alternate screen writes only the rows of
+// its visible viewport to the terminal, so no read of the screen or of the retained rows holds an answer taller than the member tab.
+// Each relayed line carries the token of its turn, and the room accepts each token once, only while its turn is open, because core
+// gives the handler of a command no caller and answers the owner surface for every process of an owned session.
 
-const PROMPT = "❯";
-const MARKER = "⏺ ";
-const INDENT = "  ";
+export const ANSWER_COMMAND = "soksak-plugin-agents-clubhouse.answer";
 
-// Returns the absolute line number of the last screen row that shows the submitted text after the prompt marker. The first row of a
-// line that the terminal wrapped holds the start of the text, so the text must begin with the rest of the row.
-export function submittedLine(screen: { from: number; rows: string[] }, text: string): number {
-  const shows = (row: string): boolean => {
-    if (!row.startsWith(`${PROMPT} `)) return false;
-    const rest = row.slice(PROMPT.length + 1).trimEnd();
-    return rest !== "" && text.startsWith(rest);
-  };
-  const index = screen.rows.map(shows).lastIndexOf(true);
-  if (index < 0) throw new Error("the screen shows no submitted line: no row starts with the prompt marker and the submitted text");
-  return screen.from + index;
+export interface OpenTurn {
+  // The token that the relayed line of the turn carries as `[@clubhouse] turn <token>`.
+  turn: string;
+  // Resolves with the text of the answer command of the token.
+  answer: Promise<string>;
+  // Ends the turn: a later answer of its token is refused.
+  close(): void;
 }
 
-// Returns the text of the last reply block of the rows after the submitted line up to the next prompt, or throws an error that names
-// the turn row that breaks the rule.
-export function turnAnswer(rowsAfterLine: string[]): string {
-  const end = rowsAfterLine.findIndex((row) => row.startsWith(PROMPT));
-  if (end < 0) throw new Error("the rows of the turn show no prompt row after the submitted line");
-  const rows = rowsAfterLine.slice(0, end);
-  const start = rows.map((row) => row.startsWith(MARKER)).lastIndexOf(true);
-  if (start < 0) throw new Error("the rows of the turn show no reply row: no row starts with the reply marker");
-  const lines = [rows[start].slice(MARKER.length).trimEnd()];
-  let blank = false;
-  for (let index = start + 1; index < rows.length; index += 1) {
-    const row = rows[index].trimEnd();
-    if (row === "") {
-      blank = true;
-      lines.push("");
-      continue;
-    }
-    if (row.startsWith(INDENT)) {
-      blank = false;
-      lines.push(row.slice(INDENT.length));
-      continue;
-    }
-    if (blank) break;
-    throw new Error(`the reply rows are broken at turn row ${index}: ${JSON.stringify(row)}`);
-  }
-  while (lines.length > 0 && lines[lines.length - 1] === "") lines.pop();
-  return lines.join("\n");
+export interface AnswerChannel {
+  open(session: string): OpenTurn;
+  // The handler of the answer command; it throws each refusal.
+  deliver(params: unknown): { turn: string };
+}
+
+interface Pending {
+  session: string;
+  resolve: (text: string) => void;
+}
+
+export function createAnswerChannel(newTurn: () => string = () => crypto.randomUUID()): AnswerChannel {
+  const open = new Map<string, Pending>();
+  return {
+    open(session) {
+      for (const pending of open.values()) if (pending.session === session) throw new Error(`session ${session} has an open turn`);
+      const turn = newTurn();
+      let resolve: (text: string) => void = () => {};
+      const answer = new Promise<string>((done) => (resolve = done));
+      open.set(turn, { session, resolve });
+      return { turn, answer, close: () => void open.delete(turn) };
+    },
+    deliver(params) {
+      const { turn, text } = (params ?? {}) as { turn?: unknown; text?: unknown };
+      if (typeof turn !== "string" || turn === "") throw new Error(`turn must be a non-empty string, got ${JSON.stringify(turn)}`);
+      if (typeof text !== "string" || text.trim() === "") throw new Error(`text must be a non-empty string, got ${JSON.stringify(text)}`);
+      const pending = open.get(turn);
+      if (!pending) throw new Error(`turn ${turn} is not an open turn of this room`);
+      open.delete(turn);
+      pending.resolve(text);
+      return { turn };
+    },
+  };
 }

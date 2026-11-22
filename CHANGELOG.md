@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- C55: A member delivers its answer with the declared command `soksak-plugin-agents-clubhouse.answer {turn, text}` for the token that ends its relayed line; the turn ends when the answer arrives, a program idle without an answer fails the turn, the tab state names `protocolSessions` in place of `taught`, and the room reads no answer from the screen (`docs/spec/room.md#answer`).
 - C54: The version is 0.0.10, which releases C47 and C53.
 - C53: `message.send` shows each refusal and each failed relay through the error display as `error: room relay: <reason>`, also for a command call (`docs/spec/room.md#commands`).
 - C47: The answer of a member is the last reply block of the rows of its turn, which the room reads after the submitted line by absolute line number in pages of at most 200 rows, so an answer taller than the screen is read whole (`docs/spec/room.md#answer`).

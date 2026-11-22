@@ -169,6 +169,20 @@
         }
       },
       {
+        "name": "soksak-plugin-agents-clubhouse.answer",
+        "description": "Deliver the answer of a member for the turn whose token its relayed line carries as [@clubhouse] turn <token>; run it with the surface of the room. Each token takes one answer while its turn is open.",
+        "params": {
+          "type": "object",
+          "properties": { "turn": { "type": "string" }, "text": { "type": "string" } },
+          "required": ["turn", "text"]
+        },
+        "result": {
+          "type": "object",
+          "properties": { "turn": { "type": "string" } },
+          "required": ["turn"]
+        }
+      },
+      {
         "name": "soksak-plugin-agents-clubhouse.tower.set",
         "description": "Open the control tower modal when open is true and close it when open is false. Setting the current state changes nothing.",
         "params": {

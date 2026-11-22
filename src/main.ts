@@ -30,6 +30,7 @@ import { ownedSessionIds } from "./room/session-channel";
 import { reattachedChecks, rosterFrom, type RosterEntry } from "./room/roster";
 import { measuredCardSize } from "./room/card-size";
 import { createRoomOperations } from "./room/operations";
+import { ANSWER_COMMAND, createAnswerChannel } from "./room/answer";
 import { createMacroStore } from "./tower/macro";
 import { setupTower } from "./tower/header";
 import { TOWER_LIVE_TOPIC } from "./tower/modal";
@@ -184,14 +185,14 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   const conversation: RoomTabState["conversation"] = [...(saved?.conversation ?? [])];
   // The member sessions that this room opened, and the sessions that received the room protocol.
   const roomSessions = new Set<string>(saved?.sessions ?? []);
-  const taughtSessions = new Set<string>(saved?.taught ?? []);
+  const taughtSessions = new Set<string>(saved?.protocolSessions ?? []);
   const persist = (): void => {
     const value: RoomTabState = {
       roster: roster.map((entry) => ({ id: entry.id, checked: entry.checked })),
       mode,
       conversation,
       sessions: [...roomSessions],
-      taught: [...taughtSessions],
+      protocolSessions: [...taughtSessions],
     };
     bridge!.calls.request("tab.state.write", value).catch((error: unknown) => report("room tab state", String((error as Error)?.message ?? error)));
   };
@@ -406,9 +407,12 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   };
 
   // A message goes to the checked members whose session is open, by the mode of the room and the mentions of the message
-  // (docs/spec/room.md). The answers are the screens of the members after their turns, shown as text in the conversation.
+  // (docs/spec/room.md). Each member delivers its answer with the answer command, and the conversation shows it as text.
+  const answers = createAnswerChannel();
   const relayPorts: RelayPorts = {
     commands: room.commands,
+    answers,
+    surface,
     sessions: () => sessionsValue,
     watchSessions: (listener) => {
       sessionListeners.add(listener);
@@ -534,7 +538,11 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
     [`${EXPOSE}.tower`]: towerButton,
   };
   return {
-    commands: { ...createRoomCommands({ tower, trace, mode: () => mode, state }), ...operations },
+    commands: {
+      ...createRoomCommands({ tower, trace, mode: () => mode, state }),
+      ...operations,
+      [ANSWER_COMMAND]: async (params: unknown) => answers.deliver(params),
+    },
     elements,
     statuses: {
       [`${EXPOSE}.arrangement`]: {

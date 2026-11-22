@@ -1,7 +1,6 @@
 // The owner side of an owned session (C5, core docs/spec/plugins.md#owned-sessions). The room is the owner surface of its member
 // sessions. It sends a line with core.session.submit {session, text}, which core pastes and ends with Enter and which refuses CR and
-// LF, reads the screen with core.session.read {session} as {from, rows, cursor} and retained rows with core.session.read {session, from,
-// count} as {from, count, rows}, and reads the program state of a session from its entry
+// LF, and reads the program state of a session from its entry
 // of core.sessions, where core gives `program` as {state} or null. The room names no plugin and no sidecar: the session identifier
 // comes from the summon relation (C3).
 
@@ -10,13 +9,6 @@ export interface SessionCommandPort {
 }
 
 export type ProgramState = "idle" | "working" | "blocked";
-
-export interface SessionScreen {
-  // The absolute line number of the first row, in the numbering of a read with from and count.
-  from: number;
-  rows: string[];
-  cursor: { row: number; column: number };
-}
 
 const PROGRAM_STATES: readonly string[] = ["idle", "working", "blocked"];
 
@@ -33,43 +25,6 @@ export function sessionSubmit(port: SessionCommandPort, session: string): (text:
     const reply = await port.commands.execute("core.session.submit", { session, text });
     if (reply === null || typeof reply !== "object") throw new Error("core.session.submit reply is not an object");
   };
-}
-
-const isIndex = (value: unknown): boolean => Number.isInteger(value) && (value as number) >= 0;
-const isRows = (rows: unknown): rows is string[] => Array.isArray(rows) && rows.every((row) => typeof row === "string");
-
-// Reads the screen of the session: the absolute line number of its first row, the visible rows, top row first, and the cursor
-// position in them.
-export async function sessionRead(port: SessionCommandPort, session: string): Promise<SessionScreen> {
-  checkSession(session);
-  const reply = await port.commands.execute("core.session.read", { session });
-  if (!isIndex(reply?.from)) throw new Error("core.session.read from must be an integer of 0 or more");
-  if (!isRows(reply.rows)) throw new Error("core.session.read rows must be an array of strings");
-  const cursor = reply.cursor;
-  if (cursor === null || typeof cursor !== "object" || !isIndex(cursor.row) || !isIndex(cursor.column)) {
-    throw new Error("core.session.read cursor must be zero-based integers");
-  }
-  return { from: reply.from, rows: reply.rows, cursor: { row: cursor.row, column: cursor.column } };
-}
-
-// The largest count of one read of retained rows that core accepts.
-export const READ_PAGE = 200;
-
-// Reads count retained rows of the session from the absolute line number from. A count outside 1 to 200 is refused before any
-// request, and a reply that holds other lines than the request is refused.
-export async function sessionReadLines(port: SessionCommandPort, session: string, from: number, count: number): Promise<string[]> {
-  checkSession(session);
-  if (!isIndex(from)) throw new Error(`read from must be an integer of 0 or more, got ${JSON.stringify(from)}`);
-  if (!Number.isInteger(count) || count < 1 || count > READ_PAGE) {
-    throw new Error(`read count must be an integer from 1 to ${READ_PAGE}, got ${JSON.stringify(count)}`);
-  }
-  const reply = await port.commands.execute("core.session.read", { session, from, count });
-  if (!isRows(reply?.rows)) throw new Error("core.session.read rows must be an array of strings");
-  if (reply.from !== from || reply.count !== count || reply.rows.length !== count) {
-    const answered = isIndex(reply.from) ? `${reply.from} to ${reply.from + reply.rows.length - 1}` : JSON.stringify(reply.from);
-    throw new Error(`core.session.read answered lines ${answered} for lines ${from} to ${from + count - 1}`);
-  }
-  return reply.rows;
 }
 
 // The sessions of a value of core.sessions whose owner is the surface; a room reattaches only to its own sessions after a restart.

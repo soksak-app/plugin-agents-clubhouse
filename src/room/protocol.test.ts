@@ -15,7 +15,7 @@ function fakeCore(initial: Record<string, State | null>) {
     states = { ...states, [session]: state };
     for (const listener of [...listeners]) listener(value());
   };
-  const ports: RelayPorts = {
+  const ports: Omit<RelayPorts, "answers"> = {
     commands: {
       execute: async (name, params) => {
         if (name !== "core.session.submit") throw new Error(`unexpected command ${name}`);
@@ -25,6 +25,7 @@ function fakeCore(initial: Record<string, State | null>) {
         return {};
       },
     },
+    surface: "room-1",
     sessions: value,
     watchSessions: (listener) => {
       listeners.add(listener);
@@ -44,9 +45,21 @@ const claude = { id: "reviewer", name: "Claude", session: "s-1" };
 
 describe("roomProtocolLine", () => {
   it("is one line with the speaker labels, the mention rule, the turn rule and the other members", () => {
-    const line = roomProtocolLine("Claude", ["Codex", "Tester"]);
+    const line = roomProtocolLine("Claude", ["Codex", "Tester"], "room-1");
     expect(line).not.toMatch(/[\r\n]/);
     for (const part of ["[@owner]", "[@<member>]", "[@clubhouse]", "@<name>", "[@Claude]", "Codex, Tester", "quoted data"]) {
+      expect(line).toContain(part);
+    }
+  });
+
+  it("states the answer command with the room surface, the turn token, the MCP form and the shell form (docs/spec/room.md#answer)", () => {
+    const line = roomProtocolLine("Claude", [], "room-1");
+    for (const part of [
+      "[@clubhouse] turn <token>",
+      'command_run with name soksak-plugin-agents-clubhouse.answer, surface room-1 and params {"turn": "<token>", "text": "<your answer>"}',
+      "sok soksak-plugin-agents-clubhouse.answer --surface room-1 --turn <token> --text=\"$(cat <<'EOF'",
+      "This protocol line takes no answer.",
+    ]) {
       expect(line).toContain(part);
     }
   });
@@ -62,7 +75,7 @@ describe("createProtocolInjector", () => {
     expect(core.submitted).toEqual([]);
     core.set("s-1", "idle");
     expect(await Promise.all([first, second])).toEqual([{ ok: true }, { ok: true }]);
-    expect(core.submitted).toEqual([{ session: "s-1", text: roomProtocolLine("Claude", ["Codex"]) }]);
+    expect(core.submitted).toEqual([{ session: "s-1", text: roomProtocolLine("Claude", ["Codex"], "room-1") }]);
     await injector.ensure(claude, ["Codex"]);
     expect(core.submitted.length).toBe(1);
     expect(reports).toEqual([]);

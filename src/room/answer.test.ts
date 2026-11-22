@@ -1,49 +1,59 @@
-// The answer of a member (docs/spec/room.md#answer): the submitted line is found on the screen by its prompt marker, and the answer is
-// the last reply block of the rows of the turn, which end at the next prompt, without the status line, the spinner and the
-// separators. The fixture holds the screen rows of three members that a window reported after one turn; two of them were laid out at
-// another width than the terminal had, and their rows are refused.
+// The answer channel of the room (docs/spec/room.md#answer): each relayed line carries the token of its turn, a member delivers its
+// answer with the declared command soksak-plugin-agents-clubhouse.answer {turn, text}, and the room accepts each token once, only
+// while its turn is open.
 import { describe, expect, it } from "vitest";
-import { submittedLine, turnAnswer } from "./answer";
-import fixture from "./fixtures/member-screens.json";
+import { ANSWER_COMMAND, createAnswerChannel } from "./answer";
 
-const screen = (id: string): string[] => fixture.screens.find((entry) => entry.id === id)!.rows;
+const counter = () => {
+  let next = 0;
+  return () => `t-${++next}`;
+};
 
-describe("submittedLine", () => {
-  it("answers the absolute line of the last row that shows the submitted line, also when the terminal wrapped it", () => {
-    const rows = ["❯ [@owner] earlier", "⏺ old", "", "❯ [@owner] a long line that", "  wraps", "─────", "❯"];
-    expect(submittedLine({ from: 40, rows }, "[@owner] a long line that wraps")).toBe(43);
-    expect(submittedLine({ from: 0, rows: ["❯ hi"] }, "hi")).toBe(0);
+describe("createAnswerChannel", () => {
+  it("resolves the open turn of the token with the delivered text, whole and unchanged", async () => {
+    const channel = createAnswerChannel(counter());
+    const turn = channel.open("s-1");
+    expect(turn.turn).toBe("t-1");
+    const text = Array.from({ length: 451 }, (_, index) => `row ${index}`).join("\n");
+    expect(channel.deliver({ turn: "t-1", text })).toEqual({ turn: "t-1" });
+    await expect(turn.answer).resolves.toBe(text);
   });
 
-  it("refuses a screen without a row of the submitted line", () => {
-    expect(() => submittedLine({ from: 0, rows: ["❯", "❯ other"] }, "hi")).toThrow(
-      "the screen shows no submitted line: no row starts with the prompt marker and the submitted text",
-    );
-  });
-});
-
-describe("turnAnswer", () => {
-  it("takes only the reply rows of a turn, without the status line, the separators and the prompt", () => {
-    expect(turnAnswer(screen("harness-harness"))).toBe(
-      "여러분들, 저는 harness고 코드 변경을 꼼꼼히 확인하고\n커밋하는 일을 잘하는데요, 아직 앞에서 말한 사람이\n없어서 덧붙일 말은 없어요.",
-    );
+  it("refuses a token of no open turn, also a second answer of one turn and an answer after the close of its turn", () => {
+    const channel = createAnswerChannel(counter());
+    expect(() => channel.deliver({ turn: "t-9", text: "hi" })).toThrow("turn t-9 is not an open turn of this room");
+    channel.open("s-1");
+    channel.deliver({ turn: "t-1", text: "first" });
+    expect(() => channel.deliver({ turn: "t-1", text: "second" })).toThrow("turn t-1 is not an open turn of this room");
+    channel.open("s-1").close();
+    expect(() => channel.deliver({ turn: "t-2", text: "late" })).toThrow("turn t-2 is not an open turn of this room");
   });
 
-  it("refuses the rows of a reply that the terminal broke at another width, naming the turn row", () => {
-    expect(() => turnAnswer(screen("moai-manager-lead"))).toThrow('the reply rows are broken at turn row 1: "보고"');
-    expect(() => turnAnswer(screen("superpowers-superpowers"))).toThrow('the reply rows are broken at turn row 1: "드는"');
+  it("gives each turn its own token, so the answer of one member never ends the turn of another", async () => {
+    const channel = createAnswerChannel(counter());
+    const first = channel.open("s-1");
+    const second = channel.open("s-2");
+    channel.deliver({ turn: second.turn, text: "of s-2" });
+    channel.deliver({ turn: first.turn, text: "of s-1" });
+    await expect(first.answer).resolves.toBe("of s-1");
+    await expect(second.answer).resolves.toBe("of s-2");
   });
 
-  it("refuses rows of a turn without a reply row", () => {
-    expect(() => turnAnswer(["✻ Cogitated for 3s", "❯"])).toThrow("the rows of the turn show no reply row: no row starts with the reply marker");
+  it("refuses invalid parameters with the parameter and the value", () => {
+    const channel = createAnswerChannel(counter());
+    channel.open("s-1");
+    expect(() => channel.deliver({ turn: "", text: "x" })).toThrow('turn must be a non-empty string, got ""');
+    expect(() => channel.deliver({ turn: "t-1", text: "  " })).toThrow('text must be a non-empty string, got "  "');
+    expect(() => channel.deliver({ turn: "t-1", text: 3 })).toThrow("text must be a non-empty string, got 3");
   });
 
-  it("refuses rows of a turn without a prompt row", () => {
-    expect(() => turnAnswer(["⏺ hi", ""])).toThrow("the rows of the turn show no prompt row after the submitted line");
+  it("refuses a second open turn of one session", () => {
+    const channel = createAnswerChannel(counter());
+    channel.open("s-1");
+    expect(() => channel.open("s-1")).toThrow("session s-1 has an open turn");
   });
 
-  it("takes the last reply block before the prompt, keeps its blank rows between paragraphs and drops the trailing ones", () => {
-    const rows = ["⏺ Read(a.md)", "  ⎿  Read 3 lines", "", "⏺ first paragraph", "  goes on", "", "  second paragraph", "", "", "✻ Baked for 2s", "❯", "⏺ later"];
-    expect(turnAnswer(rows)).toBe("first paragraph\ngoes on\n\nsecond paragraph");
+  it("names the declared command", () => {
+    expect(ANSWER_COMMAND).toBe("soksak-plugin-agents-clubhouse.answer");
   });
 });
