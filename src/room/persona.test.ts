@@ -71,3 +71,30 @@ describe("createPersonaStore — room.data 컬렉션", () => {
     expect(createPersonaStore(undefined)).toBeUndefined();
   });
 });
+
+describe("createPersonaStore — errors reach the caller", () => {
+  it("a failed data read rejects with the data error instead of an empty text", async () => {
+    const data = fakeData();
+    data.get = async () => {
+      throw new Error("project data unreadable");
+    };
+    const s = createPersonaStore(data)!;
+    await expect(s.read("claude")).rejects.toThrow("project data unreadable");
+  });
+  it("a failed define rejects, and the next call defines again", async () => {
+    const data = fakeData();
+    let defines = 0;
+    data.define = async () => {
+      defines += 1;
+      if (defines === 1) throw new Error("define refused");
+    };
+    const s = createPersonaStore(data)!;
+    await expect(s.read("claude")).rejects.toThrow("define refused");
+    await expect(s.read("claude")).resolves.toBe("");
+    expect(defines).toBe(2);
+  });
+  it("a missing document still reads as an empty text", async () => {
+    const s = createPersonaStore(fakeData())!;
+    await expect(s.read("nobody")).resolves.toBe("");
+  });
+});

@@ -20,14 +20,18 @@ export interface MemberSessionStore {
 export function createMemberSessionStore(data?: PersonaDataApi): MemberSessionStore | undefined {
   if (!data) return undefined;
   let defined: Promise<void> | null = null;
+  // A failed define is not kept: the rejected promise is dropped so that the next call defines again.
   const ensure = () => {
-    defined ??= data.define(MEMBER_SESSIONS, { indexes: ["agentId"] }).catch(() => undefined);
+    defined ??= data.define(MEMBER_SESSIONS, { indexes: ["agentId"] }).catch((error: unknown) => {
+      defined = null;
+      throw error;
+    });
     return defined;
   };
   return {
     async get(agentId) {
       await ensure();
-      const doc = await data.get(MEMBER_SESSIONS, agentId).catch(() => null);
+      const doc = await data.get(MEMBER_SESSIONS, agentId);
       return doc && typeof doc.sessionId === "string" && typeof doc.cwd === "string"
         ? { agentId, sessionId: doc.sessionId, cwd: doc.cwd, savedAt: Number(doc.savedAt) || 0 }
         : null;

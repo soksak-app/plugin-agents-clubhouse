@@ -67,14 +67,18 @@ export interface PersonaStore {
 export function createPersonaStore(data?: PersonaDataApi): PersonaStore | undefined {
   if (!data) return undefined;
   let defined: Promise<void> | null = null;
+  // A failed define is not kept: the rejected promise is dropped so that the next call defines again.
   const ensure = () => {
-    defined ??= data.define(PERSONAS, { indexes: ["memberId"] }).catch(() => undefined);
+    defined ??= data.define(PERSONAS, { indexes: ["memberId"] }).catch((error: unknown) => {
+      defined = null;
+      throw error;
+    });
     return defined;
   };
   return {
     async read(memberId) {
       await ensure();
-      const doc = await data.get(PERSONAS, memberId).catch(() => null);
+      const doc = await data.get(PERSONAS, memberId);
       return typeof doc?.text === "string" ? doc.text : "";
     },
     async write(memberId, text) {
