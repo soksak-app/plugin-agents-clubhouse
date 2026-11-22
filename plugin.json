@@ -103,6 +103,71 @@
         }
       },
       {
+        "name": "soksak-plugin-agents-clubhouse.member.set",
+        "description": "Check or uncheck the roster member id; checking invites it and summons its session. Setting the current state changes nothing.",
+        "params": {
+          "type": "object",
+          "properties": { "id": { "type": "string" }, "checked": { "type": "boolean" } },
+          "required": ["id", "checked"]
+        },
+        "result": {
+          "type": "object",
+          "properties": { "id": { "type": "string" }, "checked": { "type": "boolean" } },
+          "required": ["id", "checked"]
+        }
+      },
+      {
+        "name": "soksak-plugin-agents-clubhouse.member.move",
+        "description": "Move the roster member id to the place index, counted from 0.",
+        "params": {
+          "type": "object",
+          "properties": { "id": { "type": "string" }, "index": { "type": "integer" } },
+          "required": ["id", "index"]
+        },
+        "result": {
+          "type": "object",
+          "properties": { "id": { "type": "string" }, "index": { "type": "integer" } },
+          "required": ["id", "index"]
+        }
+      },
+      {
+        "name": "soksak-plugin-agents-clubhouse.mode.set",
+        "description": "Set the conversation mode of the room: facil, turn or simul.",
+        "params": {
+          "type": "object",
+          "properties": { "mode": { "type": "string", "enum": ["turn", "facil", "simul"] } },
+          "required": ["mode"]
+        },
+        "result": {
+          "type": "object",
+          "properties": { "mode": { "type": "string", "enum": ["turn", "facil", "simul"] } },
+          "required": ["mode"]
+        }
+      },
+      {
+        "name": "soksak-plugin-agents-clubhouse.message.send",
+        "description": "Relay a message to the members by the mode and the mentions, and answer after every turn with the answer of each member in relay order.",
+        "params": {
+          "type": "object",
+          "properties": { "text": { "type": "string" } },
+          "required": ["text"]
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "answers": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": { "id": { "type": "string" }, "text": { "type": "string" } },
+                "required": ["id", "text"]
+              }
+            }
+          },
+          "required": ["answers"]
+        }
+      },
+      {
         "name": "soksak-plugin-agents-clubhouse.tower.plan",
         "description": "Turn a natural-language request into a validated command, DOM and status plan, returned as a dry run unless commit is true.",
         "params": {
@@ -206,20 +271,20 @@
     "element": [
       {
         "name": "soksak-plugin-agents-clubhouse.send",
-        "description": "Send button. Disabled while the transport status is unavailable."
+        "description": "Send button: runs message.send with the text of the input. Disabled while the transport status is unavailable."
       },
       {
         "name": "soksak-plugin-agents-clubhouse.input",
-        "description": "Message input field. Disabled while the transport status is unavailable."
+        "description": "Message input field: Enter without Shift runs message.send with its text. Disabled while the transport status is unavailable."
       },
       {
         "name": "soksak-plugin-agents-clubhouse.tab",
-        "description": "Agent tab with its checkbox and drag handle",
+        "description": "Roster tab of a member: a click runs member.set with the toggled state, a drag over another tab runs member.move",
         "many": true
       },
       {
         "name": "soksak-plugin-agents-clubhouse.mode",
-        "description": "Conversation mode button (facilitator, sequential, simultaneous)"
+        "description": "Conversation mode buttons (facilitator, sequential, simultaneous): each runs mode.set with its mode"
       },
       {
         "name": "soksak-plugin-agents-clubhouse.tower",

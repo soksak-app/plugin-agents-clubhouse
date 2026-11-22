@@ -25,6 +25,7 @@ import { mentionedMembers } from "./room/mention";
 import { shareRecord } from "./room/record";
 import { createProtocolInjector } from "./room/protocol";
 import { rosterFrom, type RosterEntry } from "./room/roster";
+import { createRoomOperations } from "./room/operations";
 import { createMacroStore } from "./tower/macro";
 import { setupTower } from "./tower/header";
 import { TOWER_LIVE_TOPIC } from "./tower/modal";
@@ -238,6 +239,11 @@ function buildRoom({ settings, collections }: RoomContext): RoomHandlers {
   document.body.style.cssText = "margin:0;height:100%";
   document.body.replaceChildren(root);
 
+  // Whether the pointer moved a roster tab since its press; the click that ends a drag is no check.
+  let dragged = false;
+  const failed = (where: string) => (error: unknown) => report(where, String((error as Error)?.message ?? error));
+  // A binding is refused only for an undeclared command; the refusal is reported.
+  const bound = (binding: Promise<unknown>, where: string): void => void binding.catch(failed(`bind ${where}`));
   function renderTabs(): void {
     tabsEl.replaceChildren();
     for (const entry of roster) {
@@ -245,24 +251,24 @@ function buildRoom({ settings, collections }: RoomContext): RoomHandlers {
       tab.dataset.id = entry.id;
       tab.dataset.expose = `${EXPOSE}.tab`;
       tab.append(elText("span", entry.checked ? "✓" : "", "chk"), elText("span", entry.name, "nm"));
-      tab.addEventListener("click", () => {
-        entry.checked = !entry.checked;
-        renderTabs();
-        summon();
-      });
+      // A click runs member.set with the toggled state; the click that ends a drag runs nothing (docs/spec/room.md#commands).
+      bound(
+        expose.bind(tab, `${EXPOSE}.member.set`, () => ({ id: entry.id, checked: !entry.checked }), {
+          when: () => !dragged,
+          failed: failed("member.set"),
+        }),
+        "member.set",
+      );
       tab.addEventListener("pointerdown", (down) => {
         const startX = down.clientX;
-        let moved = false;
+        dragged = false;
         const onMove = (ev: PointerEvent) => {
-          if (!moved && Math.abs(ev.clientX - startX) < 4) return;
-          moved = true;
+          if (!dragged && Math.abs(ev.clientX - startX) < 4) return;
+          dragged = true;
           const over = document.elementFromPoint(ev.clientX, ev.clientY)?.closest<HTMLElement>(".st-tab");
           if (!over || over.dataset.id === undefined || over.dataset.id === entry.id) return;
-          const from = roster.indexOf(entry);
-          const to = roster.findIndex((r) => r.id === over.dataset.id);
-          roster.splice(from, 1);
-          roster.splice(to, 0, entry);
-          renderTabs();
+          const index = roster.findIndex((r) => r.id === over.dataset.id);
+          expose.run(`${EXPOSE}.member.move`, { id: entry.id, index }).catch(failed("member.move"));
         };
         const onUp = () => {
           removeEventListener("pointermove", onMove);
@@ -283,10 +289,7 @@ function buildRoom({ settings, collections }: RoomContext): RoomHandlers {
       button.textContent = t(option.key, lang);
       button.dataset.mode = option.id;
       button.classList.toggle("on", option.id === mode);
-      button.addEventListener("click", () => {
-        mode = option.id;
-        renderMode();
-      });
+      bound(expose.bind(button, `${EXPOSE}.mode.set`, { mode: option.id }, { failed: failed("mode.set") }), "mode.set");
       kib.append(button);
     }
   }
@@ -388,43 +391,65 @@ function buildRoom({ settings, collections }: RoomContext): RoomHandlers {
   const teachMembers = async (): Promise<void> => {
     await taughtMembers(openMembers());
   };
-  send.addEventListener("click", () => {
-    const text = input.value.trim();
-    if (text === "" || busy) return;
+  // A message runs message.send from the send button and from Enter without Shift in the input (docs/spec/room.md#commands).
+  // The relay resolves with the answer of each member in relay order.
+  const relayMessage = async (text: string): Promise<{ id: string; text: string }[]> => {
     const targets = openMembers();
-    if (targets.length === 0) {
-      report("room relay", "no member session is open: check a member of the roster");
-      return;
+    const taught = await taughtMembers(targets);
+    if (taught.length === 0) throw new Error("no member has the room protocol");
+    const answers = await relayInMode(relayPorts, mode, taught, text);
+    const shown = answers.map((answer) => {
+      const member = targets.find((entry) => entry.id === answer.id)!;
+      const last = answer.rows.map((row) => row.trimEnd()).reduce((end, row, index) => (row === "" ? end : index + 1), 0);
+      const answerText = answer.rows.slice(0, last).join("\n");
+      appendMessage(member.name, answerText);
+      return { member, text: answerText };
+    });
+    // A mention narrowed the receivers: the other members receive the record of the exchange and answer nothing that the room
+    // shows (docs/spec/room.md#shared-record).
+    const mentioned = mentionedMembers(text, taught);
+    if (mentioned.length > 0) {
+      const others = taught.filter((entry) => !mentioned.includes(entry));
+      await shareRecord(relayPorts, { message: text, answers: shown }, others, report);
     }
-    busy = true;
-    send.disabled = true;
-    input.value = "";
-    appendMessage(lang === "ko" ? "나" : "You", text);
-    const relay = async (): Promise<void> => {
-        const taught = await taughtMembers(targets);
-        if (taught.length === 0) throw new Error("no member has the room protocol");
-        const answers = await relayInMode(relayPorts, mode, taught, text);
-        const shown = answers.map((answer) => {
-          const member = targets.find((entry) => entry.id === answer.id)!;
-          const last = answer.rows.map((row) => row.trimEnd()).reduce((end, row, index) => (row === "" ? end : index + 1), 0);
-          const answerText = answer.rows.slice(0, last).join("\n");
-          appendMessage(member.name, answerText);
-          return { member, text: answerText };
-        });
-        // A mention narrowed the receivers: the other members receive the record of the exchange and answer nothing that the room
-        // shows (docs/spec/room.md#shared-record).
-        const mentioned = mentionedMembers(text, taught);
-        if (mentioned.length === 0) return;
-        const others = taught.filter((entry) => !mentioned.includes(entry));
-        await shareRecord(relayPorts, { message: text, answers: shown }, others, report);
-    };
-    relay()
-      .catch((error: unknown) => report("room relay", String((error as Error)?.message ?? error)))
-      .finally(() => {
-        busy = false;
-        send.disabled = transport.state !== "ready";
-      });
+    return shown.map((one) => ({ id: one.member.id, text: one.text }));
+  };
+  const operations = createRoomOperations({
+    roster,
+    mode: () => mode,
+    setMode: (next) => {
+      mode = next;
+    },
+    changed: () => {
+      renderTabs();
+      renderMode();
+    },
+    summon,
+    openMembers: () => openMembers().length,
+    accept: (text) => {
+      input.value = "";
+      appendMessage(lang === "ko" ? "나" : "You", text);
+    },
+    busy: (value) => {
+      busy = value;
+      send.disabled = value || transport.state !== "ready";
+    },
+    relay: relayMessage,
   });
+  bound(expose.bind(send, `${EXPOSE}.message.send`, () => ({ text: input.value }), { failed: failed("room relay") }), "message.send");
+  // Enter without Shift sends; the newline that it would insert is prevented. Enter during an IME composition commits the text.
+  const sendKey = (event: KeyboardEvent): boolean => event.key === "Enter" && !event.shiftKey && !event.isComposing;
+  input.addEventListener("keydown", (event) => {
+    if (sendKey(event)) event.preventDefault();
+  });
+  bound(
+    expose.bind(input, `${EXPOSE}.message.send`, () => ({ text: input.value }), {
+      event: "keydown",
+      when: (event: Event) => sendKey(event as KeyboardEvent),
+      failed: failed("room relay"),
+    }),
+    "message.send",
+  );
 
   // The trace and the macros of the tower are project data of the room, kept per project root.
   const trace = createTrace(collections, { sessionId: sessionIdOf(), report });
@@ -441,7 +466,7 @@ function buildRoom({ settings, collections }: RoomContext): RoomHandlers {
     [`${EXPOSE}.tower`]: towerButton,
   };
   return {
-    commands: createRoomCommands({ tower, trace, mode: () => mode, state }),
+    commands: { ...createRoomCommands({ tower, trace, mode: () => mode, state }), ...operations },
     elements,
     statuses: {
       [`${EXPOSE}.arrangement`]: {

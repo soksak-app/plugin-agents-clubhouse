@@ -48,6 +48,14 @@ declare module "@soksak/plugin-api" {
     element(name: string, target: object | (() => object[])): Promise<void>;
     status(name: string, read: () => unknown, subscribe: (listener: (value: unknown) => void) => () => void): Promise<void>;
     dispose(): Promise<void>;
+    // The shared binder of the page (core docs/spec/exposure.md): bind connects an element to a declared command, run runs one.
+    bind(
+      element: HTMLElement,
+      name: string,
+      params: Record<string, unknown> | ((event: Event) => Record<string, unknown>),
+      options?: { event?: string; stop?: boolean; when?: (event: Event) => boolean; failed?: (error: unknown) => void },
+    ): Promise<HTMLElement>;
+    run(name: string, params: Record<string, unknown>): Promise<unknown>;
   }
   export function createExpose(
     port: {

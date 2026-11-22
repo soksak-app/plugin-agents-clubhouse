@@ -1,0 +1,94 @@
+// The operations of the room as declared commands (C35, docs/spec/room.md#commands). The elements of the page are bound to these
+// commands, so a click and a command call run the same path. Each command refuses an invalid parameter with an explicit error.
+import type { RoomMode } from "./commands";
+import type { RosterEntry } from "./roster";
+
+const P = "soksak-plugin-agents-clubhouse";
+const MODES: RoomMode[] = ["facil", "turn", "simul"];
+
+export interface OperationDeps {
+  roster: RosterEntry[];
+  mode: () => RoomMode;
+  setMode: (mode: RoomMode) => void;
+  // Redraws the roster and the mode after a change.
+  changed: () => void;
+  // Summons the checked members that have no open session.
+  summon: () => void;
+  // The number of checked members whose session is open.
+  openMembers: () => number;
+  // Shows the accepted text in the conversation and clears the input.
+  accept: (text: string) => void;
+  busy: (value: boolean) => void;
+  relay: (text: string) => Promise<{ id: string; text: string }[]>;
+}
+
+function idOf(params: any): string {
+  const id = params?.id;
+  if (typeof id !== "string" || id === "") throw new Error(`id must be a non-empty string, got ${JSON.stringify(id)}`);
+  return id;
+}
+
+function entryOf(roster: RosterEntry[], id: string): RosterEntry {
+  const entry = roster.find((one) => one.id === id);
+  if (!entry) throw new Error(`member ${id} is not in the roster`);
+  return entry;
+}
+
+export function createRoomOperations(deps: OperationDeps): Record<string, (params: any) => Promise<any>> {
+  let relaying = false;
+  return {
+    [`${P}.member.set`]: async (params) => {
+      const id = idOf(params);
+      const checked = params?.checked;
+      if (typeof checked !== "boolean") throw new Error(`checked must be a boolean, got ${JSON.stringify(checked)}`);
+      const entry = entryOf(deps.roster, id);
+      if (entry.checked !== checked) {
+        entry.checked = checked;
+        deps.changed();
+        deps.summon();
+      }
+      return { id, checked };
+    },
+    [`${P}.member.move`]: async (params) => {
+      const id = idOf(params);
+      const index = params?.index;
+      const last = deps.roster.length - 1;
+      if (!Number.isInteger(index) || index < 0 || index > last) {
+        throw new Error(`index must be an integer from 0 to ${last}, got ${JSON.stringify(index)}`);
+      }
+      const entry = entryOf(deps.roster, id);
+      const from = deps.roster.indexOf(entry);
+      if (from !== index) {
+        deps.roster.splice(from, 1);
+        deps.roster.splice(index, 0, entry);
+        deps.changed();
+      }
+      return { id, index };
+    },
+    [`${P}.mode.set`]: async (params) => {
+      const mode = params?.mode;
+      if (!MODES.includes(mode)) throw new Error(`mode must be facil, turn or simul, got ${JSON.stringify(mode)}`);
+      if (deps.mode() !== mode) {
+        deps.setMode(mode);
+        deps.changed();
+      }
+      return { mode };
+    },
+    [`${P}.message.send`]: async (params) => {
+      const raw = params?.text;
+      const text = typeof raw === "string" ? raw.trim() : "";
+      if (text === "") throw new Error(`text must be a non-empty string, got ${JSON.stringify(raw)}`);
+      if (relaying) throw new Error("the room is relaying a message");
+      if (deps.openMembers() === 0) throw new Error("no member session is open: check a member of the roster");
+      relaying = true;
+      deps.busy(true);
+      try {
+        deps.accept(text);
+        return { answers: await deps.relay(text) };
+      } finally {
+        relaying = false;
+        deps.busy(false);
+      }
+    },
+  };
+}
