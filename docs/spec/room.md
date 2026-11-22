@@ -17,3 +17,13 @@ The mode of the room (`facil`, `turn`, `simul`) decides who receives a message w
 - `simul`: each member at the same time. The room submits the message to every member before any turn ends, and resolves when every turn has ended; the answers keep roster order (or mention order).
 
 A failed turn rejects the relay with the member and the reason. In `turn` and `facil` the members after it receive nothing; in `simul` the other turns run to their end, and the relay rejects with the first failure in member order.
+
+## Shared record
+
+When a mention narrowed the receivers of a message and every mentioned member has answered, the room submits the record of that exchange to each other member with an open session, in roster order. The text is:
+
+`답은 하지말고 알고있어. [@<sender>]와 [@<member1>], [@<member2>]의 대화기록이다. 답하지말고 참고해.` followed by the record, one entry per line: `@<sender>: <message>`, then `@<member>: <answer>` for each mentioned member in mention order. `<sender>` is the name the conversation shows for the person (`나` or `You`), and an answer is the text the conversation shows for that member.
+
+`core.session.submit` refuses CR and LF, so the room joins the parts of the text with ` | ` in place of each line break, and replaces each line break inside a message or an answer with a space.
+
+The room waits for no turn of these members and shows nothing of their output. A member whose session is not `idle` receives no record; the room reports `error: room record: member <id> is <state>: record not sent` (`<state>` is `without a program state` when the session reports none), and a refused submit is reported with its reason.

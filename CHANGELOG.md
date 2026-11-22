@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- C24: After a mention exchange, each other idle member receives its record as one submitted line, and the room shows none of its output (`docs/spec/room.md#shared-record`).
 - C23: README, the description of `plugin.json` and the setting `kibitzDefault` state the modes and the mentions of `docs/spec/room.md`.
 - C21: The relay applies the mode of the room: `turn` relays in roster order, `facil` to the first idle member or the mentioned members, and `simul` to every member at the same time (`docs/spec/room.md`).
 - C22: The development dependencies `vitest` (4.1.12) and `esbuild` (0.28.2) replace releases with known vulnerabilities; the lock holds `vite` 8.3.8 and no `tinypool`.

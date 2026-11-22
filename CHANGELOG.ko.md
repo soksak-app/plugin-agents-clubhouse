@@ -2,6 +2,7 @@
 
 ## 미출시
 
+- C24: Mention 대화 뒤에 idle인 나머지 member가 그 기록을 submit된 한 줄로 받고, 방은 그 출력을 보여 주지 않는다(`docs/spec/room.md#shared-record`).
 - C23: README, `plugin.json`의 description, setting `kibitzDefault`가 `docs/spec/room.md`의 mode와 mention을 말한다.
 - C21: Relay가 방의 mode를 적용한다. `turn`은 roster 순서로, `facil`은 첫 idle member나 mention된 member에게, `simul`은 모든 member에게 동시에 전달한다(`docs/spec/room.md`).
 - C22: 개발 dependency `vitest`(4.1.12)와 `esbuild`(0.28.2)가 알려진 취약점이 있는 release를 대신한다. Lock은 `vite` 8.3.8을 담고 `tinypool`은 없다.

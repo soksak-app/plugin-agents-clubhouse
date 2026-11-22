@@ -21,6 +21,8 @@ import { readAgentDefinitions, toMemberDefinition, type AgentDataGet, type Agent
 import { createMemberSessionStore } from "./room/session-store";
 import { serialRunner, summonAndArrange, type TriggerDeps } from "./room/trigger";
 import { relayInMode, type RelayPorts } from "./room/room-relay";
+import { mentionedMembers } from "./room/mention";
+import { shareRecord } from "./room/record";
 import { rosterFrom, type RosterEntry } from "./room/roster";
 import { createMacroStore } from "./tower/macro";
 import { setupTower } from "./tower/header";
@@ -379,14 +381,23 @@ function buildRoom({ settings, collections }: RoomContext): RoomHandlers {
     busy = true;
     send.disabled = true;
     input.value = "";
-    appendMessage(lang === "ko" ? "나" : "You", text);
+    const sender = lang === "ko" ? "나" : "You";
+    appendMessage(sender, text);
     relayInMode(relayPorts, mode, targets, text)
-      .then((answers) => {
-        for (const answer of answers) {
-          const name = roster.find((entry) => entry.id === answer.id)?.name ?? answer.id;
+      .then(async (answers) => {
+        const shown = answers.map((answer) => {
+          const member = targets.find((entry) => entry.id === answer.id)!;
           const last = answer.rows.map((row) => row.trimEnd()).reduce((end, row, index) => (row === "" ? end : index + 1), 0);
-          appendMessage(name, answer.rows.slice(0, last).join("\n"));
-        }
+          const answerText = answer.rows.slice(0, last).join("\n");
+          appendMessage(member.name, answerText);
+          return { member, text: answerText };
+        });
+        // A mention narrowed the receivers: the other members receive the record of the exchange and answer nothing that the room
+        // shows (docs/spec/room.md#shared-record).
+        const mentioned = mentionedMembers(text, targets);
+        if (mentioned.length === 0) return;
+        const others = targets.filter((entry) => !mentioned.includes(entry));
+        await shareRecord(relayPorts, { sender, message: text, answers: shown }, others, report);
       })
       .catch((error: unknown) => report("room relay", String((error as Error)?.message ?? error)))
       .finally(() => {
