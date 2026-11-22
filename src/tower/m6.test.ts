@@ -5,7 +5,7 @@
 //    한 번에 정확히 하나만 열린다(FIFO). RED: 큐가 없으면 두 gatedRun 이 confirmGate 를 동시 호출 → 2개 동시.
 // 2. 인터럽트: dispatch 중 pendingHuman 신호가 들어오면 현재 step 종결 후 yield, 부분 결과 보존(RED: 폐기·크래시).
 // 3. 모드 분배: facil=@지목 split / turn=순차 체인 / simul=병렬 — 모드별 올바른 drive 경로(스텁 엔진).
-// 4. 불변식: executor=유일 실행점 — modal/plan 은 app.commands.execute 를 직접 부르지 않는다(정적 grep).
+// 4. 불변식: executor=유일 실행점 — modal/plan 은 room.commands.execute 를 직접 부르지 않는다(정적 grep).
 //
 // 기준 미달 시 단언 약화 금지 — 구현을 고친다(배신).
 
@@ -32,7 +32,7 @@ const CATALOG = [
 
 function fakeApp(over: Record<string, (p: any) => any> = {}) {
   const executed: Array<{ name: string; params: any }> = [];
-  const app = {
+  const room = {
     commands: {
       execute: vi.fn(async (name: string, params: any) => {
         if (over[name]) return over[name](params);
@@ -47,12 +47,12 @@ function fakeApp(over: Record<string, (p: any) => any> = {}) {
       }),
     },
   };
-  return { app, executed };
+  return { room, executed };
 }
 
 function deps(over: Partial<ExecutorDeps> = {}, appOver: Record<string, (p: any) => any> = {}) {
-  const { app, executed } = fakeApp(appOver);
-  const d: ExecutorDeps = { app, confirmGate: async (issue) => issue(), ...over };
+  const { room, executed } = fakeApp(appOver);
+  const d: ExecutorDeps = { room, confirmGate: async (issue) => issue(), ...over };
   return { d, executed };
 }
 
@@ -280,28 +280,28 @@ describe("(M6-3) 모드 분배 — facil split / turn 순차 / simul 병렬", ()
 describe("(M6-4) 불변식 — executor 가 유일 실행점(정적 grep)", () => {
   const here = dirname(fileURLToPath(import.meta.url));
 
-  it("modal.ts·plan.ts·distribute.ts·header.ts 는 app.commands.execute 를 직접 부르지 않는다", () => {
-    // executor.ts·engine.ts 만이 app.commands.execute 를 호출하는 단일 실행점. 그 외 tower 모듈에서
+  it("modal.ts·plan.ts·distribute.ts·header.ts 는 room.commands.execute 를 직접 부르지 않는다", () => {
+    // executor.ts·engine.ts 만이 room.commands.execute 를 호출하는 단일 실행점. 그 외 tower 모듈에서
     //   직접 호출이 발견되면 게이트 우회 회귀 — RED. (state.commands 라이브 fetch 는 read 라 modal 이
     //   직접 부를 수 있으나, plan dispatch 경로의 execute 는 executor 만.) 여기선 dispatch 류 호출만 잡는다.
     const files = ["modal.ts", "plan.ts", "distribute.ts", "header.ts"];
     for (const f of files) {
       const src = readFileSync(join(here, f), "utf8");
-      // 주석 제거 후 실행 코드만 검사(설명 주석의 'app.commands.execute' 언급은 허용).
+      // 주석 제거 후 실행 코드만 검사(설명 주석의 'room.commands.execute' 언급은 허용).
       const code = stripComments(src);
       const offenders = code
         .split("\n")
         .map((l, i) => ({ l, i }))
-        .filter(({ l }) => /\bapp\.commands\.execute\b/.test(l));
+        .filter(({ l }) => /\broom\.commands\.execute\b/.test(l));
       // modal.ts 는 팔레트 라이브 read(state.commands) 1곳만 허용 — dispatch 류(panel.*/ui.input.* 등)는 0.
       const disallowed = offenders.filter(({ l }) => !/state\.commands/.test(l));
       expect(disallowed.map((o) => `${f}:${o.i + 1}: ${o.l.trim()}`)).toEqual([]);
     }
   });
 
-  it("executor.ts 만이 dispatch 실행 호출(app.commands.execute)을 보유한다(단일점 확인)", () => {
+  it("executor.ts 만이 dispatch 실행 호출(room.commands.execute)을 보유한다(단일점 확인)", () => {
     const src = readFileSync(join(here, "executor.ts"), "utf8");
-    expect(/\bapp\.commands\.execute\b/.test(stripComments(src))).toBe(true);
+    expect(/\broom\.commands\.execute\b/.test(stripComments(src))).toBe(true);
   });
 });
 

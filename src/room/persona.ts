@@ -1,12 +1,11 @@
 // 방 페르소나 — [프로토콜 블록(플러그인 소유·고정·영어)] + [멤버 페르소나(사용자 소유)] 를 조립해
-// ACP 표준 systemPrompt 로 주입한다. 에이전트에게 가는 텍스트는 영어(레포 규칙).
-// 멤버 페르소나 저장은 app.data 컬렉션(tower 와 같은 표면 — 데이터 권한만으로 충분, fs:write 불요).
-import type { AcpSystemPromptLike } from "./acp-shapes";
+// 페르소나는 멤버 세션의 시스템 프롬프트로 주입한다(세션 연결은 C3). 에이전트에게 가는 텍스트는 영어(레포 규칙).
+// 멤버 페르소나 저장은 project data 컬렉션(tower 와 같은 표면 — 데이터 권한만으로 충분, fs:write 불요).
 
 /** 턴 종료 마커 — 봉투(전달)와 프로토콜(교육)이 같은 문장을 써야 한다(단일 진실). */
 export const TURN_END_MARKER = "Your turn. Your reply posts to the room.";
 
-// app.data 표면의 필요 부분집합(코어가 ns=pluginId 로 격리 주입) — tower/trace 와 같은 계약, room 은
+// project data 표면의 필요 부분집합(코어가 ns=pluginId 로 격리 주입) — tower/trace 와 같은 계약, room 은
 // tower 를 임포트하지 않고 필요한 메서드만 다시 선언한다(디렉터리 역할 분리).
 export interface PersonaDataApi {
   define: (coll: string, opts: { indexes?: string[]; fts?: string[] }) => Promise<void>;
@@ -59,17 +58,12 @@ export function assemblePersona(memberId: string, personaText: string, peerNames
   return { memberId, protocol, persona, assembled: `${protocol}\n\n${persona}` };
 }
 
-/** ACP 표준 systemPrompt 형태 — append 모드(에이전트 기본 인스트럭션 보존), 텍스트 블록 1개. */
-export function toSystemPrompt(bundle: PersonaBundle): AcpSystemPromptLike {
-  return { mode: "append", content: [{ type: "text", text: bundle.assembled }] };
-}
-
 export interface PersonaStore {
   read(memberId: string): Promise<string>;
   write(memberId: string, text: string): Promise<void>;
 }
 
-/** app.data 부재(데이터 권한 미부여) 환경이면 undefined — 페르소나는 스타터로만 동작(기능 무해 비활성). */
+/** project data 부재(데이터 권한 미부여) 환경이면 undefined — 페르소나는 스타터로만 동작(기능 무해 비활성). */
 export function createPersonaStore(data?: PersonaDataApi): PersonaStore | undefined {
   if (!data) return undefined;
   let defined: Promise<void> | null = null;

@@ -114,6 +114,10 @@ const strings = {
     en: "Conversation",
     ko: "대화",
   },
+  transportUnavailable: {
+    en: "No member is connected yet: member sessions and the terminal relay are not in place.",
+    ko: "멤버가 아직 연결되지 않았습니다. 멤버 세션과 터미널 중계가 준비되면 대화할 수 있습니다.",
+  },
   towerTitle: {
     en: "AI Command",
     ko: "AI 명령",

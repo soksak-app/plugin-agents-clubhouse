@@ -1,3 +1,4 @@
+import type { RoomPort } from "../room/port";
 // 타워 모달 셸 + 본문(M3) + fast-path 실행 배선(M4) — AI-명령 모달. 560px 드래그 오버레이 +
 //   헤더(✦ AI 명령 · 부제 · 그립 · ✕) + 본문(NL 입력바 · 예시행 5 · 명령 팔레트 · 검색 · 우측 라이브칸).
 //   M4: 예시행/팔레트 클릭 = executor.runExample/runCommand 로 실행(NL 바 채우기 stub 제거). danger 는
@@ -42,11 +43,11 @@ import { deleteStep, moveStep, editParams } from "./editplan";
 import type { TraceSink } from "./trace";
 import type { Macro, MacroSink } from "./macro";
 
-// 라이브칸이 구독하는 stable bus 토픽 — Clubhouse 런타임(main.ts)이 스트림 단일 진실에서 재방송한다.
-//   acp.update.<connId> 는 connId 별이라 모달이 직접 못 잡는다 → main.ts onStream 이 이 토픽으로 relay(이벤트-우선).
+// 라이브칸이 구독하는 stable bus 토픽 — the room page이 스트림 단일 진실에서 재방송한다.
+//   A member stream is per connection, so the room page relays it to this topic (C5).
 export const TOWER_LIVE_TOPIC = "clubhouse.tower.live";
 
-// 라이브 이벤트 — main.ts 가 emit. kind 로 버블 구분(시작/델타/종료/사람/시스템).
+// 라이브 이벤트 — room page 가 emit. kind 로 버블 구분(시작/델타/종료/사람/시스템).
 export interface TowerLiveEvent {
   kind: "start" | "delta" | "end" | "user" | "reset";
   who?: string; // 표시 이름(에이전트/나)
@@ -234,10 +235,10 @@ const ICON_SM =
 export interface TowerModalDeps {
   title: string;
   lang: () => string; // 현재 호스트 언어(locale.changed 로 갱신됨) — 본문 텍스트·재fetch 에 사용
-  app: any; // ctx.app — commands.execute(팔레트) · events.on(재fetch) · bus.on(라이브)
+  room: RoomPort; // the room port: declaredCommands (palette), live (tower relay), onTheme (palette refresh), commands.execute (steps)
   planner?: Planner; // slow-path planning 턴 seam — 없으면 NL Enter 모호 입력이 NO_PLANNER 보고
-  trace?: TraceSink; // 세션/trace 영속(M7, app.data) — executor 로 전달. 없으면 영속 0(순수 동작).
-  macros?: MacroSink; // 명명 매크로 영속(M11, app.data) — executor 로 전달. 없으면 매크로 비활성.
+  trace?: TraceSink; // 세션/trace 영속(M7, project data) — executor 로 전달. 없으면 영속 0(순수 동작).
+  macros?: MacroSink; // 명명 매크로 영속(M11, project data) — executor 로 전달. 없으면 매크로 비활성.
   onChange?: () => void; // 열림/닫힘 변화 단일 채널(헤더 active 동기화, 이벤트-우선)
 }
 
@@ -348,7 +349,7 @@ function makeDraggable(ov: HTMLElement, handle: HTMLElement): () => void {
 }
 
 export function createTowerModal(deps: TowerModalDeps): TowerModal {
-  const { app, lang, onChange } = deps;
+  const { room, lang, onChange } = deps;
   ensureStyle();
   let ov: HTMLElement | null = null;
   let undrag: (() => void) | null = null;
@@ -439,8 +440,8 @@ export function createTowerModal(deps: TowerModalDeps): TowerModal {
     });
 
   // executor = 유일 실행점. 모달은 클릭을 여기로 넘기고 결과만 라이브칸에 반영(로직 누수 0, RULE 6).
-  //   trace(M7) 주입 — executor 가 commit/discard 시 app.data 에 plan·step·outcome 을 영속(이벤트-우선).
-  const executor: TowerExecutor = createExecutor({ app, confirmGate, lang, planner: deps.planner, trace: deps.trace, macros: deps.macros });
+  //   trace(M7) 주입 — executor 가 commit/discard 시 project data 에 plan·step·outcome 을 영속(이벤트-우선).
+  const executor: TowerExecutor = createExecutor({ room, confirmGate, lang, planner: deps.planner, trace: deps.trace, macros: deps.macros });
 
   // 실행 결과를 라이브칸 시스템 버블로 — 폴링 0, 사람 가시 피드백.
   function reportOutcome(label: string, r: { ok: boolean; code?: string }): void {
@@ -460,16 +461,9 @@ export function createTowerModal(deps: TowerModalDeps): TowerModal {
   };
 
   // ── 팔레트(축1 라이브) — state.commands 1회 fetch 후 현재 검색어로 렌더(이벤트-우선, 폴링 0) ──
-  async function fetchCatalog(): Promise<void> {
-    try {
-      const r = await app.commands.execute("state.commands", {});
-      const cmds: any[] = Array.isArray(r?.commands) ? r.commands : [];
-      catalog = cmds
-        .filter((c) => c && typeof c.name === "string")
-        .map((c) => ({ name: c.name as string, description: String(c.description ?? "") }));
-    } catch {
-      catalog = []; // 거부/오류 — 빈 팔레트(검색은 동작, 가짜 행 0)
-    }
+  // The palette lists the commands that plugin.json declares for the room (the view has no core command catalog).
+  function fetchCatalog(): void {
+    catalog = room.declaredCommands().map((c) => ({ name: c.name, description: c.description }));
     renderPalette();
   }
 
@@ -651,7 +645,7 @@ export function createTowerModal(deps: TowerModalDeps): TowerModal {
   }
 
   // 현재 대화 모드(trace 메타) — 모달은 활성 뷰 모드를 모르므로 host 가 planner 와 함께 주입 안 한 경우 "solo".
-  //   main.ts 의 헤드리스 경로(tower.plan)는 자체 trace 메타를 쓰므로 여기 값은 UI-편집 재검증 trace 에만 쓰인다.
+  //   room page 의 헤드리스 경로(tower.plan)는 자체 trace 메타를 쓰므로 여기 값은 UI-편집 재검증 trace 에만 쓰인다.
   function activeMode(): string {
     return "solo";
   }
@@ -798,7 +792,7 @@ export function createTowerModal(deps: TowerModalDeps): TowerModal {
     return `${s.name}${p}`;
   }
 
-  // ── 라이브칸(이벤트-우선) — main.ts 가 TOWER_LIVE_TOPIC 으로 재방송한 스트림을 버블로 ──
+  // ── 라이브칸(이벤트-우선) — room page 가 TOWER_LIVE_TOPIC 으로 재방송한 스트림을 버블로 ──
   function clearLive(): void {
     if (!liveBox) return;
     liveBox.replaceChildren(elText("div", tr("towerLiveEmpty"), "tower-live-empty"));
@@ -955,7 +949,7 @@ export function createTowerModal(deps: TowerModalDeps): TowerModal {
     planAndRun: (nl: string, opts?: PlanRunOptions) => executor.planAndRun(nl, opts),
     // 편집된 plan 재검증 + dry-run(M9) — executor 직통. 편집 검증 우회 0, commit 은 편집된 plan + rollback 보호.
     revalidateAndRun: (steps: PlanStep[], opts?: PlanRunOptions) => executor.revalidateAndRun(steps, opts),
-    // 다중 에이전트 분배(M6) — executor.distributeAndRun 직통. 모드별 planFor 는 main.ts 가 주입.
+    // 다중 에이전트 분배(M6) — executor.distributeAndRun 직통. 모드별 planFor 는 room page 가 주입.
     distributeAndRun: (nl: string, opts: DistRunOptions) => executor.distributeAndRun(nl, opts),
     // reflection 루프(M8) — executor.reflectAndRun 직통(모달 open 비의존, executor 상주). danger 게이트 매 step.
     reflectAndRun: (nl: string, opts?: ReflectOptions) => executor.reflectAndRun(nl, opts),
@@ -985,9 +979,8 @@ export function createTowerModal(deps: TowerModalDeps): TowerModal {
       ov = build();
       document.body.appendChild(ov);
       // 이벤트-우선 구독: 라이브(bus) + 팔레트 재fetch(theme/locale). 폴링 0.
-      subs.push(app.bus.on(TOWER_LIVE_TOPIC, (p: any) => onLive(p as TowerLiveEvent)));
-      subs.push(app.events.on("theme.changed", () => fetchCatalog()));
-      subs.push(app.events.on("locale.changed", () => fetchCatalog()));
+      subs.push(room.live.on(TOWER_LIVE_TOPIC, (p: unknown) => onLive(p as TowerLiveEvent)));
+      subs.push(room.onTheme(() => fetchCatalog()));
       void fetchCatalog(); // open 시 1회 — 레지스트리-변경 이벤트가 없으므로 정공법(RULE 7 fallback)
       void fetchMacros(); // M11 — open 시 1회 매크로 fetch(save/forget 후 명시 재fetch). 폴링 0.
       emit();

@@ -16,7 +16,7 @@ import { createTrace, type DataApi, PLANS } from "./trace";
 import { deleteStep, moveStep, editParams } from "./editplan";
 import type { PlanStep } from "./plan";
 
-// ── 가짜 app.data(trace 영속 단언용) — reflect.test.ts / trace.test.ts 와 동형 ──
+// ── 가짜 room.data(trace 영속 단언용) — reflect.test.ts / trace.test.ts 와 동형 ──
 interface FakeStore {
   rows: Map<string, Map<string, Record<string, unknown>>>;
   seq: number;
@@ -71,7 +71,7 @@ const CATALOG = [
 function fakeApp(over: Record<string, (p: any) => any> = {}) {
   const executed: Array<{ name: string; params: any }> = [];
   const state = { themeName: "Cupertino", themeMode: "dark", sizes: { s1: [0.6, 0.4] as number[] } };
-  const app = {
+  const room = {
     commands: {
       execute: vi.fn(async (name: string, params: any) => {
         if (over[name]) {
@@ -105,16 +105,16 @@ function fakeApp(over: Record<string, (p: any) => any> = {}) {
       }),
     },
   };
-  return { app, executed, state };
+  return { room, executed, state };
 }
 
 function deps(
   over: Partial<ExecutorDeps> = {},
   appOver: Record<string, (p: any) => any> = {},
-): { d: ExecutorDeps; executed: Array<{ name: string; params: any }>; state: ReturnType<typeof fakeApp>["state"]; app: any } {
-  const { app, executed, state } = fakeApp(appOver);
-  const d: ExecutorDeps = { app, confirmGate: async (issue) => issue(), ...over };
-  return { d, executed, state, app };
+): { d: ExecutorDeps; executed: Array<{ name: string; params: any }>; state: ReturnType<typeof fakeApp>["state"]; room: any } {
+  const { room, executed, state } = fakeApp(appOver);
+  const d: ExecutorDeps = { room, confirmGate: async (issue) => issue(), ...over };
+  return { d, executed, state, room };
 }
 
 // ── (1) 편집 가능한 dry-run preview ──
@@ -153,7 +153,7 @@ describe("(1) 편집 가능 preview — commit 은 *편집된* plan 을 디스�
     expect(executed.map((e) => e.name)).toEqual(["panel.equalize", "theme.apply"]);
   });
 
-  it("param 편집 → 새 param 이 app.commands.execute 에 쓰인다(옛 param 아님)", async () => {
+  it("param 편집 → 새 param 이 room.commands.execute 에 쓰인다(옛 param 아님)", async () => {
     const original: PlanStep[] = [{ axis: "command", name: "theme.apply", params: { name: "Midnight" } }];
     const { d, executed } = deps();
     const ex = createExecutor(d);

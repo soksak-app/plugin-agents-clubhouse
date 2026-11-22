@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Generic plugin build-release — ID·FILES·deps 를 매니페스트에서 동적 산정한다.
-// 경계는 본질만 강제(spec@0.0.1·id·version·entry·private). 유닛별 하드코딩 없음.
+// 경계는 현재 plugin.json 형식(core docs/spec/plugins.md#pluginjson)으로 강제한다: id, the view page, dependencies.
+// FILES 는 package.json 의 files 목록이며, 그 목록이 release 의 파일 목록이다.
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -8,7 +9,6 @@ import { createRegularFileArchive, readRegularFileArchive, sha256 } from "./arch
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const STRICT_SEMVER_RE = /^(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:-[0-9A-Za-z-.]+)?(?:\+[0-9A-Za-z-.]+)?$/;
-const CANDIDATES = ["LICENSE", "NOTICE", "README.ko.md", "README.md", "main.js", "plugin.json"];
 
 function option(name) {
   const i = process.argv.indexOf(name);
@@ -29,18 +29,21 @@ const ID = plugin.id;
 const REPOSITORY = `https://github.com/soksak-ai/${ID}`;
 const VERSION = pkg.version;
 
-// 경계(본질) — 유닛 공통 불변식만
+// 경계 — 현재 plugin.json 형식의 불변식
 if (typeof VERSION !== "string" || !STRICT_SEMVER_RE.test(VERSION)) throw new Error("package version must be strict SemVer");
 if (pkg.name !== ID || pkg.private !== true) throw new Error("package name/private boundary");
-if (plugin.spec !== "soksak-spec-plugin@0.0.1") throw new Error(`plugin.spec must be soksak-spec-plugin@0.0.1 (got ${plugin.spec})`);
-if (plugin.version !== VERSION) throw new Error(`plugin.version ${plugin.version} != package.version ${VERSION}`);
-if (plugin.entry !== "main.js") throw new Error("plugin.entry must be main.js");
 if ("repo" in plugin) throw new Error("plugin manifest must not carry a repo field");
+if (!Array.isArray(pkg.files) || pkg.files.length === 0) throw new Error("package.json files must list the release files");
+const pageRef = plugin.surface?.composition?.page;
+if (plugin.surface?.composition?.kind !== "view" || typeof pageRef !== "string") throw new Error("plugin.surface.composition must be a view with a page");
 
-// FILES = 표준 후보 ∩ 실존 (main.js·plugin.json 필수)
-const FILES = CANDIDATES.filter((f) => fs.existsSync(path.join(root, f)));
-for (const req of ["main.js", "plugin.json"]) {
-  if (!FILES.includes(req)) throw new Error(`required file missing: ${req}`);
+// FILES = package.json files, each of which must exist; plugin.json and the view page must be among them.
+const FILES = pkg.files;
+for (const file of FILES) {
+  if (!fs.existsSync(path.join(root, file))) throw new Error(`release file missing: ${file} (run npm run build first)`);
+}
+for (const req of ["plugin.json", pageRef]) {
+  if (!FILES.includes(req)) throw new Error(`required file not in package.json files: ${req}`);
 }
 
 // install-closure deps = plugin.dependencies(plugin-kind) + sidecars(sidecar-kind)

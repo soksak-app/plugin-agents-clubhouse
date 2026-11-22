@@ -1,9 +1,9 @@
-// trace.ts — 타워 세션/trace 영속(M7). plan·step·outcome 을 코어 generic app.data 위에 기록한다.
+// trace.ts — 타워 세션/trace 영속(M7). plan·step·outcome 을 코어 generic project data 위에 기록한다.
 //
 // RULE 8(코어 무강결합 + 전수 노출): 타워는 코어에 전용 테이블/스키마/커맨드를 추가하지 않는다. 영속은
-//   오직 코어가 제공하는 generic 데이터 capability `app.data`(SQLite, ns=pluginId 격리, raw SQL 금지)
+//   오직 코어가 제공하는 generic 데이터 capability `project data`(SQLite, ns=pluginId 격리, raw SQL 금지)
 //   표면만 쓴다 — define/put/get/query. 컬렉션 이름은 플러그인 ns 안의 논리 이름일 뿐(코어 테이블 아님).
-//   그래서 코어 변경 0·코어 커플링 0 — 이 모듈은 app.data 인터페이스에만 의존한다.
+//   그래서 코어 변경 0·코어 커플링 0 — 이 모듈은 project data 인터페이스에만 의존한다.
 //
 // RULE 7(이벤트-우선): executor 가 step 을 실행하는 그 순간(이벤트)에 trace 에 기록한다 — 폴링 0.
 //   plan 시작(beginPlan) → 각 step 실행 직후(recordStep) → plan 종결(finishPlan)을 executor 가 호출.
@@ -14,12 +14,12 @@
 //   tower_steps  = 그 plan 의 각 step. { sessionId, planId, seq, axis, name, params?|address?, danger?,
 //                  outcome(코어 결과 객체), status, ts }. seq 단조 = 실행 순서(질의 정렬 키).
 //
-// 영속 = app.data(디스크) — reload 후 같은 ns 로 재조회하면 그대로 살아 있다(인메모리 아님).
+// 영속 = project data(디스크) — reload 후 같은 ns 로 재조회하면 그대로 살아 있다(인메모리 아님).
 
 import type { PlanStep } from "./plan";
 import type { CommandOutcome } from "./executor";
 
-// app.data 표면(필요한 메서드만) — 코어가 ns=pluginId 를 주입한다(격리). raw SQL 0.
+// project data 표면(필요한 메서드만) — 코어가 ns=pluginId 를 주입한다(격리). raw SQL 0.
 //   runbook/kanban 과 동일 표면(define/put/get/query). 여기선 그 부분집합만 선언한다.
 export interface DataApi {
   define: (coll: string, opts: { indexes?: string[]; fts?: string[] }) => Promise<void>;
@@ -41,7 +41,7 @@ export type PlanOutcome = "committed" | "dry-run-discarded" | "yielded" | "faile
 //   gated=게이트가 막아 미실행(토큰 부재 등). status 는 코어 결과(outcome.code)에서 파생(단일 진실).
 export type StepStatus = "ok" | "failed" | "denied" | "gated";
 
-// 영속된 plan 레코드(조회 결과 형태). id = app.data put 이 부여한 레코드 id(= 조회 키).
+// 영속된 plan 레코드(조회 결과 형태). id = project data put 이 부여한 레코드 id(= 조회 키).
 export interface TracePlan {
   id: string;
   sessionId: string;

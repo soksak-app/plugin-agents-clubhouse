@@ -1,7 +1,7 @@
 // macro.ts — 매크로 승격(M11). 반복되는 TRUSTED NL→plan 을 명명 매크로로 저장 제안 → 다음엔 fast-path 즉시 실행.
 //   "학습 = 명명 callable". 단, 코어 레지스트리에 새 command 이름을 동적 등록할 수는 없다(conformance:
 //   plugin.json contributes.commands 가 모든 이름을 사전 선언해야 하므로 — 사용자-coined 런타임 이름은 불가).
-//   그래서 매크로는 app.data(M7 인프라)에 영속되고 단일 사전선언 command tower.macro(save/run/list/forget) +
+//   그래서 매크로는 project data(M7 인프라)에 영속되고 단일 사전선언 command tower.macro(save/run/list/forget) +
 //   모달 팔레트로 노출된다. 매크로는 타워 *안의* 명명 fast-path 엔트리지 새 코어 레지스트리 이름이 아니다
 //   (RULE 8 노출 + conformance 법칙 동시 충족).
 //
@@ -9,7 +9,7 @@
 //   planSignature = 정규화 NL + 정렬된 step 시그니처. 같은 trusted 요청이 같은 plan 으로 ≥ threshold 회
 //   재발하면 승격 제안(human-approval — design-constitution graduation 동형, 절대 무음 자동저장 0).
 //
-// ── 영속(app.data, M7 동일 표면): MacroSink — save/get/list/forget. ns=pluginId 격리, raw SQL 0, 코어 변경 0 ──
+// ── 영속(project data, M7 동일 표면): MacroSink — save/get/list/forget. ns=pluginId 격리, raw SQL 0, 코어 변경 0 ──
 //   매크로 = { name, trigger(NL), steps[], createdAt }. reload 후에도 같은 ns 로 재조회(인메모리 아님).
 //
 // ⚠️ 승격 가능 조건(RULE 0 no-bypass): trusted(untrusted 컨텍스트 0) + scanner-clean + non-tainted 한 plan 만
@@ -20,7 +20,7 @@ import type { PlanStep } from "./plan";
 import type { DataApi } from "./trace";
 
 // 영속된 매크로 — 명명 fast-path 엔트리. trigger = 원 NL(정확매치 fast-path 키), steps = 저장된 plan.
-//   createdAt = 저장 시각. id = app.data put 이 부여(= forget/get 키). name 은 사용자-coined(유일 키 — 같은
+//   createdAt = 저장 시각. id = project data put 이 부여(= forget/get 키). name 은 사용자-coined(유일 키 — 같은
 //   이름 재저장은 덮어쓰기).
 export interface Macro {
   id: string;
@@ -87,7 +87,7 @@ export function promotable(p: PromotionInput): boolean {
 
 // ── 순수: 반복 탐지 → 승격 제안(human-approval) ──
 //
-// 관측(trace 또는 app.data history 에서 추출) = { nl, steps, tainted?, scanVerdict? } 들. 같은 plan
+// 관측(trace 또는 project data history 에서 추출) = { nl, steps, tainted?, scanVerdict? } 들. 같은 plan
 //   시그니처가 promotable 한 관측으로 ≥ threshold 회 재발하면 승격 제안을 만든다(자동저장 X — 제안만).
 //   tainted/flagged 관측은 카운트에서 제외(promotable 통과분만 셈) — tainted 가 끼면 그 시그니처는 절대
 //   threshold 에 못 닿는다(RULE 0). 제안은 가장 먼저 임계 도달한 시그니처 1건(결정적).
@@ -133,7 +133,7 @@ export function detectPromotion(observations: PlanObservation[], threshold = 3):
   return { proposed: true, trigger: e.trigger, steps: e.steps, count: e.count, signature: winner.signature };
 }
 
-// ── 영속 sink(app.data, M7 동일 표면) ──
+// ── 영속 sink(project data, M7 동일 표면) ──
 //
 // MacroSink — save/get/list/forget. ns=pluginId(코어 격리) 안에서 sessionId 로 세션별 매크로 분리한다.
 //   reload 후 같은 store(디스크)·같은 sessionId 면 같은 매크로가 재조회된다(영속 단언). 코어 커플링 0.
@@ -214,7 +214,7 @@ export function createMacroStore(data: DataApi, opts: MacroOptions): MacroSink {
   async function forget(name: string): Promise<boolean> {
     const existing = await findByName(name);
     if (!existing) return false;
-    // app.data 는 delete 표면이 없으므로(DataApi 부분집합) tombstone 으로 무력화 — 같은 id 에 빈/forgotten
+    // project data 는 delete 표면이 없으므로(DataApi 부분집합) tombstone 으로 무력화 — 같은 id 에 빈/forgotten
     //   레코드를 덮어쓰고 list/byName 이 그것을 거른다. 정직: 실제 행은 남지만 forgotten 플래그로 유령 0.
     await data.put(MACROS, { sessionId, name, forgotten: true, createdAt: existing.createdAt }, { id: existing.id });
     return true;

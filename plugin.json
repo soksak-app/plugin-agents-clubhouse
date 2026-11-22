@@ -13,62 +13,83 @@
   "preview": {
     "ink": "--fg"
   },
-  "dependencies": {
-    "soksak-plugin-agents-acp": "0.0.1"
-  },
   "settings": {
-    "permissionPolicy": {
-      "label": "권한 요청 정책",
-      "description": "에이전트가 파일이나 명령 권한을 요청할 때의 처리 방식. 거부(안전)는 거절하고, 허용은 승인하며, 물어보기는 화면에 묻는다.",
-      "type": "enum",
-      "default": "deny",
-      "values": ["deny", "allow", "ask"]
-    },
     "kibitzDefault": {
       "label": "대화 기본 모드",
       "description": "새 방의 대화 방식. 진행(사회자)은 진행자가 동료를 조율하고, 순차는 탭 순서대로 각 1회, 동시는 전원이 병렬로 답한다.",
       "type": "enum",
       "default": "facil",
       "values": ["facil", "turn", "simul"]
+    }
+  },
+  "data": {
+    "personas": {
+      "schema": { "type": "array", "items": { "type": "object" } },
+      "default": []
     },
-    "facilMaxRounds": {
-      "label": "진행 모드 라운드 상한",
-      "description": "진행 모드에서 진행자와 동료 사이 라운드의 하드 상한. 도달하면 강제로 마무리한다.",
-      "type": "integer",
-      "default": 6,
-      "minimum": 1,
-      "maximum": 20
+    "member-sessions": {
+      "schema": { "type": "array", "items": { "type": "object" } },
+      "default": []
     },
-    "nameTriggerDepthCap": {
-      "label": "@멘션 연쇄 상한",
-      "description": "한 @지목 스레드가 이어질 수 있는 최대 깊이. 무한 루프를 막는 안전판이며 강제로 늘리지 않는다.",
-      "type": "integer",
-      "default": 4,
-      "minimum": 1,
-      "maximum": 20
+    "tower-plans": {
+      "schema": { "type": "array", "items": { "type": "object" } },
+      "default": []
+    },
+    "tower-steps": {
+      "schema": { "type": "array", "items": { "type": "object" } },
+      "default": []
+    },
+    "macros": {
+      "schema": { "type": "array", "items": { "type": "object" } },
+      "default": []
     }
   },
   "exposes": {
-    "commands": [
+    "status": [
       {
-        "name": "soksak-plugin-agents-clubhouse.send",
-        "description": "Inject a human message into the active clubhouse, as if typed and submitted in its input.",
-        "params": {
+        "name": "soksak-plugin-agents-clubhouse.transport",
+        "description": "Whether the room can reach its members, with the reason when it cannot. The room has no member transport until the owned sessions and the terminal relay are in place, so its state is unavailable.",
+        "schema": {
           "type": "object",
           "properties": {
-            "text": { "type": "string" },
-            "mode": { "type": "string", "enum": ["turn", "facil", "simul"] },
-            "cut": { "type": "boolean" }
+            "state": { "type": "string", "enum": ["unavailable", "ready"] },
+            "reason": { "type": "string" }
           },
-          "required": ["text"]
-        },
-        "result": { "type": "object" }
-      },
+          "required": ["state"]
+        }
+      }
+    ],
+    "commands": [
       {
         "name": "soksak-plugin-agents-clubhouse.state",
-        "description": "Return the live state of the active clubhouse: mode, running flag, utterance count, roster check states and streaming lengths.",
+        "description": "Return the live state of the room: the conversation mode, the roster with the check state of each member, and the transport status.",
         "params": { "type": "object", "properties": {} },
-        "result": { "type": "object" }
+        "result": {
+          "type": "object",
+          "properties": {
+            "mode": { "type": "string", "enum": ["turn", "facil", "simul"] },
+            "roster": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": { "type": "string" },
+                  "checked": { "type": "boolean" }
+                },
+                "required": ["id", "checked"]
+              }
+            },
+            "transport": {
+              "type": "object",
+              "properties": {
+                "state": { "type": "string", "enum": ["unavailable", "ready"] },
+                "reason": { "type": "string" }
+              },
+              "required": ["state"]
+            }
+          },
+          "required": ["mode", "roster", "transport"]
+        }
       },
       {
         "name": "soksak-plugin-agents-clubhouse.tower.plan",
@@ -85,7 +106,11 @@
           },
           "required": ["text"]
         },
-        "result": { "type": "object" }
+        "result": {
+          "type": "object",
+          "properties": { "ok": { "type": "boolean" } },
+          "required": ["ok"]
+        }
       },
       {
         "name": "soksak-plugin-agents-clubhouse.tower.reflect",
@@ -102,7 +127,14 @@
           },
           "required": ["text"]
         },
-        "result": { "type": "object" }
+        "result": {
+          "type": "object",
+          "properties": {
+            "ok": { "type": "boolean" },
+            "outcome": { "type": "string" }
+          },
+          "required": ["ok"]
+        }
       },
       {
         "name": "soksak-plugin-agents-clubhouse.tower.trace",
@@ -114,7 +146,11 @@
             "limit": { "type": "number" }
           }
         },
-        "result": { "type": "object" }
+        "result": {
+          "type": "object",
+          "properties": { "ok": { "type": "boolean" } },
+          "required": ["ok"]
+        }
       },
       {
         "name": "soksak-plugin-agents-clubhouse.tower.scan",
@@ -126,7 +162,11 @@
             "steps": { "type": "array" }
           }
         },
-        "result": { "type": "object" }
+        "result": {
+          "type": "object",
+          "properties": { "ok": { "type": "boolean" } },
+          "required": ["ok"]
+        }
       },
       {
         "name": "soksak-plugin-agents-clubhouse.tower.macro",
@@ -145,44 +185,21 @@
           },
           "required": ["verb"]
         },
-        "result": { "type": "object" }
-      },
-      {
-        "name": "soksak-plugin-agents-clubhouse.ask",
-        "description": "Send one prompt to one agent and return its single turn, headless.",
-        "params": {
+        "result": {
           "type": "object",
-          "properties": {
-            "agent": { "type": "string" },
-            "text": { "type": "string" }
-          },
-          "required": ["text"]
-        },
-        "result": { "type": "object" }
-      },
-      {
-        "name": "soksak-plugin-agents-clubhouse.converse",
-        "description": "Run one exchange among several agents, one turn each, headless.",
-        "params": {
-          "type": "object",
-          "properties": {
-            "message": { "type": "string" },
-            "agents": { "type": "array" },
-            "cwd": { "type": "string" }
-          },
-          "required": ["message"]
-        },
-        "result": { "type": "object" }
+          "properties": { "ok": { "type": "boolean" } },
+          "required": ["ok"]
+        }
       }
     ],
     "element": [
       {
         "name": "soksak-plugin-agents-clubhouse.send",
-        "description": "Send button"
+        "description": "Send button. Disabled while the transport status is unavailable."
       },
       {
         "name": "soksak-plugin-agents-clubhouse.input",
-        "description": "Message input field"
+        "description": "Message input field. Disabled while the transport status is unavailable."
       },
       {
         "name": "soksak-plugin-agents-clubhouse.tab",
@@ -194,16 +211,8 @@
         "description": "Conversation mode button (facilitator, sequential, simultaneous)"
       },
       {
-        "name": "soksak-plugin-agents-clubhouse.crown",
-        "description": "Facilitator selector in facilitator mode"
-      },
-      {
-        "name": "soksak-plugin-agents-clubhouse.modal",
-        "description": "Intervention modal button (interrupt now, finish, cancel)"
-      },
-      {
         "name": "soksak-plugin-agents-clubhouse.tower",
-        "description": "Control tower modal: natural-language input, dry run, command templates, search, titlebar and graph"
+        "description": "Control tower button: toggles the control tower modal (natural-language input, dry run, command templates, search, graph)"
       }
     ]
   }

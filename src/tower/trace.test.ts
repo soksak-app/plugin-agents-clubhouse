@@ -7,8 +7,8 @@
 //   4. 영속 — 같은 ns 의 새 trace 인스턴스(=reload 후 재조회)에서도 plan/step 이 살아 있다(RED: 인메모리면 소실).
 //   5. step 순서 + per-step result/status 가 충실(의미가 바뀌면 결과가 바뀐다 — trace 가 정확).
 //
-// app.data 만 쓴다(ns=pluginId 격리, raw SQL 0, 코어 변경 0). 코어 커플링 없음을 fakeData(순수 메모리 KV)로 단언.
-//   fakeData 는 코어 app.data 표면(define/put/get/query)을 그대로 흉내 — 같은 ns 면 인스턴스가 바뀌어도
+// room.data 만 쓴다(ns=pluginId 격리, raw SQL 0, 코어 변경 0). 코어 커플링 없음을 fakeData(순수 메모리 KV)로 단언.
+//   fakeData 는 코어 room.data 표면(define/put/get/query)을 그대로 흉내 — 같은 ns 면 인스턴스가 바뀌어도
 //   같은 store 를 공유(reload 모사: store 는 디스크처럼 살아남고, trace 인스턴스만 새로 만든다).
 
 import { describe, expect, it, vi } from "vitest";
@@ -16,7 +16,7 @@ import { createExecutor, type ExecutorDeps } from "./executor";
 import { createTrace, PLANS, STEPS, type DataApi, type TraceSink } from "./trace";
 import type { PlanStep } from "./plan";
 
-// ── 가짜 app.data — 코어 데이터 표면의 순수 메모리 구현(reload 모사용 외부 store) ──
+// ── 가짜 room.data — 코어 데이터 표면의 순수 메모리 구현(reload 모사용 외부 store) ──
 //   store 는 테스트가 보유 → 같은 store 로 trace 를 두 번 만들면 reload 후 재조회와 동형(영속 단언).
 interface FakeStore {
   rows: Map<string, Map<string, Record<string, unknown>>>; // coll → id → doc(scope 무관 — ns 격리는 코어 책임).
@@ -79,7 +79,7 @@ const CATALOG = [
 // 실행 기록 가짜 코어(executor 와 동일 패턴) + trace 주입.
 function fakeApp() {
   const executed: Array<{ name: string; params: any }> = [];
-  const app = {
+  const room = {
     commands: {
       execute: vi.fn(async (name: string, params: any) => {
         if (name === "state.commands") return { ok: true, commands: CATALOG.map((c) => ({ name: c, description: c })) };
@@ -93,16 +93,16 @@ function fakeApp() {
       }),
     },
   };
-  return { app, executed };
+  return { room, executed };
 }
 
 function deps(
   trace: TraceSink,
   over: Partial<ExecutorDeps> = {},
 ): { d: ExecutorDeps; executed: Array<{ name: string; params: any }> } {
-  const { app, executed } = fakeApp();
+  const { room, executed } = fakeApp();
   const d: ExecutorDeps = {
-    app,
+    room,
     confirmGate: async (issue) => issue(), // 기본 수락
     trace,
     ...over,
@@ -210,8 +210,8 @@ describe("(5) step 순서 + per-step result/status 충실", () => {
     const { d } = deps(trace, {
       // status.query 가 dirty 를 반환하도록 — per-step result 가 그대로 보존되는지 단언.
     });
-    // status override 를 위해 app 을 직접 패치.
-    (d.app.commands.execute as any).mockImplementation(async (name: string, params: any) => {
+    // status override 를 위해 room 을 직접 패치.
+    (d.room.commands.execute as any).mockImplementation(async (name: string, params: any) => {
       if (name === "state.commands") return { ok: true, commands: CATALOG.map((c) => ({ name: c, description: c })) };
       if (name === "ui.tree") return { ok: true, nodes: [{ address: "win/main/chrome/tower/input" }] };
       if (name === "status.query") return { ok: true, statuses: [{ viewId: "v9", code: "dirty", message: "미저장" }] };
@@ -273,7 +273,7 @@ describe("distributeAndRun 도 trace 에 plan·step·outcome 을 기록(M6 경�
 });
 
 describe("trace collection 이름 — 플러그인 ns 격리(코어 커플링 0)", () => {
-  it("plan/step 컬렉션 이름이 안정적이다(코어 테이블 아님 — app.data ns)", () => {
+  it("plan/step 컬렉션 이름이 안정적이다(코어 테이블 아님 — room.data ns)", () => {
     expect(PLANS).toBe("tower_plans");
     expect(STEPS).toBe("tower_steps");
   });

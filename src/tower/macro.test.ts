@@ -10,7 +10,7 @@
 //   7. 영속 — 저장된 매크로가 reload(새 인스턴스)에서도 살아 있다(RED: reload 시 소실).
 //   8. list/forget — list 가 매크로 노출, forget 이 제거 → 더는 fast-path 안 됨(RED: 유령 매크로).
 //
-// app.data(define/put/get/query)만 쓴다(ns 격리·코어 변경 0). fakeData=순수 메모리 store(reload 모사 외부 보유).
+// room.data(define/put/get/query)만 쓴다(ns 격리·코어 변경 0). fakeData=순수 메모리 store(reload 모사 외부 보유).
 // 기준 미달 시 단언 약화 금지 — 구현을 고친다(RULE 2).
 
 import { describe, expect, it, vi } from "vitest";
@@ -37,7 +37,7 @@ const CATALOG = [
 // 실행을 가로채 기록하는 가짜 코어(read 명령은 fixture). plannerSpy 로 "0 planner" 단언.
 function fakeApp(catalog: string[] = CATALOG) {
   const executed: Array<{ name: string; params: any }> = [];
-  const app = {
+  const room = {
     commands: {
       execute: vi.fn(async (name: string, params: any) => {
         if (name === "state.commands") return { ok: true, commands: catalog.map((c) => ({ name: c, description: c })) };
@@ -51,10 +51,10 @@ function fakeApp(catalog: string[] = CATALOG) {
       }),
     },
   };
-  return { app, executed };
+  return { room, executed };
 }
 
-// ── 가짜 app.data — 순수 메모리 KV(define/put/get/query). reload 모사: store 는 테스트가 보유(디스크 동형). ──
+// ── 가짜 room.data — 순수 메모리 KV(define/put/get/query). reload 모사: store 는 테스트가 보유(디스크 동형). ──
 interface FakeStore {
   rows: Map<string, Map<string, Record<string, unknown>>>;
   seq: number;
@@ -100,12 +100,12 @@ function clock() {
 function deps(
   store: FakeStore,
   over: Partial<ExecutorDeps> = {},
-): { d: ExecutorDeps; executed: Array<{ name: string; params: any }>; trace: TraceSink; macros: MacroSink; app: any } {
-  const { app, executed } = over.app ? { app: over.app, executed: [] as any[] } : fakeApp();
+): { d: ExecutorDeps; executed: Array<{ name: string; params: any }>; trace: TraceSink; macros: MacroSink; room: any } {
+  const { room, executed } = over.room ? { room: over.room, executed: [] as any[] } : fakeApp();
   const trace = createTrace(fakeData(store), { sessionId: "s1", now: clock() });
   const macros = createMacroStore(fakeData(store), { sessionId: "s1", now: clock() });
-  const d: ExecutorDeps = { app, confirmGate: async (issue) => issue(), trace, macros, ...over };
-  return { d, executed, trace, macros, app };
+  const d: ExecutorDeps = { room, confirmGate: async (issue) => issue(), trace, macros, ...over };
+  return { d, executed, trace, macros, room };
 }
 
 // ── (1) 반복 탐지: threshold 미만 제안 X, 도달 제안 ──
@@ -268,14 +268,14 @@ describe("(5) re-validation — 저장된 step 의 command 가 라이브 도메�
     const full = fakeApp(CATALOG);
     const trace1 = createTrace(fakeData(store), { sessionId: "s1", now: clock() });
     const macros1 = createMacroStore(fakeData(store), { sessionId: "s1", now: clock() });
-    const exSave = createExecutor({ app: full.app, confirmGate: async (i) => i(), trace: trace1, macros: macros1 });
+    const exSave = createExecutor({ room: full.room, confirmGate: async (i) => i(), trace: trace1, macros: macros1 });
     const steps: PlanStep[] = [{ axis: "command", name: "view.close", params: { view: "v9" } }];
     await exSave.saveMacro({ name: "탭닫기", trigger: "탭 닫아", steps });
 
     // 실행 시점 — view.close 가 사라진 카탈로그(플러그인 비활성 등). 같은 store 의 새 macros sink.
     const reduced = fakeApp(CATALOG.filter((c) => c !== "view.close"));
     const macros2 = createMacroStore(fakeData(store), { sessionId: "s1", now: clock() });
-    const exRun = createExecutor({ app: reduced.app, confirmGate: async (i) => i(), macros: macros2 });
+    const exRun = createExecutor({ room: reduced.room, confirmGate: async (i) => i(), macros: macros2 });
     const r = await exRun.runMacro("탭닫기");
     expect(r.ok).toBe(false);
     expect(r.stage).toBe("refused");
@@ -332,7 +332,7 @@ describe("(7) persistence — 저장된 매크로가 reload(새 인스턴스)에
     expect(list[0].steps).toEqual(steps);
     // reload 후 runMacro 도 동작 — fast-path 가 영속을 진실로 쓴다.
     const reduced = fakeApp(CATALOG);
-    const exRun = createExecutor({ app: reduced.app, confirmGate: async (i) => i(), macros: macros2 });
+    const exRun = createExecutor({ room: reduced.room, confirmGate: async (i) => i(), macros: macros2 });
     const r = await exRun.runMacro("야간");
     expect(r.ok).toBe(true);
     expect(reduced.executed.map((e) => e.name)).toEqual(["theme.apply"]);

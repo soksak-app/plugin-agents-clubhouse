@@ -1,4 +1,4 @@
-// 페르소나 조립·저장 계약 — 프로토콜(고정)이 먼저, 사용자 텍스트가 뒤. 저장은 app.data 컬렉션.
+// 페르소나 조립·저장 계약 — 프로토콜(고정)이 먼저, 사용자 텍스트가 뒤. 저장은 room.data 컬렉션.
 import { describe, it, expect } from "vitest";
 import {
   TURN_END_MARKER,
@@ -6,7 +6,6 @@ import {
   assemblePersona,
   roomProtocolBlock,
   starterPersona,
-  toSystemPrompt,
   createPersonaStore,
   type PersonaDataApi,
 } from "./persona";
@@ -54,16 +53,7 @@ describe("assemblePersona — 조립 순서와 폴백", () => {
   });
 });
 
-describe("toSystemPrompt — ACP 표준 형태", () => {
-  it("append 모드 + 텍스트 블록 1개에 조립본 전체", () => {
-    const b = assemblePersona("claude", "persona text", ["codex"]);
-    const sp = toSystemPrompt(b);
-    expect(sp.mode).toBe("append");
-    expect(sp.content).toEqual([{ type: "text", text: b.assembled }]);
-  });
-});
-
-describe("createPersonaStore — app.data 컬렉션", () => {
+describe("createPersonaStore — room.data 컬렉션", () => {
   it("부재 doc → 빈 문자열(호출자가 스타터로 폴백)", async () => {
     const s = createPersonaStore(fakeData());
     await expect(s!.read("claude")).resolves.toBe("");
@@ -77,7 +67,7 @@ describe("createPersonaStore — app.data 컬렉션", () => {
     await expect(s.read("claude")).resolves.toBe("second");
     expect(data.docs.size).toBe(1);
   });
-  it("app.data 미부여 → undefined(스토어 없음, 스타터로만 동작)", () => {
+  it("room.data 미부여 → undefined(스토어 없음, 스타터로만 동작)", () => {
     expect(createPersonaStore(undefined)).toBeUndefined();
   });
 });

@@ -1,5 +1,6 @@
+import type { RoomPort } from "../room/port";
 // executor.ts — 타워의 유일 실행점(RULE 6). 모든 fast-path(예시행·팔레트)와 향후 slow-path plan 이
-//   여기 한 곳을 거쳐 app.commands.execute 로 직렬화된다(입력 race 0, 불변식 강제 1곳).
+//   여기 한 곳을 거쳐 room.commands.execute 로 직렬화된다(입력 race 0, 불변식 강제 1곳).
 //
 // fast-path: 예시행 → EXAMPLE_COMMANDS 의 command + 라이브 파라미터 / 팔레트행 → 그 command 자체.
 //   destructive 는 퍼지매치 금지(정확매치만). danger 면 confirm 게이트 경유 후에야 실행.
@@ -97,7 +98,7 @@ export interface CommandOutcome {
 }
 
 // slow-path planner — 모호 NL 의 planning 턴 단일 seam. systemPrompt(도메인맵 라이브 주입)를 받아
-//   에이전트의 PLAN 텍스트(JSON step 배열, 코드펜스 무방)를 돌려준다. main.ts 가 Clubhouse 엔진
+//   에이전트의 PLAN 텍스트(JSON step 배열, 코드펜스 무방)를 돌려준다. room transport(C3·C5)가
 //   requestPlan 으로 주입하고, 단위 테스트는 고정 PLAN 을 반환하는 stub 을 주입(라이브 LLM 비의존).
 export type Planner = (systemPrompt: string) => Promise<string>;
 
@@ -126,7 +127,7 @@ export interface RollbackResult {
 }
 
 // commit 옵션 — 사람 인터럽트 협조 양보(M6). shouldYield() 가 true 면 다음 step 으로 넘어가기 전에 멈춘다
-//   (현재 step 은 이미 종결, 그때까지의 results 보존). 라이브에선 main.ts 가 () => st.pendingHuman.length>0 주입.
+//   (현재 step 은 이미 종결, 그때까지의 results 보존). 라이브에선 room page 가 () => st.pendingHuman.length>0 주입.
 export interface CommitOptions {
   shouldYield?: () => boolean;
   // 헤드리스 E2E 전용 — 이 commit 동안 danger confirm 을 DOM 모달 대신 자동 거부(deny)한다(M9 rollback 검증).
@@ -168,7 +169,7 @@ export interface DistCommitResult extends CommandOutcome {
   yielded?: boolean;
 }
 
-// 분배 옵션 — 모드/참여자/진행자 + 에이전트별 planning 턴 seam(planFor). main.ts 가 engine 으로 주입.
+// 분배 옵션 — 모드/참여자/진행자 + 에이전트별 planning 턴 seam(planFor). room transport 가 주입(C3·C5).
 export interface DistRunOptions {
   mode: DistMode;
   participants: string[];
@@ -255,7 +256,7 @@ export type ReflectResult = {
   escalation?: { reason: string; lastFailure?: { code?: string; message?: string; step?: PlanStep; result?: CommandOutcome } };
 };
 
-// escalation 사람-표면 메시지(라이브 모달/main.ts 가 라이브칸·status 로 띄운다). 영어 base 가 아니라
+// escalation 사람-표면 메시지(라이브 모달/room page 가 라이브칸·status 로 띄운다). 영어 base 가 아니라
 //   사용자 대면 문구는 호스트 언어를 따르나, executor 는 결정적 단언을 위해 고정 한국어 구를 반환한다.
 export const ESCALATION_REASON = "여기서 막혔습니다 — 개입 필요";
 
@@ -273,15 +274,15 @@ export interface ConfirmInfo {
 }
 
 export interface ExecutorDeps {
-  app: any; // ctx.app — commands.execute 단일 코어 호출 seam.
+  room: Pick<RoomPort, "commands">; // the room port (src/room/port.ts): commands.execute runs a core or own command through the view.
   confirmGate: ConfirmGate;
   lang?: () => string;
-  planner?: Planner; // slow-path planning 턴 seam(main.ts 가 Clubhouse 엔진으로 주입). 없으면 NO_PLANNER.
-  // trace sink(M7) — 코어 generic app.data 위 세션/trace 영속(plan·step·outcome). 미주입이면 영속 0
-  //   (순수 단위 테스트는 trace 없이 동작). 라이브에선 main.ts 가 createTrace(app.data, …) 로 주입.
+  planner?: Planner; // slow-path planning 턴 seam(room transport 가 주입(C3·C5)). 없으면 NO_PLANNER.
+  // trace sink(M7) — 코어 generic project data 위 세션/trace 영속(plan·step·outcome). 미주입이면 영속 0
+  //   (순수 단위 테스트는 trace 없이 동작). 라이브에선 room page 가 createTrace(collections, …) 로 주입.
   trace?: TraceSink;
-  // 매크로 sink(M11) — 코어 generic app.data 위 명명 매크로 영속(save/run/list/forget). 미주입이면
-  //   매크로 비활성(NO_MACRO_STORE). 라이브에선 main.ts 가 createMacroStore(app.data, …) 로 주입.
+  // 매크로 sink(M11) — 코어 generic project data 위 명명 매크로 영속(save/run/list/forget). 미주입이면
+  //   매크로 비활성(NO_MACRO_STORE). 라이브에선 room page 가 createMacroStore(collections, …) 로 주입.
   macros?: MacroSink;
 }
 
@@ -408,7 +409,7 @@ export interface TowerExecutor {
   //   tainted/flagged(M10) plan 은 절대 제안 0(RULE 0 — 무음 untrusted fast-path 금지). 제안 ≠ 저장 —
   //   사람이 승인(saveMacro)해야 영속. trace 미주입이면 항상 proposed:false(history 없음).
   proposeMacro: (threshold?: number) => Promise<MacroProposal>;
-  // 명명 매크로 저장(human-approval 후) — trigger(NL)+steps 를 app.data 에 영속. 같은 이름은 덮어쓰기.
+  // 명명 매크로 저장(human-approval 후) — trigger(NL)+steps 를 project data 에 영속. 같은 이름은 덮어쓰기.
   //   macros sink 미주입이면 NULL 반환(영속 비활성). RULE 0 — tainted/flagged(M10) 입력은 저장 0(promotable
   //   봉인). 저장만 — 실행은 runMacro.
   saveMacro: (input: {
@@ -434,9 +435,9 @@ export interface TowerExecutor {
 export const SEALED = Symbol("tower.executor.sealed");
 
 export function createExecutor(deps: ExecutorDeps): TowerExecutor {
-  const { app, confirmGate } = deps;
+  const { room, confirmGate } = deps;
   const exec = (name: string, params?: Record<string, unknown>): Promise<CommandOutcome> =>
-    app.commands.execute(name, params ?? {});
+    room.commands.execute(name, params ?? {});
 
   // ── 게이트 엔트리 저장소(토큰 → {name, params}). (c) 데이터 의존의 핵심 ──
   //   destructive/inject 실행의 name/params 는 오직 confirm 이 발급한 토큰을 통해서만 얻는다. 토큰이 없으면
@@ -1172,7 +1173,7 @@ export function createExecutor(deps: ExecutorDeps): TowerExecutor {
   //   아님, RULE 6).
   async function runMacro(name: string, opts: CommitOptions = {}): Promise<MacroRunResult> {
     const sink = deps.macros;
-    if (!sink) return { stage: "not-found", ok: false, code: "MACRO_NOT_FOUND", message: "매크로 영속이 비활성(app.data 미제공)" };
+    if (!sink) return { stage: "not-found", ok: false, code: "MACRO_NOT_FOUND", message: "매크로 영속이 비활성(project data 미제공)" };
     const macro = await sink.byName(name);
     if (!macro) return { stage: "not-found", ok: false, code: "MACRO_NOT_FOUND", message: `매크로 없음: ${name}` };
     // ② 재검증 — 저장 당시 유효했어도 지금 command/주소가 사라졌을 수 있다(플러그인 비활성·뷰 닫힘 등).

@@ -30,7 +30,7 @@ const CATALOG = [
 // 실행을 기록하는 가짜 코어. read 명령(도메인맵·status)은 fixture, 그 외는 executed 에 기록.
 function fakeApp(over: Record<string, (p: any) => any> = {}) {
   const executed: Array<{ name: string; params: any }> = [];
-  const app = {
+  const room = {
     commands: {
       execute: vi.fn(async (name: string, params: any) => {
         if (over[name]) return over[name](params);
@@ -55,7 +55,7 @@ function fakeApp(over: Record<string, (p: any) => any> = {}) {
       }),
     },
   };
-  return { app, executed };
+  return { room, executed };
 }
 
 // confirmGate 기본 = 수락(토큰 발급). over 로 거부/관찰 주입.
@@ -63,9 +63,9 @@ function deps(
   over: Partial<ExecutorDeps> = {},
   appOver: Record<string, (p: any) => any> = {},
 ): { d: ExecutorDeps; executed: Array<{ name: string; params: any }> } {
-  const { app, executed } = fakeApp(appOver);
+  const { room, executed } = fakeApp(appOver);
   const d: ExecutorDeps = {
-    app,
+    room,
     confirmGate: async (issue) => issue(),
     ...over,
   };
@@ -187,7 +187,7 @@ describe("(3b) dom step(ui.input.click=inject) 도 commit 시 confirm 게이트 
     const c = await res.commit();
     expect(c.ok).toBe(false);
     // ui.input.click 이 confirm 없이 실행되지 않았다(executed 미기록 — read fixture 외 dispatch 0).
-    expect(d.app.commands.execute).not.toHaveBeenCalledWith("ui.input.click", expect.anything());
+    expect(d.room.commands.execute).not.toHaveBeenCalledWith("ui.input.click", expect.anything());
     expect(confirmGate).toHaveBeenCalledTimes(1);
   });
 
@@ -202,7 +202,7 @@ describe("(3b) dom step(ui.input.click=inject) 도 commit 시 confirm 게이트 
     if (!res.ok) throw new Error("dry-run 실패");
     const c = await res.commit();
     expect(c.ok).toBe(true);
-    expect(d.app.commands.execute).toHaveBeenCalledWith("ui.input.click", { address: "win/main/chrome/tower/input" });
+    expect(d.room.commands.execute).toHaveBeenCalledWith("ui.input.click", { address: "win/main/chrome/tower/input" });
   });
 });
 

@@ -4,7 +4,7 @@
 //   거부 → 에러를 plan 컨텍스트에 되먹임(self-correct). 순수 함수라 단위 테스트로 불변식 강제.
 //
 // ⚠️ danger 분류의 단일 진실: 코어 state.commands(catalogJson)는 danger 필드를 싣지 않는다(registry.ts
-//   catalogJson 가 description/params/returns 만 직렬화). 그래서 in-process 호출 경로(app.commands.execute)
+//   catalogJson 가 description/params/returns 만 직렬화). 그래서 in-process 호출 경로(room.commands.execute)
 //   가 destructive 인지를 호스트에 물을 길이 없다 — 코어 게이트는 remote(소켓/CLI/MCP) 호출에만 걸리고
 //   로컬 모달 fast-path 는 우회한다(plan §안전모델). 따라서 타워는 코어 레지스트리의 danger 선언을
 //   이름 집합으로 미러해 자기 게이트의 진실로 삼는다. 코어가 danger 를 추가/변경하면 이 집합도 갱신한다
@@ -227,7 +227,7 @@ function extractBalancedArray(text: string): string | null {
 //   command = 정식 레지스트리 이름(축1). resolveParams = 클릭 시점 라이브 상태(plugin.implementers/
 //   panel.list/theme.list/state.tree)에서 필수 파라미터를 채운다 — 정적 문장이 동적 컨텍스트로 해소
 //   (좌표 hallucination 0).
-//   query = executor 가 주입하는 read 명령 실행기(app.commands.execute 래퍼).
+//   query = executor 가 주입하는 read 명령 실행기(room.commands.execute 래퍼).
 export interface ExampleSpec {
   text: string; // handoff 고정 문구(modal EXAMPLES 와 동일 순서).
   command: string; // 정식 코어 command 이름.

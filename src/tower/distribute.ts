@@ -15,7 +15,7 @@
 import { parsePlan, type PlanStep } from "./plan";
 
 // planning 턴 seam — 한 에이전트에게 systemPrompt(+ 선택적 priorContext)를 주고 PLAN 텍스트를 받는다.
-//   main.ts 가 engine.requestPlan(agent, …) 으로 주입. 단위 테스트는 고정 PLAN 반환 스텁을 주입(라이브 LLM 비의존).
+//   room transport(C3·C5)(agent, …) 으로 주입. 단위 테스트는 고정 PLAN 반환 스텁을 주입(라이브 LLM 비의존).
 export type PlanFor = (agentId: string, systemPrompt: string, priorContext?: string) => Promise<string>;
 
 export type DistMode = "turn" | "facil" | "simul";

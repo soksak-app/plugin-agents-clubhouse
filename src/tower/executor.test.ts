@@ -19,7 +19,7 @@ import {
 // 실행을 가로채 호출만 기록하는 가짜 코어 — destructive 가 confirm 전에 불리면 즉시 드러난다.
 function fakeApp() {
   const executed: Array<{ name: string; params: any }> = [];
-  const app = {
+  const room = {
     commands: {
       execute: vi.fn(async (name: string, params: any) => {
         // 검증·상태조회 read 명령은 fixture 응답.
@@ -47,7 +47,7 @@ function fakeApp() {
       }),
     },
   };
-  return { app, executed };
+  return { room, executed };
 }
 
 const CATALOG = ["panel.close", "panel.equalize", "theme.apply", "view.close", "editor.close", "state.commands", "ui.tree", "panel.list", "theme.list", "state.tree", "status.query", "plugin.implementers"];
@@ -55,9 +55,9 @@ const CATALOG = ["panel.close", "panel.equalize", "theme.apply", "view.close", "
 // 테스트 deps — confirmGate 를 주입해 DOM 없이 사람-수락/거부/타임아웃을 흉내낸다.
 //   실제 모달은 dom data-node 노출 여부가 (b) 의 본체 — 별도 dom 테스트에서 단언.
 function deps(over: Partial<ExecutorDeps> = {}): { d: ExecutorDeps; executed: Array<{ name: string; params: any }> } {
-  const { app, executed } = fakeApp();
+  const { room, executed } = fakeApp();
   const d: ExecutorDeps = {
-    app,
+    room,
     // 기본 = 사람이 수락(게이트가 토큰 발급) — over 로 거부/타임아웃 주입.
     confirmGate: async (issue) => issue(), // issue() = 토큰 발급(수락). 반환 = 토큰.
     ...over,
@@ -66,7 +66,7 @@ function deps(over: Partial<ExecutorDeps> = {}): { d: ExecutorDeps; executed: Ar
 }
 
 describe("fast-path 비파괴 — confirm 없이 즉시 실행 (긍정)", () => {
-  it("theme.apply(비파괴)는 게이트 없이 app.commands.execute 로 직행", async () => {
+  it("theme.apply(비파괴)는 게이트 없이 room.commands.execute 로 직행", async () => {
     const { d, executed } = deps();
     const ex = createExecutor(d);
     const r = await ex.runCommand("theme.apply", { name: "Cupertino" });
@@ -156,7 +156,7 @@ describe("(b) ⚠️ confirm accept 는 executor 의 dom 도달 밖", () => {
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.code).toBe("FORBIDDEN_CHROME");
     // confirm accept 주소가 어떤 형태든 executor 의 ui.input.click 로 흐르지 않았다.
-    expect(d.app.commands.execute).not.toHaveBeenCalledWith("ui.input.click", expect.objectContaining({ address: expect.stringContaining("confirm") }));
+    expect(d.room.commands.execute).not.toHaveBeenCalledWith("ui.input.click", expect.objectContaining({ address: expect.stringContaining("confirm") }));
     expect(executed).toEqual([]);
   });
 
@@ -165,7 +165,7 @@ describe("(b) ⚠️ confirm accept 는 executor 의 dom 도달 밖", () => {
     const ex = createExecutor(d);
     const r = await ex.runDom("win/main/chrome/tower/input");
     expect(r.ok).toBe(true);
-    expect(d.app.commands.execute).toHaveBeenCalledWith("ui.input.click", { address: "win/main/chrome/tower/input" });
+    expect(d.room.commands.execute).toHaveBeenCalledWith("ui.input.click", { address: "win/main/chrome/tower/input" });
   });
 
   it("confirm 모달 accept 컨트롤은 data-node 가 없다(주소화 0 → collectExposed 미수집)", () => {

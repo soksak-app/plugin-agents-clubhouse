@@ -34,7 +34,7 @@ const CATALOG = [
 
 function fakeApp(over: Record<string, (p: any) => any> = {}) {
   const executed: Array<{ name: string; params: any }> = [];
-  const app = {
+  const room = {
     commands: {
       execute: vi.fn(async (name: string, params: any) => {
         if (over[name]) return over[name](params);
@@ -49,16 +49,16 @@ function fakeApp(over: Record<string, (p: any) => any> = {}) {
       }),
     },
   };
-  return { app, executed };
+  return { room, executed };
 }
 
 function deps(over: Partial<ExecutorDeps> = {}, appOver: Record<string, (p: any) => any> = {}) {
-  const { app, executed } = fakeApp(appOver);
-  const d: ExecutorDeps = { app, confirmGate: async (issue) => issue(), ...over };
+  const { room, executed } = fakeApp(appOver);
+  const d: ExecutorDeps = { room, confirmGate: async (issue) => issue(), ...over };
   return { d, executed };
 }
 
-// ── 가짜 app.data(trace 영속 단언용) ──
+// ── 가짜 room.data(trace 영속 단언용) ──
 interface FakeStore {
   rows: Map<string, Map<string, Record<string, unknown>>>;
   seq: number;
