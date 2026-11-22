@@ -254,6 +254,31 @@
         }
       },
       {
+        "name": "soksak-plugin-agents-clubhouse.definitions",
+        "description": "List the agent definitions that member.summon takes, each with its name, its plugin, the names of its groups and the agent file of its role in core.roles, null without one; the leader reads each file itself.",
+        "params": { "type": "object", "properties": {} },
+        "result": {
+          "type": "object",
+          "properties": {
+            "definitions": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": { "type": "string" },
+                  "name": { "type": "string" },
+                  "plugin": { "type": "string" },
+                  "groups": { "type": "array", "items": { "type": "string" } },
+                  "file": { "type": ["string", "null"] }
+                },
+                "required": ["id", "name", "plugin", "groups", "file"]
+              }
+            }
+          },
+          "required": ["definitions"]
+        }
+      },
+      {
         "name": "soksak-plugin-agents-clubhouse.member.release",
         "description": "End the session of the team member with the turn token of the leader, close its tab and remove it from the team; git is not touched.",
         "params": {

@@ -235,6 +235,7 @@ describe("the team protocol", () => {
     expect(line).toContain("Add .worktrees/ to .gitignore if missing.");
     expect(line).toContain("Record a merge with member.merged {turn, member, commit} and end a worker with member.release {turn, member}.");
     expect(line).toContain("workers mentioned in one answer start together.");
+    expect(line).toContain("List the agents you can summon with definitions {} and read the file of each before you choose.");
   });
 
   it("tells a worker the worktree lifecycle inside the project", () => {

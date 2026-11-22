@@ -2,6 +2,7 @@
 
 ## 미출시
 
+- C94: `definitions {}`는 `member.summon`이 받는 agent definition을 `id`, `name`, `plugin`, `groups`의 이름, `core.roles`에서 그 role의 agent `file`(없으면 null)과 함께 나열한다. 방은 agent file을 읽지 않고, leader 줄은 leader에게 그것을 나열하고 고르기 전에 각 file을 읽으라고 한다(`docs/spec/room.md#commands`). Definition은 여러 group에 속할 수 있으므로 field는 목록 `groups`다. 검증: 목록, 다른 형식의 거부, leader 줄의 unit test.
 - C93-1: Protocol 줄은 peer도 role도 나열하지 않고 `sok status soksak-plugin-agents-clubhouse.conversation`을 가리키며, 그 `delivery`가 이제 각 member의 이름과 role을 담는다. Worker는 worktree 이름을 한 번만 말하고 command는 shell 변수를 쓴다. 이름 40자와 role 200자인 member 열여섯의 가장 큰 구성에서 leader 줄은 7749자에서 3293자로 줄었고 worker 줄은 3460자다(`docs/spec/room.md#room-protocol`). 검증: test가 MCP form이 있을 때와 없을 때 leader와 worker 줄을 3500자 이하로 지키며, 이전 줄에서는 7749자로 실패했다.
 - C90-1: Page의 team command를 `src/room/team-control.ts`로 옮기고, test가 room record와 answer channel 위에서 실행한다. `member.release`는 session을 끝내고 member를 빼고 release를 기록하고 tab을 다시 배치하며, `member.merged`는 commit을 team view에 보이고, stop은 모든 team session을 한 번 release한다.
 - C93: 모든 protocol 줄은 MCP form이 있든 없든 3500자 이하다. 각 규칙은 한 번 말하고, `answer` 밖의 room command는 `sok soksak-plugin-agents-clubhouse.<command> --surface <surface> --params <json>` 형식으로 한 번 이름 붙이며, team 줄의 4100자 bound는 없앴다. 측정한 줄은 3551자, 4230자, 4187자에서 2817자, 3434자, 3404자로 줄었다(`docs/spec/room.md#room-protocol`). 검증: test가 peer 일곱의 plain, leader, worker 줄을 3500자 이하로 지키며, 이전 문구에서는 4159자로 실패했다.

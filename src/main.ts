@@ -33,6 +33,7 @@ import { answerSections } from "./room/sections";
 import { createRoomRecord, leaderRoute, settledRelay } from "./room/room-record";
 import { maxMembersOf, summonedEntry, teamName, type TeamEntry } from "./room/team";
 import { createTeamControl } from "./room/team-control";
+import { summonableDefinitions } from "./room/summonable";
 import { createConversationStatus, waitLabel } from "./room/conversation-status";
 import { createProtocolInjector } from "./room/protocol";
 import { parseRoomState, serializedRoomState, type RoomState as RoomTabState } from "./room/room-state";
@@ -480,6 +481,11 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   // The value of core.sessions, which the relay reads, and the listeners that the relay watches it with.
   let sessionsValue: unknown = [];
   const sessionListeners = new Set<(value: unknown) => void>();
+  // The value of core.roles, which gives the agent file of the role of each definition (docs/spec/room.md#team).
+  let rolesValue: unknown = undefined;
+  Promise.resolve(bridge!.runtime.status.watch("core.roles", (value: unknown) => {
+    rolesValue = value;
+  })).catch((error: unknown) => report("core.roles", `status watch: ${String((error as Error)?.message ?? error)}`));
   // A summon waits for the first value, so that it opens no member whose session is open (docs/spec/room.md#restart).
   let sessionsArrived: () => void = () => {};
   const sessionsReady = new Promise<void>((resolve) => (sessionsArrived = resolve));
@@ -909,6 +915,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
       ...operations,
       [ANSWER_COMMAND]: async (params: unknown) => answers.deliver(params),
       [`${EXPOSE}.member.summon`]: async (params: unknown) => summonMember(params),
+      [`${EXPOSE}.definitions`]: async () => ({ definitions: summonableDefinitions(definitions, await agentData("groups"), rolesValue) }),
       [`${EXPOSE}.member.release`]: async (params: unknown) => teamControl.release(params),
       [`${EXPOSE}.member.merged`]: async (params: unknown) => teamControl.merged(params),
       [REPORT_COMMAND]: async (params: unknown) => work!.reportCommand(params),
