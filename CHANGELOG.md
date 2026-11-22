@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- C77: The stop button is enabled only while a relay or a record wait runs, a disabled composer button is drawn disabled, and the view status carries `stopEnabled` (`docs/spec/room.md#commands`).
 - C76: The protocol states the subagent rule, the empty terminal rule and the claim of each file in its turn; `report` takes `paths` and refuses a path outside the claims of the reporter in its open turn (`docs/spec/room.md#work-reports`).
 - C75: A turn to a member whose session is working waits for its idle value of core.sessions instead of failing the relay; the status shows the step `turn`, and `conversation.stop` ends the wait (`docs/spec/room.md#modes`).
 - C74: The conversation view follows new entries only at the bottom; in reading mode the scroll stays, the pill shows the unseen entries below the viewport and runs `conversation.scroll.bottom`, and the status `view` carries `{following, unseen}` (`docs/spec/room.md#follow-mode`).

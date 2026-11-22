@@ -21,6 +21,7 @@ import { HEADER_CSS, createRoomHeader } from "./room/header";
 import { memberLaunch } from "./room/isolation";
 import { conversationView, elapsedLabel } from "./room/bubbles";
 import { createFollow, type FollowState } from "./room/follow";
+import { createStopState } from "./room/stop-state";
 import { readAgentDefinitions, toMemberDefinition, type AgentDataGet, type AgentDefinition } from "./room/definitions";
 import { createMemberSessionStore } from "./room/session-store";
 import { serialRunner, summonAndArrange, type TriggerDeps } from "./room/trigger";
@@ -120,7 +121,8 @@ const CSS = `
 .st-mention-at{opacity:.6}
 .st-mention-nm{font-weight:600;color:var(--fg,#ddd)}
 .st-in textarea{flex:1;resize:none;background:rgba(127,127,127,.1);color:inherit;border:1px solid rgba(127,127,127,.25);border-radius:7px;padding:7px 9px;font:inherit;min-height:20px;max-height:120px}
-.st-in button{background:#2d6cdf;color:#fff;border:0;border-radius:7px;padding:0 14px;cursor:pointer;font:inherit;font-weight:600}
+.st-in button{background:var(--acc,#2d6cdf);color:#fff;border:0;border-radius:7px;padding:0 14px;cursor:pointer;font:inherit;font-weight:600}
+.st-in button:disabled{opacity:.4;cursor:default}
 .st-cut{font-weight:400;opacity:.7;font-size:9px;font-style:italic} /* 참견으로 중단된 부분응답 표식 */
 .st-row.queued .st-bubble{opacity:.45;border:1px dashed rgba(255,255,255,.4)} /* 대기 중 사람 입력(미반영) */
 .st-queued-tag{font-weight:400;opacity:.7;font-size:10px;font-style:italic}
@@ -272,17 +274,23 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   msgsBox.append(msgs, pill);
   // The threshold in points within which the last entry counts as fully visible.
   const BOTTOM_POINTS = 4;
-  const viewListeners = new Set<(value: FollowState) => void>();
+  type ViewState = FollowState & { stopEnabled: boolean };
+  const viewListeners = new Set<(value: ViewState) => void>();
+  const viewState = (): ViewState => ({ ...follow.state(), stopEnabled: !stop.disabled });
   const follow = createFollow({
     atBottom: () => msgs.scrollHeight - msgs.scrollTop - msgs.clientHeight <= BOTTOM_POINTS,
     scrollToBottom: () => void (msgs.scrollTop = msgs.scrollHeight),
     changed: (value) => {
       pill.hidden = value.following || value.unseen === 0;
       pill.textContent = tp("unseen", lang, { count: String(value.unseen) });
-      for (const listener of [...viewListeners]) listener({ ...value });
+      publishView();
     },
   });
   msgs.addEventListener("scroll", () => follow.scrolled());
+  function publishView(): void {
+    const value = viewState();
+    for (const listener of [...viewListeners]) listener(value);
+  }
   // The observer reports each unseen entry that scrolls into view; it observes only entries of the record, keyed by data-index.
   const seen = new IntersectionObserver(
     (records) => {
@@ -307,6 +315,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   stop.textContent = t("stopBtn", lang);
   stop.disabled = true;
   composer.append(input, send, stop);
+  const stopState = createStopState(stop, () => publishView());
   let busy = false;
   // Sets the transport state and the composer. A status subscriber receives each new value.
   const setTransport = (ready: boolean): void => {
@@ -522,7 +531,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
     changed: () => {
       persist();
       delivery?.tokensChanged();
-      stop.disabled = !busy && !(delivery?.waits() ?? false);
+      stopState.update(busy, delivery?.waits() ?? false);
     },
   });
   // One submit queue per member session, so each line is built from the sent number that the previous submit left.
@@ -665,7 +674,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   // (docs/spec/room.md#closing-delivery).
   delivery = createClosingDelivery(
     { commands: room.commands, answers, lines, sessions: () => sessionsValue, waiting: relayPorts.waiting, report, changed: () => {
-      stop.disabled = !busy && !delivery!.waits();
+      stopState.update(busy, delivery!.waits());
       try {
         conversationStatus.changed();
       } catch (error) {
@@ -733,7 +742,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
       // A relay in progress keeps the tab loaded: an unload would end the page that waits for the turns.
       bridge!.calls.request("tab.keep", { reason: "busy", on: value }).catch((error: unknown) => report("tab keep", String((error as Error)?.message ?? error)));
       send.disabled = value || transport.state !== "ready";
-      stop.disabled = !value && !delivery!.waits();
+      stopState.update(value, delivery!.waits());
     },
     relay: relayMessage,
     stopWaits: () => {
@@ -803,7 +812,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
         subscribe: (listener) => conversationStatus.subscribe(listener),
       },
       [`${EXPOSE}.view`]: {
-        read: () => follow.state(),
+        read: () => viewState(),
         subscribe: (listener) => {
           viewListeners.add(listener);
           return () => void viewListeners.delete(listener);
