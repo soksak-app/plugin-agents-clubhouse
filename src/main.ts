@@ -687,58 +687,6 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   // each value, and each value of core.sessions publishes the program states again (docs/spec/room.md#conversation-status).
   // The sections of an answer name the addressees by the mention rules among the roster (docs/spec/room.md#sections).
   // The team commands and the team view (docs/spec/room.md#team).
-  const teamControl = createTeamControl({
-    team,
-    definitions: () => definitions,
-    sessionOf: (id) => memberSessions.get(id) ?? null,
-    leader: () => leaderEntry(),
-    answers,
-    end: (session) => endSession(session),
-    append: (text) => record.append("clubhouse", text),
-    summon: () => summon(),
-    changed: () => {
-      persist();
-      conversationStatus.changed();
-    },
-    report,
-  });
-  const conversationStatus = createConversationStatus(conversation, () => sessionsValue, () => deliveryEntries(), (entry) =>
-    entry.speaker === "owner" || entry.speaker === "clubhouse" ? [] : answerSections(entry.text, roster),
-    () => teamControl.view(sessionsValue),
-  );
-  conversationStatus.subscribe(() => showConversation());
-  sessionListeners.add((value) => {
-    work?.inject();
-    try {
-      conversationStatus.changed();
-    } catch (error) {
-      report("room conversation", String((error as Error)?.message ?? error));
-    }
-  });
-  // With a leader the leader receives every line and a worker its owner lines and the lines that mention it
-  // (docs/spec/room.md#addressed-views).
-  const leaderEntry = () => roster.find((entry) => entry.leader && entry.checked);
-  const route = leaderRoute(
-    () => {
-      const leader = leaderEntry();
-      return leader === undefined ? null : (memberSessions.get(leader.id) ?? null);
-    },
-    () => openMembers(),
-  );
-  const record = createRoomRecord(conversation, saved?.delivered ?? {}, speakerName, () => {
-    conversationStatus.changed();
-    persist();
-  }, saved?.sent ?? {}, () => Date.now(), saved?.addressed ?? {}, route);
-  showConversation();
-  // Each member session receives the room protocol once, after it first reports idle and before its first relayed message
-  // (docs/spec/room.md#room-protocol). The injector reports each refusal itself and resolves with the outcome of each member.
-  const protocol = createProtocolInjector(relayPorts, report, {
-    taught: [...taughtSessions],
-    onTaught: (session) => {
-      taughtSessions.add(session);
-      persist();
-    },
-  });
   type OpenMember = { id: string; name: string; session: string; role: string; mcp: boolean };
   const isOpen = (id: string): boolean => memberSessions.has(id) && openSessionIds.has(memberSessions.get(id)!);
   const openMembers = (): OpenMember[] => [
@@ -766,6 +714,59 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
         unreceived: record.unsent(member.session, member.id).length,
       };
     });
+  const teamControl = createTeamControl({
+    team,
+    definitions: () => definitions,
+    sessionOf: (id) => memberSessions.get(id) ?? null,
+    leader: () => leaderEntry(),
+    answers,
+    end: (session) => endSession(session),
+    append: (text) => record.append("clubhouse", text),
+    summon: () => summon(),
+    changed: () => {
+      persist();
+      conversationStatus.changed();
+    },
+    report,
+  });
+  const conversationStatus = createConversationStatus(conversation, () => sessionsValue, () => deliveryEntries(), (entry) =>
+    entry.speaker === "owner" || entry.speaker === "clubhouse" ? [] : answerSections(entry.text, roster),
+    () => teamControl.view(sessionsValue),
+  );
+  conversationStatus.subscribe(() => showConversation());
+  // With a leader the leader receives every line and a worker its owner lines and the lines that mention it
+  // (docs/spec/room.md#addressed-views).
+  const leaderEntry = () => roster.find((entry) => entry.leader && entry.checked);
+  const route = leaderRoute(
+    () => {
+      const leader = leaderEntry();
+      return leader === undefined ? null : (memberSessions.get(leader.id) ?? null);
+    },
+    () => openMembers(),
+  );
+  const record = createRoomRecord(conversation, saved?.delivered ?? {}, speakerName, () => {
+    conversationStatus.changed();
+    persist();
+  }, saved?.sent ?? {}, () => Date.now(), saved?.addressed ?? {}, route);
+  showConversation();
+  // The listener of core.sessions reads the conversation status, the delivery entries and the record, so it is added after them (C96).
+  sessionListeners.add((value) => {
+    work?.inject();
+    try {
+      conversationStatus.changed();
+    } catch (error) {
+      report("room conversation", String((error as Error)?.message ?? error));
+    }
+  });
+  // Each member session receives the room protocol once, after it first reports idle and before its first relayed message
+  // (docs/spec/room.md#room-protocol). The injector reports each refusal itself and resolves with the outcome of each member.
+  const protocol = createProtocolInjector(relayPorts, report, {
+    taught: [...taughtSessions],
+    onTaught: (session) => {
+      taughtSessions.add(session);
+      persist();
+    },
+  });
   // A token kept from before a restart shows its member as waiting for the answer until the answer or conversation.stop closes it.
   for (const token of answers.tokens()) keptWaits.set(token.turn, relayPorts.waiting({ id: token.member, session: token.session }, "answer"));
   stopState.update(busy, keptOpen());

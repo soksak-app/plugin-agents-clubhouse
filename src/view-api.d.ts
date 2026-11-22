@@ -70,3 +70,9 @@ declare module "@soksak/plugin-api" {
     load: () => unknown,
   ): ExposeApi;
 }
+
+// The view test host of the plugin API, which the page start test loads the built page into (testing.js of the package).
+declare module "@soksak/plugin-api/testing" {
+  export function openView(name: string, options: Record<string, unknown>): Promise<any>;
+  export function turn(): Promise<void>;
+}
