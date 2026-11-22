@@ -144,3 +144,30 @@ describe("the other tabs of the plane", () => {
     }
   });
 });
+
+describe("arrangeMembers after a restart (docs/spec/room.md#restart)", () => {
+  it("reuses the member tabs through the tree and closes the tabs of the room's ended member sessions", async () => {
+    const plan = {
+      feasible: true,
+      reason: null,
+      cards: [
+        {
+          card: "card-1",
+          tabs: [
+            { tab: "tab-room", plugin: ROOM_PLUGIN, params: null },
+            { tab: "tab-dead", plugin: FIXTURE_PLUGIN, params: { session: "owned-old" } },
+            { tab: "tab-person", plugin: FIXTURE_PLUGIN, params: { session: "owned-person" } },
+            { tab: "tab-shell", plugin: FIXTURE_PLUGIN, params: null },
+          ],
+        },
+        { card: "card-2", tabs: [{ tab: "tab-claude", plugin: FIXTURE_PLUGIN, params: { session: "s-claude" } }] },
+      ],
+    };
+    const double = port(plan);
+    const ended = (session: string) => session === "owned-old";
+    expect(await arrangeMembers(double.port, members, createArrangementStatus(), ended)).toEqual({ state: "group" });
+    expect(double.calls.map(([name]) => name)).toEqual(["core.layout.plan", "core.layout.apply", "core.layout.close"]);
+    expect(double.calls[2]).toEqual(["core.layout.close", { tab: "tab-dead" }]);
+    expect(double.reports).toEqual([]);
+  });
+});

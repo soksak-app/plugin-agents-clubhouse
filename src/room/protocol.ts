@@ -32,8 +32,19 @@ export interface ProtocolInjector {
   ensure(member: ProtocolMember, peers: string[]): Promise<ProtocolOutcome>;
 }
 
-export function createProtocolInjector(ports: RelayPorts, report: (where: string, text: string) => void): ProtocolInjector {
-  const done = new Map<string, Promise<ProtocolOutcome>>();
+export interface ProtocolMemory {
+  // The sessions that received the protocol before, as the tab state of the room keeps them across a restart.
+  taught: string[];
+  // Called with each session whose protocol turn ended, so the room keeps it.
+  onTaught: (session: string) => void;
+}
+
+export function createProtocolInjector(
+  ports: RelayPorts,
+  report: (where: string, text: string) => void,
+  memory: ProtocolMemory = { taught: [], onTaught: () => {} },
+): ProtocolInjector {
+  const done = new Map<string, Promise<ProtocolOutcome>>(memory.taught.map((session) => [session, Promise.resolve({ ok: true })]));
   // Resolves when the session first reports idle, from the current value or from the next values of core.sessions.
   const firstIdle = (session: string) =>
     new Promise<void>((resolve, reject) => {
@@ -75,6 +86,7 @@ export function createProtocolInjector(ports: RelayPorts, report: (where: string
         }),
       };
       await relayMemberMessage(port, roomProtocolLine(member.name, peers), { signal: controller.signal });
+      memory.onTaught(member.session);
       return { ok: true };
     } catch (error) {
       if (!listed(member.session)) {

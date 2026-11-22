@@ -46,12 +46,23 @@ export async function arrangeMembers(
   port: ArrangementPort,
   members: Member[],
   status: ArrangementStatus,
+  // Whether a session is a member session that this room opened and that has ended (docs/spec/room.md#restart).
+  ended: (session: string) => boolean = () => false,
 ): Promise<ArrangementState> {
   const tree = arrangementTree(members);
   try {
     const plan = await port.commands.execute("core.layout.plan", { tree });
     if (plan.feasible === true) {
       await port.commands.execute("core.layout.apply", { tree });
+      // The apply reuses each tab whose plugin and params an entry of the tree names; a tab of an ended member session of this room
+      // names no entry and stays as an inactive tab, so the room closes it. Tabs of the person are kept.
+      const planned: { tab?: unknown; params?: { session?: unknown } | null }[] = (plan.cards ?? []).flatMap((card: any) => card?.tabs ?? []);
+      for (const entry of planned) {
+        const session = entry.params?.session;
+        if (typeof entry.tab === "string" && typeof session === "string" && ended(session)) {
+          await port.commands.execute("core.layout.close", { tab: entry.tab });
+        }
+      }
       status.set({ state: "group" });
       return { state: "group" };
     }

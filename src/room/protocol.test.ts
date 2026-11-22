@@ -105,3 +105,14 @@ describe("createProtocolInjector", () => {
   });
 });
 
+describe("createProtocolInjector after a restart (docs/spec/room.md#restart)", () => {
+  it("submits no protocol line to a session that received it before, and names each session that receives it", async () => {
+    const core = fakeCore({ "s-1": "idle", "s-2": "idle" });
+    const taught: string[] = [];
+    const injector = createProtocolInjector(core.ports, () => undefined, { taught: ["s-1"], onTaught: (session) => taught.push(session) });
+    expect(await injector.ensure(claude, [])).toEqual({ ok: true });
+    expect(await injector.ensure({ ...claude, session: "s-2" }, [])).toEqual({ ok: true });
+    expect(core.submitted.map((entry) => entry.session)).toEqual(["s-2"]);
+    expect(taught).toEqual(["s-2"]);
+  });
+});

@@ -87,3 +87,15 @@ describe("sessionProgram", () => {
     expect(() => sessionProgram([{ session: "s-1", program: { state: "done" } }], "s-1")).toThrow("program state done is not idle, working or blocked");
   });
 });
+
+describe("ownedSessionIds (docs/spec/room.md#restart)", () => {
+  it("lists the sessions of core.sessions that this surface owns", async () => {
+    const { ownedSessionIds } = await import("./session-channel");
+    const value = [
+      { session: "owned-a", owner: "tab-room", program: null },
+      { session: "owned-b", owner: "tab-other", program: null },
+    ];
+    expect([...ownedSessionIds(value, "tab-room")]).toEqual(["owned-a"]);
+    expect(() => ownedSessionIds({}, "tab-room")).toThrow("core.sessions is not a list");
+  });
+});

@@ -2,6 +2,7 @@
 
 ## 미출시
 
+- C44: 방 tab은 roster 순서와 check, mode, 대화, 연 session, protocol을 받은 session을 tab state(`surface.unload` format 1)에 보관하고, 시작할 때 자기가 소유한 `core.sessions`의 session에 다시 붙으며, protocol 줄을 다시 보내지 않고, arrangement 뒤 끝난 member session의 tab을 닫는다(`docs/spec/room.md#restart`). Relay는 `tab.keep busy`를 보고한다.
 - C43: Protocol turn 전에 끝난 member session은 error 보고 없이 그 단계를 끝내고, send는 `core.sessions`가 나열하는 저장된 session만 쓴다(`docs/spec/room.md#room-protocol`).
 - C42: 차례로 전달할 때 뒤의 각 member는 메시지와 함께 앞 답을 `[@<name>] <answer>`로 받는다(`docs/spec/room.md#modes`).
 - C41: Member의 답은 화면 행의 마지막 reply block이며 status line, spinner, separator, prompt를 포함하지 않는다. Terminal이 깨뜨린 행은 그 행과 함께 거부된다(`docs/spec/room.md#answer`).

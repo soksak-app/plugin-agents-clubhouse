@@ -14,7 +14,7 @@ The header of the room is one row of the plugin name, the roster tabs, the mode 
 
 ## Arrangement
 
-After a summon the room plans a group card named `Room` of the room card and the member cards with `core.layout.plan` and builds it with `core.layout.apply` when the plan is feasible; otherwise each member opens as a tab of the current card. The arrangement passes no `close`, so core keeps every other tab of the plane as an inactive tab at the end of the first card of the tree, which is the room card, and the room tab stays the active tab of that card. The room never closes a tab that it did not open, because a tab of the person can hold work that is not saved, and closing it is the choice of the person.
+After a summon the room plans a group card named `Room` of the room card and the member cards with `core.layout.plan` and builds it with `core.layout.apply` when the plan is feasible; otherwise each member opens as a tab of the current card. The arrangement passes no `close`, so core keeps every other tab of the plane as an inactive tab at the end of the first card of the tree, which is the room card, and the room tab stays the active tab of that card. The room closes only the member tabs of its own ended sessions ([restart](#restart)); it never closes a tab that it did not open, because a tab of the person can hold work that is not saved, and closing it is the choice of the person.
 
 ## Commands
 
@@ -60,6 +60,20 @@ The answer of a member is the last reply block of the screen rows that `core.ses
 - A row that does not begin with two spaces and directly follows a row of the block breaks the block. The room refuses the answer with `the reply rows are broken at screen row <row>: <text>` and repairs nothing, because such rows come from a program and a terminal that laid out the screen at different widths, and the rows no longer hold the reply as the program wrote it.
 
 A refused answer fails the turn of the member with `member <id>: <reason>` ([modes](#modes)).
+
+## Restart
+
+A restart of the application, an unload of the room tab and a restart of its view show the room as it was, without input. The room declares `surface.unload` `{format: 1, maxBytes: 1048576}` and writes the state of its tab through the tab state of its view (`tab.state.write`) at each change; core keeps it per tab across a restart (core `docs/spec/plugins.md#memory-saver`). The state is `{roster, mode, conversation, sessions, taught}`:
+
+- `roster`: the entries `{id, checked}` in roster order. At start the first roster that the definitions give keeps this order and these checks; a definition that is not in it joins unchecked at the end, and an entry without a definition leaves.
+- `mode`: the conversation mode; the setting `kibitzDefault` gives the mode only of a room tab without a state.
+- `conversation`: the entries `{speaker, text}` that the conversation shows, `speaker` being `owner` or the identifier of a member and `text` the message or the [answer](#answer) of the member, so the conversation shows the same answers after a restart.
+- `sessions`: the member sessions that this room opened.
+- `taught`: the sessions that received the [room protocol](#room-protocol); a session in it receives no protocol line again.
+
+The reader accepts only this form and refuses any other value with `room tab state: <field> ...` naming the field and what it found; a tab without a state reads `null` and starts empty. A refused write is reported as `error: room tab state: <reason>`.
+
+At start the room waits for the first value of `core.sessions` and summons the checked members of its state. It reattaches only to the sessions that `core.sessions` lists with this room surface as `owner`: a member whose stored session is one of them keeps it, and only a member without one opens a session. The arrangement applies the same tree, so core resolves each entry `{plugin, params: {session}}` to the member tab that shows that session already. A tab of the plane whose `params.session` names a session of `sessions` that `core.sessions` no longer lists is a member tab of this room whose session ended; the room closes it with `core.layout.close {tab}` after the apply, and then keeps in `sessions` only the open sessions. The room closes no other tab. While a message is relayed the room reports `tab.keep {reason: "busy", on: true}`, so core does not unload the page that waits for the turns.
 
 ## Shared record
 

@@ -25,6 +25,8 @@ import { relayInMode, type RelayPorts } from "./room/room-relay";
 import { mentionedMembers } from "./room/mention";
 import { shareRecord } from "./room/record";
 import { createProtocolInjector } from "./room/protocol";
+import { parseRoomState, type RoomState as RoomTabState } from "./room/room-state";
+import { ownedSessionIds } from "./room/session-channel";
 import { rosterFrom, type RosterEntry } from "./room/roster";
 import { createRoomOperations } from "./room/operations";
 import { createMacroStore } from "./tower/macro";
@@ -167,13 +169,31 @@ const expose = createExpose(
 
 // The room of the page: the roster tabs, the conversation mode, the control tower button and the composer. Its elements and
 // status are the handlers that startRoomPage registers.
-function buildRoom({ settings, collections }: RoomContext): RoomHandlers {
+async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHandlers> {
   const lang = navigator.language.startsWith("ko") ? "ko" : "en";
   const modeSetting = settings.kibitzDefault;
   if (modeSetting !== "facil" && modeSetting !== "turn" && modeSetting !== "simul") {
     throw new Error(`settings.kibitzDefault must be facil, turn or simul, got ${JSON.stringify(modeSetting)}`);
   }
-  let mode: RoomMode = modeSetting;
+  // The state of this room tab, which core keeps per tab across a restart (docs/spec/room.md#restart).
+  const saved = parseRoomState(await bridge!.calls.request("tab.state.read", null));
+  let mode: RoomMode = saved?.mode ?? modeSetting;
+  // The roster of the saved state orders and checks the first roster that the definitions give.
+  let seed: RosterEntry[] = (saved?.roster ?? []).map((entry) => ({ id: entry.id, name: "", checked: entry.checked }));
+  const conversation: RoomTabState["conversation"] = [...(saved?.conversation ?? [])];
+  // The member sessions that this room opened, and the sessions that received the room protocol.
+  const roomSessions = new Set<string>(saved?.sessions ?? []);
+  const taughtSessions = new Set<string>(saved?.taught ?? []);
+  const persist = (): void => {
+    const value: RoomTabState = {
+      roster: roster.map((entry) => ({ id: entry.id, checked: entry.checked })),
+      mode,
+      conversation,
+      sessions: [...roomSessions],
+      taught: [...taughtSessions],
+    };
+    bridge!.calls.request("tab.state.write", value).catch((error: unknown) => report("room tab state", String((error as Error)?.message ?? error)));
+  };
   // The roster lists the agent definitions of the agents plugin (C13); it is empty until the status arrives.
   const roster: RosterEntry[] = [];
   let definitions: AgentDefinition[] = [];
@@ -308,9 +328,13 @@ function buildRoom({ settings, collections }: RoomContext): RoomHandlers {
     readAgentDefinitions(agentData)
       .then((next) => {
         definitions = next;
-        roster.splice(0, roster.length, ...rosterFrom(definitions, roster));
+        roster.splice(0, roster.length, ...rosterFrom(definitions, roster.length === 0 ? seed : roster));
         renderTabs();
         refreshReported();
+        // At start the checked members of the saved state are summoned: a member with an open session of this room is reattached,
+        // and only a member without one opens a session (docs/spec/room.md#restart).
+        if (seed.length > 0 && roster.some((entry) => entry.checked)) summon();
+        seed = [];
       })
       .catch((error: unknown) => report("agents.definitions", String((error as Error)?.message ?? error)));
   };
@@ -320,9 +344,20 @@ function buildRoom({ settings, collections }: RoomContext): RoomHandlers {
   // The value of core.sessions, which the relay reads, and the listeners that the relay watches it with.
   let sessionsValue: unknown = [];
   const sessionListeners = new Set<(value: unknown) => void>();
+  // The room reattaches only to the sessions that it owns; a summon waits for the first value, so that it opens no member whose
+  // session is open (docs/spec/room.md#restart).
+  const surface = window.sokSurface?.surface;
+  if (typeof surface !== "string" || surface === "") throw new Error("the room needs the surface identifier of its start values");
+  let sessionsArrived: () => void = () => {};
+  const sessionsReady = new Promise<void>((resolve) => (sessionsArrived = resolve));
   Promise.resolve(bridge!.runtime.status.watch("core.sessions", (value: unknown) => {
     openSessionIds.clear();
-    if (Array.isArray(value)) for (const entry of value) openSessionIds.add(String((entry as { session?: unknown }).session));
+    try {
+      for (const session of ownedSessionIds(value, surface)) openSessionIds.add(session);
+    } catch (error) {
+      report("core.sessions", String((error as Error)?.message ?? error));
+    }
+    sessionsArrived();
     sessionsValue = value;
     for (const listener of [...sessionListeners]) listener(value);
     refreshReported();
@@ -335,11 +370,21 @@ function buildRoom({ settings, collections }: RoomContext): RoomHandlers {
     arrange: { commands: room.commands, report },
     status: arrangement,
     size: () => ({ width: window.innerWidth, height: window.innerHeight, scale: window.devicePixelRatio }),
+    ended: (session) => roomSessions.has(session) && !openSessionIds.has(session),
   };
   const summon = (): void => {
     const checked = roster.filter((entry) => entry.checked).map((entry) => entry.id);
-    runTrigger(() => summonAndArrange(trigger, definitions.map(toMemberDefinition), checked))
+    runTrigger(async () => {
+      await sessionsReady;
+      await summonAndArrange(trigger, definitions.map(toMemberDefinition), checked);
+      // The arrangement closed the tabs of the ended sessions; the room keeps the sessions that are open.
+      for (const session of [...roomSessions]) if (!openSessionIds.has(session)) roomSessions.delete(session);
+    })
       .then(refreshMembers)
+      .then(() => {
+        for (const session of memberSessions.values()) roomSessions.add(session);
+        persist();
+      })
       .then(teachMembers)
       .catch((error: unknown) => report("room summon", String((error as Error)?.message ?? error)));
   };
@@ -354,13 +399,27 @@ function buildRoom({ settings, collections }: RoomContext): RoomHandlers {
       return () => void sessionListeners.delete(listener);
     },
   };
-  const appendMessage = (who: string, text: string): void => {
+  // The conversation names the owner or a member by its identifier and shows the roster name of the member.
+  const showMessage = (speaker: string, text: string): void => {
+    const who = speaker === "owner" ? (lang === "ko" ? "나" : "You") : (roster.find((entry) => entry.id === speaker)?.name ?? speaker);
     msgs.append(elText("div", `${who}: ${text}`, "st-msg"));
     msgs.scrollTop = msgs.scrollHeight;
   };
+  const appendMessage = (speaker: string, text: string): void => {
+    conversation.push({ speaker, text });
+    showMessage(speaker, text);
+    persist();
+  };
+  for (const entry of conversation) showMessage(entry.speaker, entry.text);
   // Each member session receives the room protocol once, after it first reports idle and before its first relayed message
   // (docs/spec/room.md#room-protocol). The injector reports each refusal itself and resolves with the outcome of each member.
-  const protocol = createProtocolInjector(relayPorts, report);
+  const protocol = createProtocolInjector(relayPorts, report, {
+    taught: [...taughtSessions],
+    onTaught: (session) => {
+      taughtSessions.add(session);
+      persist();
+    },
+  });
   type OpenMember = { id: string; name: string; session: string };
   const openMembers = (): OpenMember[] =>
     roster
@@ -386,7 +445,7 @@ function buildRoom({ settings, collections }: RoomContext): RoomHandlers {
     const answers = await relayInMode(relayPorts, mode, taught, text);
     const shown = answers.map((answer) => {
       const member = targets.find((entry) => entry.id === answer.id)!;
-      appendMessage(member.name, answer.text);
+      appendMessage(member.id, answer.text);
       return { member, text: answer.text };
     });
     // A mention narrowed the receivers: the other members receive the record of the exchange and answer nothing that the room
@@ -407,15 +466,18 @@ function buildRoom({ settings, collections }: RoomContext): RoomHandlers {
     changed: () => {
       renderTabs();
       renderMode();
+      persist();
     },
     summon,
     openMembers: () => openMembers().length,
     accept: (text) => {
       input.value = "";
-      appendMessage(lang === "ko" ? "나" : "You", text);
+      appendMessage("owner", text);
     },
     busy: (value) => {
       busy = value;
+      // A relay in progress keeps the tab loaded: an unload would end the page that waits for the turns.
+      bridge!.calls.request("tab.keep", { reason: "busy", on: value }).catch((error: unknown) => report("tab keep", String((error as Error)?.message ?? error)));
       send.disabled = value || transport.state !== "ready";
     },
     relay: relayMessage,

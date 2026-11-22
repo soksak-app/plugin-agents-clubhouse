@@ -47,6 +47,12 @@ export async function sessionRead(port: SessionCommandPort, session: string): Pr
   return { rows: reply.rows, cursor: { row: cursor.row, column: cursor.column } };
 }
 
+// The sessions of a value of core.sessions whose owner is the surface; a room reattaches only to its own sessions after a restart.
+export function ownedSessionIds(sessions: unknown, surface: string): Set<string> {
+  if (!Array.isArray(sessions)) throw new Error("core.sessions is not a list");
+  return new Set(sessions.filter((entry) => entry?.owner === surface).map((entry) => String(entry.session)));
+}
+
 // The program state of session in a value of core.sessions, the list of open sessions. A session that the list does not hold is
 // refused, and null means that the sidecar has reported no state yet.
 export function sessionProgram(sessions: unknown, session: string): ProgramState | null {

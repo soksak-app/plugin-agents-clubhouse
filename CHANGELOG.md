@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- C44: The room tab keeps its roster order and checks, mode, conversation, opened sessions and protocol sessions in its tab state (`surface.unload` format 1), reattaches at start to the sessions of `core.sessions` that it owns, sends no second protocol line, and closes the tabs of its ended member sessions after the arrangement (`docs/spec/room.md#restart`). A relay reports `tab.keep busy`.
 - C43: A member session that ends before its protocol turn ends the step without an error report, and a send uses only the stored sessions that `core.sessions` lists (`docs/spec/room.md#room-protocol`).
 - C42: In a relay one after another each later member receives the earlier answers as `[@<name>] <answer>` with the message (`docs/spec/room.md#modes`).
 - C41: The answer of a member is the last reply block of its screen rows, without the status line, the spinner, the separators and the prompt; rows that the terminal broke are refused with the row (`docs/spec/room.md#answer`).
