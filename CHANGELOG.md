@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- C85: The protocol line requires a turn to end with no terminal text and forbids closing words that look like a state (`docs/spec/room.md#room-protocol`).
 - C84: A turn of a member that has received every record line runs with a room line in place of record lines, so its answer settles the conversation (`docs/spec/room.md#room-record`).
 - C83: The protocol line tells a member to run `sok skill print` once first and to check a web page or a local server in a soksak browser tab first, and states the preface of an owner instruction (`docs/spec/room.md#soksak-knowledge`).
 - C82: `message.send` during a relay appends the owner line to the running conversation: a working member receives it injected as an owner instruction, an idle member in its next turn, and a member that answered before it takes one more turn (`docs/spec/room.md#owner-follow-up`).

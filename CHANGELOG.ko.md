@@ -2,6 +2,7 @@
 
 ## 미출시
 
+- C85: Protocol 줄은 turn을 terminal text 없이 끝내게 하고 상태처럼 보이는 마무리 단어를 금한다(`docs/spec/room.md#room-protocol`).
 - C84: 모든 record 줄을 받은 member의 turn은 record 줄 대신 방의 줄로 실행되므로 그 답이 대화를 settle한다(`docs/spec/room.md#room-record`).
 - C83: Protocol 줄은 member에게 먼저 `sok skill print`를 한 번 실행하고 web page나 local server를 먼저 soksak browser tab에서 확인하라고 하며, owner 지시의 preface를 밝힌다(`docs/spec/room.md#soksak-knowledge`).
 - C82: Relay 중 `message.send`는 owner 줄을 진행 중인 대화에 더한다. Working member는 owner 지시로 inject 받고, idle member는 다음 turn에 받으며, 그 전에 답한 member는 turn을 한 번 더 받는다(`docs/spec/room.md#owner-follow-up`).

@@ -180,10 +180,11 @@ describe("nothing said outside the room", () => {
 });
 
 describe("the work rules of the protocol (docs/spec/room.md#room-protocol)", () => {
-  it("states the subagent rule, the empty terminal rule and the claim rule of every turn", () => {
+  it("states the subagent rule, the empty terminal rule without a closing word and the claim rule of every turn", () => {
     const line = roomProtocolLine("Claude", [], "room-1");
     expect(line).toContain("Split development work of a turn into independent parts and delegate them to subagents with the Agent tool, run them in parallel and verify their results before you report; edit a trivial single file directly.");
-    expect(line).toContain("Write no explanation, summary or progress text in your terminal: every word for others goes through report or answer, and the last terminal text of a turn is empty or one word.");
+    expect(line).toContain("Write nothing in your terminal, no closing word either: end a turn with no text. Never write a state word such as Waiting, Settled, Ready, Done, Sent or Noted; state lives only in the answer status and the session state.");
+    expect(line).not.toContain("one word");
     expect(line).toContain("A claim ends with its turn: claim each file in the turn in which you write it, before you write it, and release it when you are done.");
     expect(line).toContain('"paths": ["<path>"]');
   });
