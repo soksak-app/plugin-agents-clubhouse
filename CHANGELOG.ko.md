@@ -2,6 +2,7 @@
 
 ## 미출시
 
+- C80: Protocol은 각 room 명령을 `;`, `&&`, `|`로 잇지 않고 foreground에서 단독으로 실행하고, 시간 초과로 끝나거나 background로 넘어간 room 명령은 `report`로 알린다고 말한다(`docs/spec/room.md#room-protocol`).
 - C78: Test가 `@soksak/plugin-api` 0.0.48 release의 `validateManifest`로 plugin.json을 검증하고, view status schema는 exposure schema subset이 거부하는 `minimum`을 뺀다(`docs/spec/room.md#manifest`).
 - C77: Stop button은 relay나 record wait가 진행되는 동안에만 enabled이고, disabled인 composer button은 disabled로 그려지며, view status는 `stopEnabled`를 가진다(`docs/spec/room.md#commands`).
 - C76: Protocol은 subagent 규칙, 빈 terminal 규칙, 각 file을 그 turn에서 claim하는 규칙을 말한다. `report`는 `paths`를 받고, 열린 turn에서 보고자의 claim 밖에 있는 path를 거부한다(`docs/spec/room.md#work-reports`).

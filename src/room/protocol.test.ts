@@ -187,3 +187,11 @@ describe("the work rules of the protocol (docs/spec/room.md#room-protocol)", () 
     expect(line).toContain('"paths": ["<path>"]');
   });
 });
+
+describe("the room commands run alone (docs/spec/room.md#room-protocol)", () => {
+  it("states that each room command runs alone in the foreground and that a timed-out command is reported, not claimed as sent", () => {
+    const line = roomProtocolLine("Claude", [], "room-1");
+    expect(line).toContain("Run each room command (answer, report, claim, release, record.ack) as a command of its own in the foreground, never chained with ;, && or |.");
+    expect(line).toContain("When a room command times out or goes to the background, report it with report and never say that it was sent.");
+  });
+});

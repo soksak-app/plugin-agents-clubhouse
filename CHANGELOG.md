@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- C80: The protocol states that each room command runs alone in the foreground, never chained with `;`, `&&` or `|`, and that a room command that times out or goes to the background is reported with `report` (`docs/spec/room.md#room-protocol`).
 - C78: A test validates plugin.json with `validateManifest` of the `@soksak/plugin-api` 0.0.48 release, and the view status schema drops `minimum`, which the exposure schema subset refuses (`docs/spec/room.md#manifest`).
 - C77: The stop button is enabled only while a relay or a record wait runs, a disabled composer button is drawn disabled, and the view status carries `stopEnabled` (`docs/spec/room.md#commands`).
 - C76: The protocol states the subagent rule, the empty terminal rule and the claim of each file in its turn; `report` takes `paths` and refuses a path outside the claims of the reporter in its open turn (`docs/spec/room.md#work-reports`).
