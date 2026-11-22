@@ -25,6 +25,7 @@ import { relayInMode, type RelayPorts } from "./room/room-relay";
 import { mentionedMembers } from "./room/mention";
 import { shareRecord } from "./room/record";
 import { createRoomRecord, withdrawnOnFailure } from "./room/room-record";
+import { createConversationStatus } from "./room/conversation-status";
 import { createProtocolInjector } from "./room/protocol";
 import { parseRoomState, type RoomState as RoomTabState } from "./room/room-state";
 import { ownedSessionIds } from "./room/session-channel";
@@ -433,8 +434,11 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   };
   // Each member receives the record lines that it has not received at the start of its turn (docs/spec/room.md#room-record).
   const speakerName = (speaker: string): string => (speaker === "owner" ? "owner" : memberName(speaker));
+  // The declared conversation status carries the entries that the page shows (docs/spec/room.md#conversation-status).
+  const conversationStatus = createConversationStatus(conversation);
   const record = createRoomRecord(conversation, saved?.delivered ?? {}, speakerName, () => {
     showConversation();
+    conversationStatus.changed();
     persist();
   });
   showConversation();
@@ -551,6 +555,10 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
       [`${EXPOSE}.arrangement`]: {
         read: () => arrangement.read(),
         subscribe: (listener) => arrangement.subscribe(listener).dispose,
+      },
+      [`${EXPOSE}.conversation`]: {
+        read: () => conversationStatus.read(),
+        subscribe: (listener) => conversationStatus.subscribe(listener),
       },
       [`${EXPOSE}.transport`]: {
         read: () => ({ ...transport }),

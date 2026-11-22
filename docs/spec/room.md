@@ -59,6 +59,10 @@ The room delivers the record to each member session. For each session the room k
 
 A send that fails before any answer of its relay is in the record withdraws the line of the owner: the room removes it from the record and from the conversation, lowers each delivered number above the length of the record to that length, and `message.send` reports the failure through the error display ([commands](#commands)), which keeps the reason. The record holds no message that no member answered, so a repeated send after failures leaves one line of the owner. A send that fails after an answer keeps the line of the owner and the answers that arrived, because a member answered it.
 
+## Conversation status
+
+The declared status `soksak-plugin-agents-clubhouse.conversation` carries the conversation that the page shows: `{entries: [{speaker, text}]}`, the entries of the [room record](#room-record) in record order, `speaker` being `owner` or the identifier of a member. The room publishes a new value at each change of the record, also when a failed send withdraws the line of the owner, so a caller reads the conversation from the status and not from the drawn page.
+
 ## Answer
 
 A member delivers its answer through the declared command `soksak-plugin-agents-clubhouse.answer {turn, text}`, not through its screen. A program that draws on the alternate screen, such as Claude Code, writes only the rows of its visible viewport to the terminal, and a row that leaves the viewport is never written; so neither the screen nor the retained rows that `core.session.read` reads hold an answer taller than the member tab, nor the submitted line once it has left the viewport, and the room reads no answer from them.

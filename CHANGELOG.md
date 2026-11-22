@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- C52: The declared status `soksak-plugin-agents-clubhouse.conversation` carries the entries `{speaker, text}` that the room conversation shows and follows each change of the room record (`docs/spec/room.md#conversation-status`).
 - C58: The version is 0.0.12, which releases C57.
 - C57: Every member receives at the start of each turn, in every mode, and in the shared record, every room record line that its session has not received; the tab state keeps the delivered number of each session in `delivered`, and a relay that fails before any answer withdraws the line of the owner (`docs/spec/room.md#room-record`).
 - C56: The version is 0.0.11, which releases C55.

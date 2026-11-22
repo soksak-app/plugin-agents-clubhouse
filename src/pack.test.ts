@@ -48,13 +48,14 @@ describe("ACP removal", () => {
     expect(existsSync(join(root, "src/room/acp-shapes.ts"))).toBe(false);
   });
 
-  it("exposes no ask, converse or send command, and declares the transport status", () => {
+  it("exposes no ask, converse or send command, and declares the arrangement, conversation and transport statuses", () => {
     const names = manifest.exposes.commands.map((c) => c.name);
     for (const removed of ["ask", "converse", "send"]) {
       expect(names).not.toContain(`soksak-plugin-agents-clubhouse.${removed}`);
     }
     expect(manifest.exposes.status.map((s) => s.name)).toEqual([
       "soksak-plugin-agents-clubhouse.arrangement",
+      "soksak-plugin-agents-clubhouse.conversation",
       "soksak-plugin-agents-clubhouse.transport",
     ]);
   });

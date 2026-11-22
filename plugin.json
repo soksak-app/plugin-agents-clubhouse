@@ -59,6 +59,24 @@
         }
       },
       {
+        "name": "soksak-plugin-agents-clubhouse.conversation",
+        "description": "The conversation that the room shows: the entries of the room record in record order, speaker being owner or the identifier of a member.",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "entries": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": { "speaker": { "type": "string" }, "text": { "type": "string" } },
+                "required": ["speaker", "text"]
+              }
+            }
+          },
+          "required": ["entries"]
+        }
+      },
+      {
         "name": "soksak-plugin-agents-clubhouse.transport",
         "description": "Whether the room can reach its members, with the reason when it cannot. The room has no member transport until the owned sessions and the terminal relay are in place, so its state is unavailable.",
         "schema": {

@@ -2,6 +2,7 @@
 
 ## 미출시
 
+- C52: 선언된 status `soksak-plugin-agents-clubhouse.conversation`이 방 대화가 보여 주는 항목 `{speaker, text}`를 담고 room record의 각 변경을 따른다(`docs/spec/room.md#conversation-status`).
 - C58: 버전은 0.0.12이며 C57을 출시한다.
 - C57: 모든 member는 모든 mode의 각 turn 시작과 공유 기록에서 그 session이 받지 않은 모든 room record 줄을 받는다. Tab state는 session마다 전달한 수를 `delivered`에 보관하고, 답이 나오기 전에 실패한 relay는 owner의 줄을 거둔다(`docs/spec/room.md#room-record`).
 - C56: 버전은 0.0.11이며 C55를 출시한다.

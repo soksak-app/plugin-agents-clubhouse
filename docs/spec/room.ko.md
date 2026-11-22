@@ -59,6 +59,10 @@ Room record는 방의 대화다. Owner의 각 메시지 줄과 각 member의 답
 
 Relay의 답이 record에 하나도 없을 때 실패한 send는 owner의 줄을 거둔다. 방은 그 줄을 record와 대화에서 지우고, record 길이를 넘는 delivered 수를 그 길이로 낮추며, `message.send`는 실패를 error display로 보고하므로([command](#command)) 이유는 남는다. Record에는 어떤 member도 답하지 않은 메시지가 없으므로, 실패 뒤 다시 보낸 send는 owner의 줄 하나만 남긴다. 답이 나온 뒤에 실패한 send는 member가 답했으므로 owner의 줄과 도착한 답을 유지한다.
 
+## Conversation status
+
+선언된 status `soksak-plugin-agents-clubhouse.conversation`은 page가 보여 주는 대화 `{entries: [{speaker, text}]}`를 담는다. 이는 [room record](#room-record)의 항목을 record 순서로 담으며, `speaker`는 `owner` 또는 member의 식별자다. 방은 record가 바뀔 때마다, 실패한 send가 owner의 줄을 거둘 때도 새 값을 게시하므로, 호출자는 그려진 page가 아니라 status에서 대화를 읽는다.
+
 ## Answer
 
 Member는 화면이 아니라 선언된 command `soksak-plugin-agents-clubhouse.answer {turn, text}`로 답을 전한다. Claude Code처럼 alternate screen에 그리는 program은 보이는 viewport의 행만 terminal에 쓰고, viewport를 벗어난 행은 쓰이지 않는다. 그래서 화면도 `core.session.read`가 읽는 retained row도 member tab보다 긴 답이나 viewport를 벗어난 submit된 줄을 담지 않으며, 방은 그것에서 답을 읽지 않는다.
