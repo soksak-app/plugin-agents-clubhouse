@@ -45,7 +45,10 @@ describe("ACP removal", () => {
     for (const removed of ["ask", "converse", "send"]) {
       expect(names).not.toContain(`soksak-plugin-agents-clubhouse.${removed}`);
     }
-    expect(manifest.exposes.status.map((s) => s.name)).toEqual(["soksak-plugin-agents-clubhouse.transport"]);
+    expect(manifest.exposes.status.map((s) => s.name)).toEqual([
+      "soksak-plugin-agents-clubhouse.arrangement",
+      "soksak-plugin-agents-clubhouse.transport",
+    ]);
   });
 });
 

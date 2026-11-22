@@ -47,6 +47,18 @@
   "exposes": {
     "status": [
       {
+        "name": "soksak-plugin-agents-clubhouse.arrangement",
+        "description": "How the room arranged its member cards: idle before any arrangement, group when the room card and the member cards form one group card, tabs with the reason of the layout plan when the members open as tabs, and error with the reason of a refused layout command.",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "state": { "type": "string", "enum": ["idle", "group", "tabs", "error"] },
+            "reason": { "type": "string" }
+          },
+          "required": ["state"]
+        }
+      },
+      {
         "name": "soksak-plugin-agents-clubhouse.transport",
         "description": "Whether the room can reach its members, with the reason when it cannot. The room has no member transport until the owned sessions and the terminal relay are in place, so its state is unavailable.",
         "schema": {

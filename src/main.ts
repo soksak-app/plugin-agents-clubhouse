@@ -16,6 +16,7 @@ import { startRoomPage, type RoomContext } from "./room/page";
 import type { RoomPort } from "./room/port";
 import { createTrace } from "./tower/trace";
 import { createRoomReport } from "./room/report";
+import { createArrangementStatus } from "./room/arrangement";
 import { createMacroStore } from "./tower/macro";
 import { setupTower } from "./tower/header";
 import { TOWER_LIVE_TOPIC } from "./tower/modal";
@@ -180,6 +181,7 @@ function buildRoom({ settings, collections }: RoomContext): RoomHandlers {
   let mode: RoomMode = modeSetting;
   const roster: Tab[] = MEMBERS.map((m) => ({ id: m.id, checked: true }));
   const transport = { state: "unavailable" as const, reason: t("transportUnavailable", lang) };
+  const arrangement = createArrangementStatus();
   const state = (): RoomState => ({
     mode,
     roster: roster.map((r) => ({ id: r.id, checked: r.checked })),
@@ -291,6 +293,10 @@ function buildRoom({ settings, collections }: RoomContext): RoomHandlers {
     commands: createRoomCommands({ tower, trace, mode: () => mode, state }),
     elements,
     statuses: {
+      [`${EXPOSE}.arrangement`]: {
+        read: () => arrangement.read(),
+        subscribe: (listener) => arrangement.subscribe(listener).dispose,
+      },
       [`${EXPOSE}.transport`]: { read: () => ({ ...transport }), subscribe: () => () => {} },
     },
   };

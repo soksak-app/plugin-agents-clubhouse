@@ -1,0 +1,121 @@
+// The arrangement of the room and its members (C4) against the declared shapes of core.layout.plan, core.layout.apply and
+// core.layout.open (core docs/spec/cli.md#layout). The port double answers with those shapes; no module is mocked.
+import { describe, expect, it, vi } from "vitest";
+import { ROOM_PLUGIN, arrangeMembers, arrangementTree, createArrangementStatus, type Member } from "./arrangement";
+
+const members: Member[] = [
+  { plugin: "terminal", params: { program: "claude", args: [] } },
+  { plugin: "terminal", params: { program: "codex", args: [] } },
+];
+
+function port(plan: unknown, options: { applyRejects?: boolean; planRejects?: boolean } = {}) {
+  const calls: Array<[string, Record<string, unknown>]> = [];
+  const reports: Array<[string, string]> = [];
+  const execute = vi.fn(async (name: string, params: Record<string, unknown>) => {
+    calls.push([name, params]);
+    if (name === "core.layout.plan") {
+      if (options.planRejects) throw new Error("layout plan refused");
+      return plan;
+    }
+    if (name === "core.layout.apply") {
+      if (options.applyRejects) throw new Error("layout apply refused");
+      return { tree: params.tree, cards: [], kept: [], closed: [] };
+    }
+    return { card: "new", tab: "new" };
+  });
+  return {
+    calls,
+    reports,
+    port: { commands: { execute }, report: (where: string, text: string) => reports.push([where, text]) },
+  };
+}
+
+const feasible = { feasible: true, tree: { direction: "row", children: [] }, cards: [], reason: null };
+const infeasible = {
+  feasible: false,
+  reason: "card 2 of the tree would be 300 × 90 points, below the minimum 320 × 240 points; the tree needs a plane of 1200 × 900 points and the plane is 800 × 600 points",
+  needed: { width: 1200, height: 900 },
+  proposal: null,
+};
+
+describe("arrangementTree", () => {
+  it("puts the room card beside a column of the member cards inside one named group", () => {
+    expect(arrangementTree(members)).toEqual({
+      group: { name: "Room" },
+      tree: {
+        direction: "row",
+        children: [
+          { tabs: [{ plugin: ROOM_PLUGIN, params: null }] },
+          {
+            direction: "column",
+            children: [
+              { tabs: [{ plugin: "terminal", params: { program: "claude", args: [] } }] },
+              { tabs: [{ plugin: "terminal", params: { program: "codex", args: [] } }] },
+            ],
+          },
+        ],
+      },
+    });
+  });
+
+  it("uses one member card directly when there is a single member", () => {
+    const tree = arrangementTree([members[0]]) as { tree: { children: unknown[] } };
+    expect(tree.tree.children[1]).toEqual({ tabs: [{ plugin: "terminal", params: { program: "claude", args: [] } }] });
+  });
+
+  it("refuses an empty member list at the boundary", () => {
+    expect(() => arrangementTree([])).toThrow("arrangement needs at least one member");
+  });
+});
+
+describe("arrangeMembers", () => {
+  it("plans the tree and applies the planned tree when the plan is feasible", async () => {
+    const { port: p, calls } = port(feasible);
+    const status = createArrangementStatus();
+    const result = await arrangeMembers(p, members, status);
+    expect(result).toEqual({ state: "group" });
+    expect(calls.map(([name]) => name)).toEqual(["core.layout.plan", "core.layout.apply"]);
+    expect(calls[1][1]).toEqual({ tree: arrangementTree(members) });
+    expect(status.read()).toEqual({ state: "group" });
+  });
+
+  it("opens the members as tabs with the reason of the plan when the plan is not feasible", async () => {
+    const { port: p, calls } = port(infeasible);
+    const status = createArrangementStatus();
+    const result = await arrangeMembers(p, members, status);
+    expect(result).toEqual({ state: "tabs", reason: infeasible.reason });
+    expect(calls.map(([name]) => name)).toEqual([
+      "core.layout.plan",
+      "core.layout.open",
+      "core.layout.open",
+    ]);
+    expect(calls[1][1]).toEqual({ card: "current", plugin: "terminal", params: members[0].params });
+    expect(status.read()).toEqual({ state: "tabs", reason: infeasible.reason });
+  });
+
+  it("reports and records a refused plan, and opens nothing", async () => {
+    const { port: p, calls, reports } = port(infeasible, { planRejects: true });
+    const status = createArrangementStatus();
+    await arrangeMembers(p, members, status);
+    expect(calls.map(([name]) => name)).toEqual(["core.layout.plan"]);
+    expect(reports).toEqual([["room arrangement", "layout plan refused"]]);
+    expect(status.read()).toEqual({ state: "error", reason: "layout plan refused" });
+  });
+
+  it("reports and records a refused apply of a feasible plan", async () => {
+    const { port: p, reports } = port(feasible, { applyRejects: true });
+    const status = createArrangementStatus();
+    await arrangeMembers(p, members, status);
+    expect(reports).toEqual([["room arrangement", "layout apply refused"]]);
+    expect(status.read()).toEqual({ state: "error", reason: "layout apply refused" });
+  });
+
+  it("notifies the status subscribers on each change", async () => {
+    const { port: p } = port(feasible);
+    const status = createArrangementStatus();
+    const seen: unknown[] = [];
+    status.subscribe((value) => seen.push(value));
+    await arrangeMembers(p, members, status);
+    expect(seen).toEqual([{ state: "group" }]);
+  });
+});
