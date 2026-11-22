@@ -302,10 +302,10 @@
       },
       {
         "name": "soksak-plugin-agents-clubhouse.report",
-        "description": "Report the work of a member during its open turn with the token of the turn; the room records it as (report) and injects it into the working sessions of the other members at once. The turn goes on.",
+        "description": "Report the work of a member during its open turn with the token of the turn and the paths it changed; a path outside the claims of the member in this turn is refused. The room records it as (report) and injects it into the working sessions of the other members at once. The turn goes on.",
         "params": {
           "type": "object",
-          "properties": { "turn": { "type": "string" }, "text": { "type": "string" } },
+          "properties": { "turn": { "type": "string" }, "text": { "type": "string" }, "paths": { "type": "array", "items": { "type": "string" } } },
           "required": ["turn", "text"]
         },
         "result": {

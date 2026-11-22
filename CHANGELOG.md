@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- C76: The protocol states the subagent rule, the empty terminal rule and the claim of each file in its turn; `report` takes `paths` and refuses a path outside the claims of the reporter in its open turn (`docs/spec/room.md#work-reports`).
 - C75: A turn to a member whose session is working waits for its idle value of core.sessions instead of failing the relay; the status shows the step `turn`, and `conversation.stop` ends the wait (`docs/spec/room.md#modes`).
 - C74: The conversation view follows new entries only at the bottom; in reading mode the scroll stays, the pill shows the unseen entries below the viewport and runs `conversation.scroll.bottom`, and the status `view` carries `{following, unseen}` (`docs/spec/room.md#follow-mode`).
 - C71: The conversation view draws speech bubbles with the name, the role and a roster color, room lines as system lines, reports, claims and releases as notes, sections as blocks and a divider per round; each entry keeps `at` and an answer `elapsedMs`, which the bubble shows, and a waiting member shows a counter on the display frames (`docs/spec/room.md#conversation-view`, `docs/spec/room.md#timing`).

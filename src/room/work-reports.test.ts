@@ -124,3 +124,21 @@ describe("the submit queue", () => {
     expect(order).toEqual(["build 1", "submit 1", "accepted 1", "build 2", "submit 2", "accepted 2"]);
   });
 });
+
+describe("the paths of a report (docs/spec/room.md#work-reports)", () => {
+  it("refuses a report that names paths the reporter has not claimed in its open turn, and accepts claimed paths", () => {
+    const r = room({ "s-a": "working", "s-b": "working" });
+    const earlier = r.answers.open("s-a", "a", "answer", 0);
+    r.work.claim({ turn: earlier.turn, paths: ["src"] });
+    r.answers.deliver({ turn: earlier.turn, text: "done", status: "continue" });
+    const a = r.answers.open("s-a", "a", "answer", 0);
+    expect(() => r.work.reportCommand({ turn: a.turn, text: "changed", paths: ["src/ws.js", "package.json"] })).toThrow(
+      "paths src/ws.js, package.json are not claimed by a",
+    );
+    r.work.claim({ turn: a.turn, paths: ["src"] });
+    expect(() => r.work.reportCommand({ turn: a.turn, text: "changed", paths: ["package.json"] })).toThrow("paths package.json are not claimed by a");
+    expect(r.work.reportCommand({ turn: a.turn, text: "changed", paths: ["src/ws.js"] })).toEqual({ turn: a.turn });
+    expect(r.record.lines.at(-1)).toMatchObject({ speaker: "a", text: "(report) changed [src/ws.js]" });
+  });
+});
+

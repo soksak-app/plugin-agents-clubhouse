@@ -105,7 +105,13 @@ export function createWorkReports(ports: WorkPorts, record: RoomRecord, members:
       const token = ports.answers.turnOf(params);
       const text = (params as { text?: unknown }).text;
       if (typeof text !== "string" || text.trim() === "") throw new Error(`text must be a non-empty string, got ${JSON.stringify(text)}`);
-      record.append(token.member, `(report) ${text}`);
+      // The room sees no file write, so it checks the paths that a report names: each must lie in a claim of the reporter in this turn.
+      const named = (params as { paths?: unknown }).paths === undefined ? [] : pathsOf(params);
+      const covered = (path: string): boolean =>
+        [...claimed].some(([held, owner]) => owner.turn === token.turn && (path === held || path.startsWith(`${held}/`)));
+      const unclaimed = named.filter((path) => !covered(path));
+      if (unclaimed.length > 0) throw new Error(`paths ${unclaimed.join(", ")} are not claimed by ${token.member}`);
+      record.append(token.member, `(report) ${text}${named.length > 0 ? ` [${named.join(", ")}]` : ""}`);
       inject();
       return { turn: token.turn };
     },

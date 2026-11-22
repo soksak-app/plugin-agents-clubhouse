@@ -169,10 +169,21 @@ describe("nothing said outside the room", () => {
   it("the protocol line states the rules in short imperative sentences", () => {
     const line = roomProtocolLine("Claude", ["Codex"], "room-1");
     expect(line).toContain("The room cannot read your terminal: say everything through the room, in your answer or with a report or a claim.");
-    expect(line).toContain("Write nothing in your terminal except what your tools need.");
     expect(line).toContain("Put a message to the owner in your answer as a section @owner:.");
     expect(line).toContain("Do not narrate what you are about to do, and do not confirm that you sent the answer.");
     expect(line).toContain("Respond to what the speakers said");
-    expect(line.length).toBeLessThan(2400);
+    // The bound holds the line near its size after the rules of subagents, the terminal and per-turn claims (docs/spec/room.md#room-protocol)
+    // were added; the earlier bound of 2400 characters held only the rules before them.
+    expect(line.length).toBeLessThan(3000);
+  });
+});
+
+describe("the work rules of the protocol (docs/spec/room.md#room-protocol)", () => {
+  it("states the subagent rule, the empty terminal rule and the claim rule of every turn", () => {
+    const line = roomProtocolLine("Claude", [], "room-1");
+    expect(line).toContain("Split development work of a turn into independent parts and delegate them to subagents with the Agent tool, run them in parallel and verify their results before you report; edit a trivial single file directly.");
+    expect(line).toContain("Write no explanation, summary or progress text in your terminal: every word for others goes through report or answer, and the last terminal text of a turn is empty or one word.");
+    expect(line).toContain("A claim ends with its turn: claim each file in the turn in which you write it, before you write it, and release it when you are done.");
+    expect(line).toContain('"paths": ["<path>"]');
   });
 });
