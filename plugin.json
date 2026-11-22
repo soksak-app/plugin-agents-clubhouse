@@ -13,6 +13,9 @@
   "preview": {
     "ink": "--fg"
   },
+  "dependencies": {
+    "agents": "^0.0.0"
+  },
   "settings": {
     "kibitzDefault": {
       "label": "대화 기본 모드",
