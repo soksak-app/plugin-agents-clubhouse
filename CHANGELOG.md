@@ -8,3 +8,4 @@
 - C8: The tower rethrows a failed `data.define` in the macro and trace stores (the next call defines again) and a failed `status.query` in the domain map, instead of swallowing them. A `status.query` reply without `statuses` is refused.
 - C9: The tower and the room report or rethrow every caught error through `room.report` (`error: <where>: <text>`). The trace store reports failed writes and continues; the confirm token needs `crypto.getRandomValues` (no `Math.random` fallback); unserializable step params refuse the scan; the modal and the theme listener report their failures.
 - C10: A destructive batch is refused before its first step when its rollback snapshot cannot be captured (`SNAPSHOT_FAILED`), and the failure is reported. Batches without a destructive step still run.
+- C11: A failed palette run, plan, or plan edit reports its code and reason through `room.report` (`error: <where>: <code>: <reason>`), not a generic phrase.

@@ -348,6 +348,17 @@ function makeDraggable(ov: HTMLElement, handle: HTMLElement): () => void {
   return () => handle.removeEventListener("pointerdown", onDown);
 }
 
+// The report of a failed outcome: the code and the reason of the outcome, written through the one error path of the room
+// (error: <where>: <text>). A successful outcome has no report; a failure with neither a code nor a message says so.
+export function failureReport(where: string, outcome: { ok: boolean; code?: string; message?: string }): { where: string; text: string } | null {
+  if (outcome.ok) return null;
+  const reason = outcome.message ?? "";
+  if (outcome.code !== undefined && reason !== "") return { where, text: `${outcome.code}: ${reason}` };
+  if (outcome.code !== undefined) return { where, text: outcome.code };
+  if (reason !== "") return { where, text: reason };
+  return { where, text: "failed without a reason" };
+}
+
 // The parameter text of a plan step is one JSON object. Any other text, including invalid JSON, gives null: the editor keeps
 // the earlier value and tells the person (the catch is the validation of the input, not a dropped error).
 export function parseParamsObject(text: string): Record<string, unknown> | null {
@@ -459,9 +470,13 @@ export function createTowerModal(deps: TowerModalDeps): TowerModal {
   const executor: TowerExecutor = createExecutor({ room, confirmGate, lang, planner: deps.planner, trace: deps.trace, macros: deps.macros });
 
   // 실행 결과를 라이브칸 시스템 버블로 — 폴링 0, 사람 가시 피드백.
-  function reportOutcome(label: string, r: { ok: boolean; code?: string }): void {
+  function reportOutcome(label: string, r: { ok: boolean; code?: string; message?: string }): void {
     let key: I18nKey = "towerRunOk";
-    if (!r.ok) key = r.code === "NEEDS_TARGET" ? "towerRunNeedsTarget" : r.code === "CONFIRM_DENIED" ? "towerRunDenied" : "towerRunFailed";
+    const failure = failureReport("tower run", r);
+    if (failure) {
+      key = r.code === "NEEDS_TARGET" ? "towerRunNeedsTarget" : r.code === "CONFIRM_DENIED" ? "towerRunDenied" : "towerRunFailed";
+      room.report(failure.where, failure.text); // the reason goes through the error path; the feed shows only the state
+    }
     onLive({ kind: "user", who: "✦", text: label });
     onLive({ kind: "start", who: "✦" });
     onLive({ kind: "end", text: tr(key) });
@@ -624,6 +639,8 @@ export function createTowerModal(deps: TowerModalDeps): TowerModal {
     }
     planning = false;
     if (!res.ok) {
+      const failure = failureReport("tower plan", res);
+      if (failure) room.report(failure.where, failure.text);
       const key: I18nKey = res.code === "NO_PLANNER" ? "towerPlanNoAgent" : "towerPlanFailed";
       renderPlanBusy(tr(key), true);
       onLive({ kind: "start", who: "✦" });
@@ -650,7 +667,9 @@ export function createTowerModal(deps: TowerModalDeps): TowerModal {
       res = { ok: false, code: "PLAN_EXCEPTION", message: String((e as Error)?.message ?? e) };
     }
     if (!res.ok) {
-      // 편집 거부 — last-valid 로 되돌려 렌더하고 사유를 라이브칸·input 에 표시(잘못된 편집은 commit 불가).
+      // 편집 거부 — last-valid 로 되돌려 렌더하고 사유를 error path 로 보고한다(잘못된 편집은 commit 불가).
+      const failure = failureReport("tower plan edit", res);
+      if (failure) room.report(failure.where, failure.text);
       onLive({ kind: "start", who: "✦" });
       onLive({ kind: "end", text: tr("towerPlanInvalidEdit") });
       const back = await executor.revalidateAndRun(planSteps, { trace: meta });
