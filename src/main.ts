@@ -31,7 +31,8 @@ import { createSubmitQueue } from "./room/submit-queue";
 import { CLAIM_COMMAND, RELEASE_COMMAND, REPORT_COMMAND, createWorkReports, type WorkReports } from "./room/work-reports";
 import { answerSections } from "./room/sections";
 import { createRoomRecord, leaderRoute, settledRelay } from "./room/room-record";
-import { maxMembersOf, mergedCommit, releasedEntry, releaseTeam, summonedEntry, teamName, teamView, type TeamEntry } from "./room/team";
+import { maxMembersOf, summonedEntry, teamName, type TeamEntry } from "./room/team";
+import { createTeamControl } from "./room/team-control";
 import { createConversationStatus, waitLabel } from "./room/conversation-status";
 import { createProtocolInjector } from "./room/protocol";
 import { parseRoomState, serializedRoomState, type RoomState as RoomTabState } from "./room/room-state";
@@ -679,9 +680,25 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   // The declared conversation status carries the entries that the page shows and the members that the room waits for; the page draws
   // each value, and each value of core.sessions publishes the program states again (docs/spec/room.md#conversation-status).
   // The sections of an answer name the addressees by the mention rules among the roster (docs/spec/room.md#sections).
+  // The team commands and the team view (docs/spec/room.md#team).
+  const teamControl = createTeamControl({
+    team,
+    definitions: () => definitions,
+    sessionOf: (id) => memberSessions.get(id) ?? null,
+    leader: () => leaderEntry(),
+    answers,
+    end: (session) => endSession(session),
+    append: (text) => record.append("clubhouse", text),
+    summon: () => summon(),
+    changed: () => {
+      persist();
+      conversationStatus.changed();
+    },
+    report,
+  });
   const conversationStatus = createConversationStatus(conversation, () => sessionsValue, () => deliveryEntries(), (entry) =>
     entry.speaker === "owner" || entry.speaker === "clubhouse" ? [] : answerSections(entry.text, roster),
-    () => teamView(team, definitions, (id) => memberSessions.get(id) ?? null, sessionsValue),
+    () => teamControl.view(sessionsValue),
   );
   conversationStatus.subscribe(() => showConversation());
   sessionListeners.add((value) => {
@@ -776,31 +793,6 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   const endSession = async (session: string): Promise<void> => {
     await room.commands.execute("core.session.end", { session });
   };
-  // member.release ends the session of a team member and closes its tab through the arrangement; git is not touched.
-  const releaseMember = async (params: unknown): Promise<{ member: string }> => {
-    const entry = releasedEntry(params, team, leaderTurns());
-    const session = memberSessions.get(entry.id);
-    if (session !== undefined) await endSession(session);
-    team.splice(team.indexOf(entry), 1);
-    record.append("clubhouse", `@${teamName(entry, definitions)} was released`);
-    summon();
-    return { member: entry.id };
-  };
-  const recordMerged = async (params: unknown): Promise<{ member: string; commit: string }> => {
-    const { entry, commit } = mergedCommit(params, team, leaderTurns());
-    entry.merged = commit;
-    persist();
-    conversationStatus.changed();
-    return { member: entry.id, commit };
-  };
-  // conversation.stop ends the session of every team member (docs/spec/room.md#commands).
-  const releaseAll = (): number => {
-    const count = team.length;
-    releaseTeam(team, (id) => memberSessions.get(id) ?? null, endSession, (text) => record.append("clubhouse", text))
-      .then(() => summon())
-      .catch((error: unknown) => report("room team", String((error as Error)?.message ?? error)));
-    return count;
-  };
   // member.summon adds a team member with the turn token of the leader, opens its session in its directory, and resolves after its
   // protocol turn; a refused open removes the entry again (docs/spec/room.md#team).
   const summonMember = async (params: unknown): Promise<{ member: string; session: string }> => {
@@ -870,7 +862,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
     followUp: () => work?.followUp(),
     stopWaits: () => {
       for (const listener of [...stopListeners]) listener();
-      return answers.closeWaits().length + releaseAll();
+      return answers.closeWaits().length + teamControl.releaseAll();
     },
     failed: (reason) => report("room relay", reason),
   });
@@ -919,8 +911,8 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
       ...operations,
       [ANSWER_COMMAND]: async (params: unknown) => answers.deliver(params),
       [`${EXPOSE}.member.summon`]: async (params: unknown) => summonMember(params),
-      [`${EXPOSE}.member.release`]: async (params: unknown) => releaseMember(params),
-      [`${EXPOSE}.member.merged`]: async (params: unknown) => recordMerged(params),
+      [`${EXPOSE}.member.release`]: async (params: unknown) => teamControl.release(params),
+      [`${EXPOSE}.member.merged`]: async (params: unknown) => teamControl.merged(params),
       [REPORT_COMMAND]: async (params: unknown) => work!.reportCommand(params),
       [CLAIM_COMMAND]: async (params: unknown) => work!.claim(params),
       [RELEASE_COMMAND]: async (params: unknown) => work!.release(params),
