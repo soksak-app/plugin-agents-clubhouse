@@ -6,7 +6,7 @@ A soksak plugin that holds one conversation room for several coding agents of a 
 
 The room reads the agent definitions that the agents plugin stores in its project data (`definitions` and `accounts`) and lists them in its roster. Each checked member starts in an owned terminal session (`core.session.open`), and the room arranges the member cards. A message from the composer is submitted to each checked member with an open session in roster order (`core.session.submit`); the room waits for the end of each turn from the program state of the session and shows the member's screen as the answer.
 
-The mode button offers three conversation modes (facilitator, sequential, simultaneous). The relay does not apply them yet: the members always answer one after another. `@name` mentions are not built. The control tower (`tower.*` commands) plans, checks and runs natural-language requests as declared commands.
+The mode of the room decides who receives a message ([room relay](docs/spec/room.md)): `turn` sends it to each member one after another in roster order, `facil` to the first member whose session is idle, and `simul` to every member at the same time. A message with `@name` goes only to the mentioned members, in the order of their first mention. The control tower (`tower.*` commands) plans, checks and runs natural-language requests as declared commands.
 
 ## Development
 

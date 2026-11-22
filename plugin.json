@@ -1,7 +1,7 @@
 {
   "id": "soksak-plugin-agents-clubhouse",
   "name": "에이전트 클럽하우스",
-  "description": "프로젝트의 여러 coding agent가 한 대화에 참여하는 방. agents plugin의 agent 정의에서 member를 고르면 각 member가 owned terminal session으로 시작하고, 방은 메시지를 member마다 차례로 전달하고 각 turn의 화면을 답으로 보여 준다.",
+  "description": "프로젝트의 여러 coding agent가 한 대화에 참여하는 방. agents plugin의 agent 정의에서 member를 고르면 각 member가 owned terminal session으로 시작하고, 방은 mode(순차, 진행, 동시)와 @이름 mention에 따라 메시지를 member에게 전달하고 각 turn의 화면을 답으로 보여 준다.",
   "mark": "방",
   "icon": "<path d=\"M2 3h12v8H7l-3 2v-2H2z\"/>",
   "surface": {
@@ -19,7 +19,7 @@
   "settings": {
     "kibitzDefault": {
       "label": "대화 기본 모드",
-      "description": "새 방의 대화 방식. 진행(사회자)은 진행자가 동료를 조율하고, 순차는 탭 순서대로 각 1회, 동시는 전원이 병렬로 답한다.",
+      "description": "새 방의 대화 방식. 순차는 roster 순서로 member마다 차례로, 진행은 session이 idle인 첫 member가, 동시는 모든 member가 동시에 받는다. @이름 mention은 mention된 member에게만 보낸다.",
       "type": "enum",
       "default": "facil",
       "values": ["facil", "turn", "simul"]

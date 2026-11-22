@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- C23: README, the description of `plugin.json` and the setting `kibitzDefault` state the modes and the mentions of `docs/spec/room.md`.
 - C21: The relay applies the mode of the room: `turn` relays in roster order, `facil` to the first idle member or the mentioned members, and `simul` to every member at the same time (`docs/spec/room.md`).
 - C22: The development dependencies `vitest` (4.1.12) and `esbuild` (0.28.2) replace releases with known vulnerabilities; the lock holds `vite` 8.3.8 and no `tinypool`.
 - C20: A room message that mentions members (`@name`) goes only to the mentioned members, in the order of their first mention (`docs/spec/room.md`).

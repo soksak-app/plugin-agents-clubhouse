@@ -6,7 +6,7 @@
 
 방은 agents plugin이 project data(`definitions`, `accounts`)에 저장한 agent 정의를 읽어 roster에 보여 준다. 체크된 member는 각각 owned terminal session(`core.session.open`)으로 시작하고, 방은 member card를 배치한다. 입력창의 메시지는 열린 session이 있는 체크된 member마다 roster 순서로 submit된다(`core.session.submit`). 방은 session의 program 상태로 각 turn의 끝을 기다리고, member의 화면을 답으로 보여 준다.
 
-Mode 버튼은 세 가지 대화 mode(facilitator, sequential, simultaneous)를 제공한다. Relay는 아직 이를 적용하지 않아 member는 항상 차례로 답한다. `@이름` mention은 만들지 않았다. Control tower(`tower.*` command)는 자연어 요청을 선언된 command로 계획하고 검사하고 실행한다.
+방의 mode가 메시지를 누가 받는지 정한다([room relay](docs/spec/room.ko.md)). `turn`은 roster 순서로 member마다 차례로, `facil`은 session이 idle인 첫 member에게, `simul`은 모든 member에게 동시에 보낸다. `@이름`이 있는 메시지는 mention된 member에게만 처음 mention된 순서로 간다. Control tower(`tower.*` command)는 자연어 요청을 선언된 command로 계획하고 검사하고 실행한다.
 
 ## 개발
 
