@@ -2,6 +2,7 @@
 
 ## 미출시
 
+- C42: 차례로 전달할 때 뒤의 각 member는 메시지와 함께 앞 답을 `[@<name>] <answer>`로 받는다(`docs/spec/room.md#modes`).
 - C41: Member의 답은 화면 행의 마지막 reply block이며 status line, spinner, separator, prompt를 포함하지 않는다. Terminal이 깨뜨린 행은 그 행과 함께 거부된다(`docs/spec/room.md#answer`).
 - C40: 버전은 0.0.6이며 C36부터 C38까지를 출시한다.
 - C38: `docs/spec/room.md#arrangement`는 arrangement가 방이 열지 않은 tab을 닫지 않는다고 밝힌다. Core는 plane의 다른 tab을 방 card의 끝에 남기고, 방 tab은 활성으로 남는다.

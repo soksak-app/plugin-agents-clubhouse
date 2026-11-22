@@ -46,6 +46,8 @@ Mention은 `@` 뒤의 member 이름이나 identifier이며 대소문자를 구�
 - `facil`: member 하나, 즉 roster 순서에서 session이 `idle`인 첫 member가 받는다. `idle`인 member가 없으면 send는 `no member is idle`로 거부된다. Mention된 member들은 차례로 받는다.
 - `simul`: 모든 member가 동시에 받는다. 방은 어떤 turn이 끝나기 전에 모든 member에게 submit하고, 모든 turn이 끝나면 resolve한다. 답은 roster 순서(또는 mention 순서)를 지킨다.
 
+Member들이 메시지를 차례로 받을 때(`turn`, 그리고 `turn`과 `facil`에서 mention된 member) 각 member는 자기 turn 전에 나온 말을 읽도록 메시지와 함께 앞 member들의 답을 받는다. 줄은 `[@owner] <message>`이고, relay 순서로 앞의 각 member마다 ` | [@<name>] <answer>`가 뒤따른다. `core.session.submit`이 CR과 LF를 거부하므로 답 안의 각 줄바꿈은 공백으로 바뀐다. `simul`에서는 방이 submit할 때 끝난 turn이 없으므로 모든 member가 `[@owner] <message>`만 받는다.
+
 실패한 turn은 member와 이유로 relay를 reject한다. `turn`과 `facil`에서는 그 뒤의 member가 아무것도 받지 않는다. `simul`에서는 다른 turn이 끝까지 진행되고, relay는 member 순서로 첫 실패로 reject한다.
 
 ## Answer

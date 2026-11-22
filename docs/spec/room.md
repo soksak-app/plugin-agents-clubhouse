@@ -46,6 +46,8 @@ The mode of the room (`facil`, `turn`, `simul`) decides who receives a message w
 - `facil`: one member, the first member in roster order whose session is `idle`. When no member is `idle`, the send is refused with `no member is idle`. Mentioned members receive the message one after another.
 - `simul`: each member at the same time. The room submits the message to every member before any turn ends, and resolves when every turn has ended; the answers keep roster order (or mention order).
 
+When members receive a message one after another (`turn`, and mentioned members in `turn` and `facil`), each member receives the message together with the answers of the members before it, so that it reads what was said before its turn: the line is `[@owner] <message>`, followed for each earlier member in relay order by ` | [@<name>] <answer>`, with each line break inside an answer replaced by a space, because `core.session.submit` refuses CR and LF. In `simul` every member receives `[@owner] <message>` alone, because no turn has ended when the room submits it.
+
 A failed turn rejects the relay with the member and the reason. In `turn` and `facil` the members after it receive nothing; in `simul` the other turns run to their end, and the relay rejects with the first failure in member order.
 
 ## Answer

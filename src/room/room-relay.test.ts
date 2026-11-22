@@ -103,17 +103,29 @@ describe("relayToMembers", () => {
 const MEMBERS = [{ id: "reviewer", name: "Claude", session: "s-1" }, { id: "writer", name: "Codex", session: "s-2" }];
 
 describe("relayInMode (docs/spec/room.md#modes)", () => {
-  it("turn: relays to each member one after another in roster order, labeled with the owner", async () => {
+  it("turn: relays to each member one after another in roster order, labeled with the owner, with the earlier answers", async () => {
     const core = fakeCore([IDLE("s-1"), IDLE("s-2")]);
     const answers = await relayInMode(core.ports, "turn", MEMBERS, "hello");
-    expect(core.submitted).toEqual([{ session: "s-1", text: "[@owner] hello" }, { session: "s-2", text: "[@owner] hello" }]);
+    expect(core.submitted).toEqual([
+      { session: "s-1", text: "[@owner] hello" },
+      { session: "s-2", text: "[@owner] hello | [@Claude] answer of s-1" },
+    ]);
     expect(answers.map((answer) => answer.id)).toEqual(["reviewer", "writer"]);
   });
 
   it("turn: a mention selects only the mentioned members in mention order", async () => {
     const core = fakeCore([IDLE("s-1"), IDLE("s-2")]);
     await relayInMode(core.ports, "turn", MEMBERS, "@codex first, then @claude");
-    expect(core.submitted.map((entry) => entry.session)).toEqual(["s-2", "s-1"]);
+    expect(core.submitted).toEqual([
+      { session: "s-2", text: "[@owner] @codex first, then @claude" },
+      { session: "s-1", text: "[@owner] @codex first, then @claude | [@Codex] answer of s-2" },
+    ]);
+  });
+
+  it("turn: an earlier answer of several rows reaches the next member as one line", async () => {
+    const core = fakeCore([IDLE("s-1"), IDLE("s-2")], { screens: { "s-1": ["⏺ one", "  two", ""] } });
+    await relayInMode(core.ports, "turn", MEMBERS, "hello");
+    expect(core.submitted[1]).toEqual({ session: "s-2", text: "[@owner] hello | [@Claude] one two" });
   });
 
   it("facil: relays to the first idle member in roster order only", async () => {
@@ -144,6 +156,7 @@ describe("relayInMode (docs/spec/room.md#modes)", () => {
     core.finish("s-1");
     const answers = await relay;
     expect(answers.map((answer) => answer.id)).toEqual(["reviewer", "writer"]);
+    expect(core.submitted.map((entry) => entry.text)).toEqual(["[@owner] all at once", "[@owner] all at once"]);
   });
 
   it("simul: lets the other turns end and rejects with the first failure in member order", async () => {

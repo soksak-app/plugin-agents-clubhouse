@@ -1,6 +1,7 @@
 // The message relay of the room (C5, docs/spec/room.md) over the members' owned sessions. The mode and the mentions of a message decide
 // which members receive it and whether their turns run one after another or at the same time. The answer of a member is the reply block
-// of the screen that core.session.read reports after its turn (docs/spec/room.md#answer).
+// of the screen that core.session.read reports after its turn (docs/spec/room.md#answer). In a relay one after another, each member
+// receives the answers of the members before it with the message, so that it reads what was said before its turn.
 import { relayMemberMessage, type SessionRelayPort } from "./relay";
 import { sessionProgram, sessionRead, sessionSubmit, type SessionCommandPort } from "./session-channel";
 import { mentionedMembers } from "./mention";
@@ -73,6 +74,21 @@ export async function relayToMembers(ports: RelayPorts, members: RelayMember[], 
   return answers;
 }
 
+const oneLine = (text: string): string => text.replace(/\r\n|\r|\n/g, " ");
+
+// Relays the labeled message to each member in order; each member receives the message followed by the answers before its turn, each
+// as `[@<name>] <answer>`, joined with " | " because core.session.submit refuses CR and LF (docs/spec/room.md#modes).
+async function relayInTurn(ports: RelayPorts, members: NamedRelayMember[], text: string): Promise<MemberAnswer[]> {
+  const answers: MemberAnswer[] = [];
+  const lines = [text];
+  for (const member of members) {
+    const answer = await relayToMember(ports, member, lines.join(" | "));
+    answers.push(answer);
+    lines.push(`[@${member.name}] ${oneLine(answer.text)}`);
+  }
+  return answers;
+}
+
 // Relays a room message by the mode of the room (docs/spec/room.md#modes). A message that mentions members goes only to them in
 // mention order: one after another in turn and facil, at the same time in simul. Without a mention, turn relays to each member in
 // roster order, facil to the first member whose session is idle, and simul to every member at the same time.
@@ -87,8 +103,8 @@ export async function relayInMode(ports: RelayPorts, mode: RoomMode, members: Na
     if (failed) throw failed.reason;
     return results.map((result) => (result as PromiseFulfilledResult<MemberAnswer>).value);
   }
-  if (mentioned.length > 0) return relayToMembers(ports, mentioned, text);
-  if (mode === "turn") return relayToMembers(ports, members, text);
+  if (mentioned.length > 0) return relayInTurn(ports, mentioned, text);
+  if (mode === "turn") return relayInTurn(ports, members, text);
   const sessions = ports.sessions();
   const idle = members.find((member) => sessionProgram(sessions, member.session) === "idle");
   if (!idle) throw new Error("no member is idle");

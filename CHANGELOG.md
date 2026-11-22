@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- C42: In a relay one after another each later member receives the earlier answers as `[@<name>] <answer>` with the message (`docs/spec/room.md#modes`).
 - C41: The answer of a member is the last reply block of its screen rows, without the status line, the spinner, the separators and the prompt; rows that the terminal broke are refused with the row (`docs/spec/room.md#answer`).
 - C40: The version is 0.0.6, which releases C36 to C38.
 - C38: `docs/spec/room.md#arrangement` states that the arrangement closes no tab that the room did not open: core keeps the other tabs of the plane at the end of the room card, and the room tab stays active.
