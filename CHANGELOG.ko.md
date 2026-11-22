@@ -33,3 +33,4 @@
 - C3-1과 C4: Roster를 체크하면 `summonMembers`가 선택된 member를 summon하고 `arrangeMembers`가 열린 member를 배치한다(`src/room/trigger.ts`). 실행은 순서대로 한다. 정의는 status `agents.definitions`에서 온다. Red: `src/room/trigger.test.ts`가 `Cannot find module`로 실패했다. Green: 287개 test와 typecheck가 통과한다. 실제 summon은 core F1074를 기다린다.
 - C15: 입력창은 열린 세션이 있는 체크된 member에게 메시지를 하나씩 중계하고, 각 member의 화면을 답으로 보여 준다(`src/room/room-relay.ts`). Transport status는 그런 세션이 있을 때만 ready다. Red: `src/room/room-relay.test.ts`가 `Cannot find module`로 실패했다. Green: 291개 test, typecheck, build가 통과한다. 실제 turn은 core F1074를 기다린다.
 - C17: Room은 제거된 status 대신 agents plugin의 저장된 project data에서 정의를 읽는다(`runtime.data.get {key, plugin: "agents"}`, core F1075). Program과 args는 계정에서 얻는다. 다른 형식의 저장 값은 agents project data를 담은 오류로 거부한다. Red: reader가 없어 7개 중 6개가 실패했다. Green: 294개 test와 typecheck가 통과한다.
+- C33: Package 이름은 `@soksak/plugin-agents-clubhouse`, license는 MIT와 파일 `LICENSE`이며, version은 0.0.4이므로 registry가 release를 받아들인다.

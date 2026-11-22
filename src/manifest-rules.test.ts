@@ -28,3 +28,16 @@ describe("plugin.json length rules", () => {
     }
   });
 });
+
+// The registry publishes a release under the scoped package name @soksak/<name> with its license (C33).
+const packageJson = JSON.parse(readFileSync(join(process.cwd(), "package.json"), "utf8")) as { name: string; license?: string };
+
+describe("package.json registry rules", () => {
+  it("has the scoped name @soksak/plugin-agents-clubhouse", () => {
+    expect(packageJson.name).toBe("@soksak/plugin-agents-clubhouse");
+  });
+
+  it("declares the MIT license", () => {
+    expect(packageJson.license).toBe("MIT");
+  });
+});

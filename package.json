@@ -1,10 +1,11 @@
 {
-  "name": "soksak-plugin-agents-clubhouse",
-  "version": "0.0.3",
+  "name": "@soksak/plugin-agents-clubhouse",
+  "version": "0.0.4",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@11.24.0",
   "description": "Agents clubhouse plugin: a conversation room whose members are agent definitions of the agents plugin, each running in an owned terminal session.",
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/soksak-app/plugin-agents-clubhouse.git"
