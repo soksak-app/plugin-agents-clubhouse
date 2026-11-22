@@ -8,6 +8,7 @@
 // lines at once.
 import { describe, expect, it } from "vitest";
 import { createSubmitQueue } from "./submit-queue";
+import { TURN_RULE } from "./room-relay";
 import { createAnswerChannel, type AnswerChannel, type OpenToken } from "./answer";
 import { createConversationStatus, type ConversationStatus } from "./conversation-status";
 import { createClosingDelivery, type ClosingDelivery } from "./closing-delivery";
@@ -65,7 +66,7 @@ function members(behaviour: Record<string, Behaviour> = {}) {
     const member = MEMBERS.find((m) => m.session === session)!;
     const own = behaviour[member.id] ?? {};
     const match = /\| \[@clubhouse\] (turn|record) (\S+)$/.exec(text)!;
-    const body = text.slice(0, match.index - 1).replace(PREFACE, "");
+    const body = text.slice(0, match.index - 1).replace(PREFACE, "").replace(` | [@clubhouse] ${TURN_RULE}`, "");
     submittedBodies.set(session, [...(submittedBodies.get(session) ?? []), body]);
     const kind = match[1];
     const token = match[2];

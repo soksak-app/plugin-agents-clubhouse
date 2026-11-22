@@ -73,4 +73,5 @@
 - [o] C68 — P0: 대화는 모든 member가 settled일 때까지 round를 진행한다. 입력: member가 열린 질문으로 답한다. 동작: relay가 한 번 돌고 끝난다. 기대: 각 답이 `continue` 또는 `settled`를 밝히고, 하나라도 continue이면 방은 모든 member의 round를 진행하며, `the conversation settled` 또는 한도에서 `the conversation ended without settling ... continue`를 적는다(`docs/spec/room.md#settling`).
 - [o] C69 — P1: 답은 화자마다 section 하나를 둔다. 기대: 말한 순서의 `@<name>:` section과 `@all:`, view는 section마다 block 하나, status 항목은 `sections`를 가진다(`docs/spec/room.md#sections`).
 - [o] C70 — P0: 방은 목표를 조율한다. 기대: `member.role`로 정하는 member별 roster role을 protocol과 turn 줄이 밝히고, mention된 member가 먼저 turn을 받고 다른 member가 roster 순서로 뒤따르며, protocol이 작업 규칙을 밝히고, `conversationTurns` 기본값은 48이다(`docs/spec/room.md#roles`, `docs/spec/room.md#mentions`).
-- [ ] C65 — P0: C64, C66부터 C70까지와 함께 0.0.16을 출시한다. `package.json`이 0.0.16을 선언하고, main의 release run이 v0.0.16을 게시한다.
+- [o] C72 — P0: 방 밖에서는 아무것도 말하지 않는다. 입력: member terminal이 혼잣말과 사람에게 하는 보고, 예를 들어 답을 보냈다는 말을 보여 준다. 동작: 그 text는 방에 전달되지 않는다. 기대: 짧은 명령문인 protocol 줄과 각 turn 줄이 모든 말을 방을 통해 하고, owner에게 할 말은 `@owner:`에 넣고, terminal에는 다른 것을 쓰지 않고, 계획을 미리 말하거나 답을 보냈다고 확인하지 말라고 말한다(`docs/spec/room.md#room-protocol`).
+- [ ] C65 — P0: C64, C66부터 C73까지와 함께 0.0.16을 출시한다. `package.json`이 0.0.16을 선언하고, main의 release run이 v0.0.16을 게시한다.

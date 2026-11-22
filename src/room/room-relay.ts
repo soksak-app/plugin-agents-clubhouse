@@ -25,6 +25,9 @@ export interface NamedRelayMember extends RelayMember {
 }
 
 // The roles that a turn line states to its member when a member of the relay has a role: its own role and the roles of the others.
+// The rule of each turn line (docs/spec/room.md#room-protocol): the room cannot read the terminal of a member.
+export const TURN_RULE = "answer through the room only: reply to the speakers, put a message to the owner in @owner:, write nothing in your terminal";
+
 export function rolesLine(member: NamedRelayMember, members: NamedRelayMember[]): string | null {
   if (!members.some((entry) => (entry.role ?? "") !== "")) return null;
   const roleOf = (entry: NamedRelayMember): string => (entry.role ?? "") || "no role";
@@ -132,7 +135,7 @@ async function relayToMember(
   }
   // The room waits for the answer of the member from the submit of its line until the turn ends.
   const endWait = ports.waiting(member, "answer");
-  const ended = relayMemberMessage(port, `${roles === null ? "" : `${roles} | `}[@clubhouse] turn ${turn.turn}`, { signal: controller.signal }).then(() => {
+  const ended = relayMemberMessage(port, `${roles === null ? "" : `${roles} | `}[@clubhouse] ${TURN_RULE} | [@clubhouse] turn ${turn.turn}`, { signal: controller.signal }).then(() => {
     throw new Error(`the member ended its turn without an answer: it ran no ${ANSWER_COMMAND}`);
   });
   try {

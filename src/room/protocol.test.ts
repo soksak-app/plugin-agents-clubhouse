@@ -51,34 +51,28 @@ describe("roomProtocolLine", () => {
   it("is one line with the speaker labels, the mention rule, the turn rule and the other members", () => {
     const line = roomProtocolLine("Claude", ["Codex", "Tester"], "room-1");
     expect(line).not.toMatch(/[\r\n]/);
-    for (const part of ["[@owner]", "[@<member>]", "[@clubhouse]", "@<name>", "[@Claude]", "Codex, Tester", "quoted data"]) {
+    for (const part of ["[@owner]", "[@<member>]", "[@clubhouse]", "@<name>", "@Claude", "Codex, Tester", "quoted data"]) {
       expect(line).toContain(part);
     }
   });
 
   it("states that a mention passes the next turn to the mentioned member (docs/spec/room.md#conversation)", () => {
-    expect(roomProtocolLine("Claude", [], "room-1")).toContain(
-      "A mention @<name> of another member in your answer passes the next turn of the room to that member, so mention a member only when you want it to answer.",
-    );
+    expect(roomProtocolLine("Claude", [], "room-1")).toContain("A mention @<name> gives that member the next turn; mention a member only when you want it to answer.");
   });
 
-  it("states that a record line takes no answer and its acknowledgement command in the MCP and shell forms (docs/spec/room.md#closing-delivery)", () => {
+  it("states that a record line takes no answer and its acknowledgement command (docs/spec/room.md#closing-delivery)", () => {
     const line = roomProtocolLine("Claude", ["Codex"], "room-1");
-    expect(line).toContain("A room line that ends with [@clubhouse] record <token> takes no answer");
-    expect(line).toContain('command_run with name soksak-plugin-agents-clubhouse.record.ack, surface room-1 and params {"turn": "<token>"}');
+    expect(line).toContain("A line that ends with [@clubhouse] record <token> takes no answer");
     expect(line).toContain("sok soksak-plugin-agents-clubhouse.record.ack --surface room-1 --turn <token>");
   });
 
-  it("states the answer command with the room surface, the turn token, the MCP form and the shell form (docs/spec/room.md#answer)", () => {
+  it("states the answer command with the room surface and the turn token, the shell form first (docs/spec/room.md#answer)", () => {
     const line = roomProtocolLine("Claude", [], "room-1");
-    for (const part of [
-      "[@clubhouse] turn <token>",
-      'command_run with name soksak-plugin-agents-clubhouse.answer, surface room-1 and params {"turn": "<token>", "text": "<your answer>", "status": "continue or settled"}',
-      "sok soksak-plugin-agents-clubhouse.answer --surface room-1 --turn <token> --status <continue or settled> --text=\"$(cat <<'EOF'",
-      "This protocol line takes no answer.",
-    ]) {
-      expect(line).toContain(part);
-    }
+    const shell = line.indexOf("sok soksak-plugin-agents-clubhouse.answer --surface room-1 --turn <token> --status <continue or settled> --text=\"$(cat <<'EOF'");
+    const mcp = line.indexOf('command_run with name soksak-plugin-agents-clubhouse.answer, surface room-1 and params {"turn": "<token>", "status": "continue or settled", "text": "<your answer>"}');
+    expect(shell).toBeGreaterThan(0);
+    expect(mcp).toBeGreaterThan(shell);
+    expect(line).toContain("This protocol line takes no answer.");
   });
 });
 
@@ -166,5 +160,19 @@ describe("createProtocolInjector after a restart (docs/spec/room.md#restart)", (
     expect(await injector.ensure({ ...claude, session: "s-2" }, [])).toEqual({ ok: true });
     expect(core.submitted.map((entry) => entry.session)).toEqual(["s-2"]);
     expect(taught).toEqual(["s-2"]);
+  });
+});
+
+// Nothing said outside the room (docs/spec/room.md#room-protocol): the room cannot read the terminal text of a member, so the protocol
+// line and each turn line tell the member to say everything through the room.
+describe("nothing said outside the room", () => {
+  it("the protocol line states the rules in short imperative sentences", () => {
+    const line = roomProtocolLine("Claude", ["Codex"], "room-1");
+    expect(line).toContain("The room cannot read your terminal: say everything through the room, in your answer or with a report or a claim.");
+    expect(line).toContain("Write nothing in your terminal except what your tools need.");
+    expect(line).toContain("Put a message to the owner in your answer as a section @owner:.");
+    expect(line).toContain("Do not narrate what you are about to do, and do not confirm that you sent the answer.");
+    expect(line).toContain("Respond to what the speakers said");
+    expect(line.length).toBeLessThan(2400);
   });
 });
