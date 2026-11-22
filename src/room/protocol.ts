@@ -24,13 +24,16 @@ export function roomProtocolLine(self: string, peers: string[]): string {
   ].join(" ");
 }
 
+// The outcome of the protocol turn of one member; a refusal has already been reported through the room error path.
+export type ProtocolOutcome = { ok: true } | { ok: false; reason: string };
+
 export interface ProtocolInjector {
-  // Resolves once the protocol turn of the member's session has ended; rejects when it failed, after reporting it.
-  ensure(member: ProtocolMember, peers: string[]): Promise<void>;
+  // Resolves with the outcome once the protocol turn of the member's session has ended or failed; it never rejects.
+  ensure(member: ProtocolMember, peers: string[]): Promise<ProtocolOutcome>;
 }
 
 export function createProtocolInjector(ports: RelayPorts, report: (where: string, text: string) => void): ProtocolInjector {
-  const done = new Map<string, Promise<void>>();
+  const done = new Map<string, Promise<ProtocolOutcome>>();
   // Resolves when the session first reports idle, from the current value or from the next values of core.sessions.
   const firstIdle = (session: string) =>
     new Promise<void>((resolve, reject) => {
@@ -50,7 +53,7 @@ export function createProtocolInjector(ports: RelayPorts, report: (where: string
       if (check(ports.sessions())) return;
       stop = ports.watchSessions((value) => void check(value));
     });
-  const inject = async (member: ProtocolMember, peers: string[]) => {
+  const inject = async (member: ProtocolMember, peers: string[]): Promise<ProtocolOutcome> => {
     try {
       await firstIdle(member.session);
       const port: SessionRelayPort = {
@@ -59,10 +62,11 @@ export function createProtocolInjector(ports: RelayPorts, report: (where: string
         watch: (listener) => ports.watchSessions((value) => listener(sessionProgram(value, member.session))),
       };
       await relayMemberMessage(port, roomProtocolLine(member.name, peers));
+      return { ok: true };
     } catch (error) {
-      const reason = error instanceof Error ? error.message : String(error);
-      report("room protocol", `member ${member.id}: ${reason}`);
-      throw new Error(`member ${member.id}: ${reason}`);
+      const reason = `member ${member.id}: ${error instanceof Error ? error.message : String(error)}`;
+      report("room protocol", reason);
+      return { ok: false, reason };
     }
   };
   return {

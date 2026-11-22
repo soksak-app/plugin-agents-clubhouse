@@ -371,18 +371,23 @@ function buildRoom({ settings, collections }: RoomContext): RoomHandlers {
     msgs.scrollTop = msgs.scrollHeight;
   };
   // Each member session receives the room protocol once, after it first reports idle and before its first relayed message
-  // (docs/spec/room.md#room-protocol). The injector reports each failure itself.
+  // (docs/spec/room.md#room-protocol). The injector reports each refusal itself and resolves with the outcome of each member.
   const protocol = createProtocolInjector(relayPorts, report);
-  const openMembers = () =>
+  type OpenMember = { id: string; name: string; session: string };
+  const openMembers = (): OpenMember[] =>
     roster
       .filter((entry) => entry.checked && memberSessions.has(entry.id))
       .map((entry) => ({ id: entry.id, name: entry.name, session: memberSessions.get(entry.id)! }));
-  const teachAll = (members: { id: string; name: string; session: string }[]) =>
-    Promise.all(members.map((member) => protocol.ensure(member, members.filter((other) => other !== member).map((other) => other.name))));
-  function teachMembers(): void {
-    // A rejection is already reported as `room protocol`; the relay waits on the same turn and refuses that member.
-    teachAll(openMembers()).catch(() => undefined);
-  }
+  // Resolves with the members whose protocol turn has ended; a refused member receives no relayed message.
+  const taughtMembers = async (members: OpenMember[]): Promise<OpenMember[]> => {
+    const outcomes = await Promise.all(
+      members.map((member) => protocol.ensure(member, members.filter((other) => other !== member).map((other) => other.name))),
+    );
+    return members.filter((_, index) => outcomes[index].ok);
+  };
+  const teachMembers = async (): Promise<void> => {
+    await taughtMembers(openMembers());
+  };
   send.addEventListener("click", () => {
     const text = input.value.trim();
     if (text === "" || busy) return;
@@ -395,9 +400,10 @@ function buildRoom({ settings, collections }: RoomContext): RoomHandlers {
     send.disabled = true;
     input.value = "";
     appendMessage(lang === "ko" ? "나" : "You", text);
-    teachAll(targets)
-      .then(() => relayInMode(relayPorts, mode, targets, text))
-      .then(async (answers) => {
+    const relay = async (): Promise<void> => {
+        const taught = await taughtMembers(targets);
+        if (taught.length === 0) throw new Error("no member has the room protocol");
+        const answers = await relayInMode(relayPorts, mode, taught, text);
         const shown = answers.map((answer) => {
           const member = targets.find((entry) => entry.id === answer.id)!;
           const last = answer.rows.map((row) => row.trimEnd()).reduce((end, row, index) => (row === "" ? end : index + 1), 0);
@@ -407,11 +413,12 @@ function buildRoom({ settings, collections }: RoomContext): RoomHandlers {
         });
         // A mention narrowed the receivers: the other members receive the record of the exchange and answer nothing that the room
         // shows (docs/spec/room.md#shared-record).
-        const mentioned = mentionedMembers(text, targets);
+        const mentioned = mentionedMembers(text, taught);
         if (mentioned.length === 0) return;
-        const others = targets.filter((entry) => !mentioned.includes(entry));
+        const others = taught.filter((entry) => !mentioned.includes(entry));
         await shareRecord(relayPorts, { message: text, answers: shown }, others, report);
-      })
+    };
+    relay()
       .catch((error: unknown) => report("room relay", String((error as Error)?.message ?? error)))
       .finally(() => {
         busy = false;

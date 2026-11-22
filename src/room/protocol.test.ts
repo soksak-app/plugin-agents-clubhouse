@@ -55,19 +55,19 @@ describe("createProtocolInjector", () => {
     const second = injector.ensure(claude, ["Codex"]);
     expect(core.submitted).toEqual([]);
     core.set("s-1", "idle");
-    await Promise.all([first, second]);
+    expect(await Promise.all([first, second])).toEqual([{ ok: true }, { ok: true }]);
     expect(core.submitted).toEqual([{ session: "s-1", text: roomProtocolLine("Claude", ["Codex"]) }]);
     await injector.ensure(claude, ["Codex"]);
     expect(core.submitted.length).toBe(1);
     expect(reports).toEqual([]);
   });
 
-  it("reports a failed protocol turn and rejects the member", async () => {
+  it("reports a failed protocol turn and resolves with the refusal of the member", async () => {
     const core = fakeCore({ "s-1": "idle" });
     core.ports.commands.execute = async () => { throw new Error("core.session.submit refused"); };
     const reports: string[] = [];
     const injector = createProtocolInjector(core.ports, (where, text) => void reports.push(`${where}: ${text}`));
-    await expect(injector.ensure(claude, [])).rejects.toThrow("member reviewer: core.session.submit refused");
+    expect(await injector.ensure(claude, [])).toEqual({ ok: false, reason: "member reviewer: core.session.submit refused" });
     expect(reports).toEqual(["room protocol: member reviewer: core.session.submit refused"]);
   });
 });

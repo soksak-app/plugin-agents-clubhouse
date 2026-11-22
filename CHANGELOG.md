@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- C27: The protocol step resolves with its outcome instead of rejecting, and the room relays only to the members whose protocol turn ended; no promise of it is discarded.
 - C26: Each line to a member names its speaker (`[@owner]`, `[@<member>]`), and each member session receives the one-line room protocol before its first relayed message (`docs/spec/room.md`). The unused persona module, its store and the data key `personas` are removed.
 - C25: `plugin.json` depends on the package `@soksak/plugin-agents` `^0.0.1` instead of the identifier `agents`.
 - C24: After a mention exchange, each other idle member receives its record as one submitted line, and the room shows none of its output (`docs/spec/room.md#shared-record`).
