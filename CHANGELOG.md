@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- C29: The version is 0.0.2, which releases C18 to C28.
 - C28: README and the description of `plugin.json` state the speaker labels, the room protocol and the shared record.
 - C27: The protocol step resolves with its outcome instead of rejecting, and the room relays only to the members whose protocol turn ended; no promise of it is discarded.
 - C26: Each line to a member names its speaker (`[@owner]`, `[@<member>]`), and each member session receives the one-line room protocol before its first relayed message (`docs/spec/room.md`). The unused persona module, its store and the data key `personas` are removed.

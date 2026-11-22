@@ -2,6 +2,7 @@
 
 ## 미출시
 
+- C29: version은 0.0.2이고, C18부터 C28까지를 release한다.
 - C28: README와 `plugin.json`의 description이 화자 label, room protocol, 공유 기록을 말한다.
 - C27: Protocol 단계가 reject 대신 결과로 resolve하고, 방은 protocol turn이 끝난 member에게만 전달한다. 그 promise를 버리는 곳은 없다.
 - C26: Member에게 가는 모든 줄이 화자를 밝히고(`[@owner]`, `[@<member>]`), 모든 member session이 첫 전달 메시지 전에 한 줄짜리 room protocol을 받는다(`docs/spec/room.md`). 쓰이지 않는 persona module, 그 store, data key `personas`를 제거했다.
