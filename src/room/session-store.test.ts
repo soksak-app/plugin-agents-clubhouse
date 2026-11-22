@@ -1,9 +1,9 @@
 // 멤버 세션 스토어 계약 — 실패는 호출자에게 거부로 전달되고, 부재 문서만 null 이다.
 import { describe, it, expect } from "vitest";
 import { createMemberSessionStore, MEMBER_SESSIONS } from "./session-store";
-import type { PersonaDataApi } from "./persona";
+import type { RoomDataApi } from "./session-store";
 
-function fakeData(): PersonaDataApi & { docs: Map<string, Record<string, unknown>> } {
+function fakeData(): RoomDataApi & { docs: Map<string, Record<string, unknown>> } {
   const docs = new Map<string, Record<string, unknown>>();
   return {
     docs,

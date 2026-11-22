@@ -5,12 +5,12 @@ import { describe, expect, it } from "vitest";
 import { summonAndArrange, serialRunner } from "./trigger";
 import { createArrangementStatus } from "./arrangement";
 import { createMemberSessionStore } from "./session-store";
-import type { PersonaDataApi } from "./persona";
+import type { RoomDataApi } from "./session-store";
 import type { MemberDefinition } from "./summon";
 
 const SIZE = { width: 480, height: 320, scale: 2 };
 
-function fakeData(): PersonaDataApi {
+function fakeData(): RoomDataApi {
   const docs = new Map<string, Record<string, unknown>>();
   return {
     define: async () => {},

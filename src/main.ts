@@ -23,6 +23,7 @@ import { serialRunner, summonAndArrange, type TriggerDeps } from "./room/trigger
 import { relayInMode, type RelayPorts } from "./room/room-relay";
 import { mentionedMembers } from "./room/mention";
 import { shareRecord } from "./room/record";
+import { createProtocolInjector } from "./room/protocol";
 import { rosterFrom, type RosterEntry } from "./room/roster";
 import { createMacroStore } from "./tower/macro";
 import { setupTower } from "./tower/header";
@@ -351,6 +352,7 @@ function buildRoom({ settings, collections }: RoomContext): RoomHandlers {
     const checked = roster.filter((entry) => entry.checked).map((entry) => entry.id);
     runTrigger(() => summonAndArrange(trigger, definitions.map(toMemberDefinition), checked))
       .then(refreshMembers)
+      .then(teachMembers)
       .catch((error: unknown) => report("room summon", String((error as Error)?.message ?? error)));
   };
 
@@ -368,12 +370,23 @@ function buildRoom({ settings, collections }: RoomContext): RoomHandlers {
     msgs.append(elText("div", `${who}: ${text}`, "st-msg"));
     msgs.scrollTop = msgs.scrollHeight;
   };
+  // Each member session receives the room protocol once, after it first reports idle and before its first relayed message
+  // (docs/spec/room.md#room-protocol). The injector reports each failure itself.
+  const protocol = createProtocolInjector(relayPorts, report);
+  const openMembers = () =>
+    roster
+      .filter((entry) => entry.checked && memberSessions.has(entry.id))
+      .map((entry) => ({ id: entry.id, name: entry.name, session: memberSessions.get(entry.id)! }));
+  const teachAll = (members: { id: string; name: string; session: string }[]) =>
+    Promise.all(members.map((member) => protocol.ensure(member, members.filter((other) => other !== member).map((other) => other.name))));
+  function teachMembers(): void {
+    // A rejection is already reported as `room protocol`; the relay waits on the same turn and refuses that member.
+    teachAll(openMembers()).catch(() => undefined);
+  }
   send.addEventListener("click", () => {
     const text = input.value.trim();
     if (text === "" || busy) return;
-    const targets = roster
-      .filter((entry) => entry.checked && memberSessions.has(entry.id))
-      .map((entry) => ({ id: entry.id, name: entry.name, session: memberSessions.get(entry.id)! }));
+    const targets = openMembers();
     if (targets.length === 0) {
       report("room relay", "no member session is open: check a member of the roster");
       return;
@@ -381,9 +394,9 @@ function buildRoom({ settings, collections }: RoomContext): RoomHandlers {
     busy = true;
     send.disabled = true;
     input.value = "";
-    const sender = lang === "ko" ? "나" : "You";
-    appendMessage(sender, text);
-    relayInMode(relayPorts, mode, targets, text)
+    appendMessage(lang === "ko" ? "나" : "You", text);
+    teachAll(targets)
+      .then(() => relayInMode(relayPorts, mode, targets, text))
       .then(async (answers) => {
         const shown = answers.map((answer) => {
           const member = targets.find((entry) => entry.id === answer.id)!;
@@ -397,7 +410,7 @@ function buildRoom({ settings, collections }: RoomContext): RoomHandlers {
         const mentioned = mentionedMembers(text, targets);
         if (mentioned.length === 0) return;
         const others = targets.filter((entry) => !mentioned.includes(entry));
-        await shareRecord(relayPorts, { sender, message: text, answers: shown }, others, report);
+        await shareRecord(relayPorts, { message: text, answers: shown }, others, report);
       })
       .catch((error: unknown) => report("room relay", String((error as Error)?.message ?? error)))
       .finally(() => {

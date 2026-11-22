@@ -2,6 +2,7 @@
 
 ## 미출시
 
+- C26: Member에게 가는 모든 줄이 화자를 밝히고(`[@owner]`, `[@<member>]`), 모든 member session이 첫 전달 메시지 전에 한 줄짜리 room protocol을 받는다(`docs/spec/room.md`). 쓰이지 않는 persona module, 그 store, data key `personas`를 제거했다.
 - C25: `plugin.json`이 identifier `agents` 대신 package `@soksak/plugin-agents` `^0.0.1`에 의존한다.
 - C24: Mention 대화 뒤에 idle인 나머지 member가 그 기록을 submit된 한 줄로 받고, 방은 그 출력을 보여 주지 않는다(`docs/spec/room.md#shared-record`).
 - C23: README, `plugin.json`의 description, setting `kibitzDefault`가 `docs/spec/room.md`의 mode와 mention을 말한다.

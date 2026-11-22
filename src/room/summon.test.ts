@@ -4,10 +4,10 @@
 import { describe, expect, it, vi } from "vitest";
 import { summonMembers, type MemberDefinition } from "./summon";
 import { createMemberSessionStore, MEMBER_SESSIONS } from "./session-store";
-import type { PersonaDataApi } from "./persona";
+import type { RoomDataApi } from "./session-store";
 import type { RoomPort } from "./port";
 
-function fakeData(): PersonaDataApi & { docs: Map<string, Record<string, unknown>> } {
+function fakeData(): RoomDataApi & { docs: Map<string, Record<string, unknown>> } {
   const docs = new Map<string, Record<string, unknown>>();
   return {
     docs,

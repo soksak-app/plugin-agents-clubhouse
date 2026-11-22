@@ -26,15 +26,14 @@ function fakeCore(states: Record<string, string | null>, refuse?: string) {
 }
 
 const exchange = {
-  sender: "나",
   message: "@Claude @Codex review\nthis",
   answers: [{ member: claude, text: "looks good" }, { member: codex, text: "one fix\nneeded" }],
 };
 
 describe("recordText", () => {
-  it("names the sender and the mentioned members and joins the record lines with ' | '", () => {
+  it("names the owner and the mentioned members with speaker labels and joins the record lines with ' | '", () => {
     expect(recordText(exchange)).toBe(
-      "답은 하지말고 알고있어. [@나]와 [@Claude], [@Codex]의 대화기록이다. 답하지말고 참고해. | @나: @Claude @Codex review this | @Claude: looks good | @Codex: one fix needed",
+      "답은 하지말고 알고있어. [@owner]와 [@Claude], [@Codex]의 대화기록이다. 답하지말고 참고해. | [@owner] @Claude @Codex review this | [@Claude] looks good | [@Codex] one fix needed",
     );
   });
 });

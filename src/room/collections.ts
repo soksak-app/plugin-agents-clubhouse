@@ -1,6 +1,6 @@
 // Document collections of the room over project data (core docs/spec/plugins.md#project-data). Each collection is one declared
 // data key whose value is an array of documents; a write replaces the whole array through runtime.data.change, so two writers
-// keep each other's documents. The collection names are the names that the stores (persona, member session, trace, macro) use.
+// keep each other's documents. The collection names are the names that the stores (member session, trace, macro) use.
 
 export type Doc = Record<string, unknown> & { id: string };
 
@@ -12,7 +12,6 @@ export interface KeyedData {
 
 // The data key of each collection, as declared in plugin.json `data`.
 export const COLLECTION_KEYS: Record<string, string> = {
-  room_personas: "personas",
   room_member_sessions: "member-sessions",
   tower_plans: "tower-plans",
   tower_steps: "tower-steps",

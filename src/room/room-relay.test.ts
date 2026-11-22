@@ -85,10 +85,10 @@ describe("relayToMembers", () => {
 const MEMBERS = [{ id: "reviewer", name: "Claude", session: "s-1" }, { id: "writer", name: "Codex", session: "s-2" }];
 
 describe("relayInMode (docs/spec/room.md#modes)", () => {
-  it("turn: relays to each member one after another in roster order", async () => {
+  it("turn: relays to each member one after another in roster order, labeled with the owner", async () => {
     const core = fakeCore([IDLE("s-1"), IDLE("s-2")]);
     const answers = await relayInMode(core.ports, "turn", MEMBERS, "hello");
-    expect(core.submitted.map((entry) => entry.session)).toEqual(["s-1", "s-2"]);
+    expect(core.submitted).toEqual([{ session: "s-1", text: "[@owner] hello" }, { session: "s-2", text: "[@owner] hello" }]);
     expect(answers.map((answer) => answer.id)).toEqual(["reviewer", "writer"]);
   });
 
@@ -101,7 +101,7 @@ describe("relayInMode (docs/spec/room.md#modes)", () => {
   it("facil: relays to the first idle member in roster order only", async () => {
     const core = fakeCore([{ session: "s-1", program: { state: "working" } }, IDLE("s-2")]);
     const answers = await relayInMode(core.ports, "facil", MEMBERS, "who takes this");
-    expect(core.submitted).toEqual([{ session: "s-2", text: "who takes this" }]);
+    expect(core.submitted).toEqual([{ session: "s-2", text: "[@owner] who takes this" }]);
     expect(answers.map((answer) => answer.id)).toEqual(["writer"]);
   });
 

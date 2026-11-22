@@ -67,7 +67,7 @@ describe("createProjectCollections", () => {
   });
 
   it("maps each collection to a key of plugin.json whose schema is an array of objects with an empty default", () => {
-    const keys = ["tower-plans", "tower-steps", "macros", "personas", "member-sessions"];
+    const keys = ["tower-plans", "tower-steps", "macros", "member-sessions"];
     for (const key of keys) {
       expect(manifest.data[key], key).toBeDefined();
       expect(manifest.data[key].schema, key).toEqual({ type: "array", items: { type: "object" } });

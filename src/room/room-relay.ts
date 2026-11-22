@@ -71,8 +71,10 @@ export async function relayToMembers(ports: RelayPorts, members: RelayMember[], 
 // Relays a room message by the mode of the room (docs/spec/room.md#modes). A message that mentions members goes only to them in
 // mention order: one after another in turn and facil, at the same time in simul. Without a mention, turn relays to each member in
 // roster order, facil to the first member whose session is idle, and simul to every member at the same time.
-export async function relayInMode(ports: RelayPorts, mode: RoomMode, members: NamedRelayMember[], text: string): Promise<MemberAnswer[]> {
-  const mentioned = mentionedMembers(text, members);
+export async function relayInMode(ports: RelayPorts, mode: RoomMode, members: NamedRelayMember[], message: string): Promise<MemberAnswer[]> {
+  const mentioned = mentionedMembers(message, members);
+  // The person speaks as the owner (docs/spec/room.md#speaker-labels).
+  const text = `[@owner] ${message}`;
   if (mode === "simul") {
     const targets = mentioned.length > 0 ? mentioned : members;
     const results = await Promise.allSettled(targets.map((member) => relayToMember(ports, member, text)));

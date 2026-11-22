@@ -26,10 +26,6 @@
     }
   },
   "data": {
-    "personas": {
-      "schema": { "type": "array", "items": { "type": "object" } },
-      "default": []
-    },
     "member-sessions": {
       "schema": { "type": "array", "items": { "type": "object" } },
       "default": []

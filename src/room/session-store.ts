@@ -1,6 +1,11 @@
 // 멤버 세션 영속 — 뷰가 내려가도 세션 id 를 project data 에 보관해, 재마운트 때 같은 세션을 resume 한다.
 // 지속 세션 모델의 회복 경로: 메모리 캐시(뷰 수명) → 이 스토어(앱 수명) → 세션 파일(디스크, 에이전트 소유).
-import type { PersonaDataApi } from "./persona";
+// The part of the project data collections that the store uses.
+export interface RoomDataApi {
+  define: (coll: string, opts: { indexes?: string[]; fts?: string[] }) => Promise<void>;
+  put: (coll: string, doc: Record<string, unknown>, opts?: { id?: string; scope?: string }) => Promise<string>;
+  get: (coll: string, id: string, opts?: { scope?: string }) => Promise<Record<string, unknown> | null>;
+}
 
 export const MEMBER_SESSIONS = "room_member_sessions";
 
@@ -17,7 +22,7 @@ export interface MemberSessionStore {
 }
 
 /** project data 미부여 환경이면 undefined — 영속 없이 메모리 수명으로만 동작(기능 무해 축소). */
-export function createMemberSessionStore(data?: PersonaDataApi): MemberSessionStore | undefined {
+export function createMemberSessionStore(data?: RoomDataApi): MemberSessionStore | undefined {
   if (!data) return undefined;
   let defined: Promise<void> | null = null;
   // A failed define is not kept: the rejected promise is dropped so that the next call defines again.
