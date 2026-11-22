@@ -617,28 +617,18 @@ export function createExecutor(deps: ExecutorDeps): TowerExecutor {
 
   // rollback 스냅샷 캡처(M9) — destructive/inject 묶음 *디스패치 직전* 의 복원 기준값. 이전 테마/모드(theme.list)
   //   + split 별 이전 sizes(state.tree/panel.list)를 read 로 잡는다(부수효과 0, 폴링 0 — 1회 캡처). 캡처 실패는
-  //   삼켜져 빈 스냅샷이 되고, 그러면 invertibleStep 이 추측 복원 대신 null 을 돌려준다(정직 — 가짜 복원 0).
+  //   실패하면 던진다. dispatchPlanInner 가 그 묶음을 첫 step 전에 거부한다(C10) — 복원 기준 없이 파괴하지 않는다.
   async function captureSnapshot(): Promise<RollbackSnapshot> {
     const snap: RollbackSnapshot = {};
-    try {
-      const th: any = await exec("theme.list");
-      if (th && typeof th.current === "string") {
-        snap.theme = { name: th.current };
-        if (typeof th.mode === "string") snap.theme.mode = th.mode;
-      }
-    } catch (error) {
-      // The theme inverse stays null: it is not guessed.
-      room.report("tower rollback snapshot", String((error as Error)?.message ?? error));
+    const th: any = await exec("theme.list");
+    if (th && typeof th.current === "string") {
+      snap.theme = { name: th.current };
+      if (typeof th.mode === "string") snap.theme.mode = th.mode;
     }
-    try {
-      const tree: any = await exec("state.tree");
-      const sizes: Record<string, number[]> = {};
-      collectSplitSizes(tree?.tree, sizes); // state.tree 의 모든 split.id → 현재 sizes.
-      if (Object.keys(sizes).length) snap.sizes = sizes;
-    } catch (error) {
-      // The resize inverse stays null: it is not guessed.
-      room.report("tower rollback snapshot", String((error as Error)?.message ?? error));
-    }
+    const tree: any = await exec("state.tree");
+    const sizes: Record<string, number[]> = {};
+    collectSplitSizes(tree?.tree, sizes); // state.tree 의 모든 split.id → 현재 sizes.
+    if (Object.keys(sizes).length) snap.sizes = sizes;
     return snap;
   }
 
@@ -698,7 +688,17 @@ export function createExecutor(deps: ExecutorDeps): TowerExecutor {
     const results: StepResult[] = [];
     // 묶음이 보호 대상이면 디스패치 직전 스냅샷 1회 캡처(이벤트-우선, 폴링 0). 비보호면 캡처조차 안 함(비용 0).
     const protectedBatch = isProtectedBatch(steps);
-    const snap: RollbackSnapshot = protectedBatch ? await captureSnapshot() : {};
+    // A destructive batch runs only with its rollback reference. A failed capture refuses the batch before its first step.
+    let snap: RollbackSnapshot = {};
+    if (protectedBatch) {
+      try {
+        snap = await captureSnapshot();
+      } catch (error) {
+        const message = `rollback snapshot cannot be captured, so the batch is refused before it runs: ${String((error as Error)?.message ?? error)}`;
+        room.report("tower rollback snapshot", message);
+        return { ok: false, code: "SNAPSHOT_FAILED", message, results: [] };
+      }
+    }
     for (const s of steps) {
       // step 진입 전 협조 양보 — 부분 실행 보존하고 멈춘다(현재 step 은 시작 안 함, 앞 step 들은 보존).
       if (opts.shouldYield?.()) return { ok: true, yielded: true, results };

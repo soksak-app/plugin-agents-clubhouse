@@ -213,7 +213,7 @@ describe("C9 — errors are reported or rethrown, never swallowed", () => {
     }
   });
 
-  it("a failed theme capture is reported with its where, and the plan still runs", async () => {
+  it("a failed theme capture refuses a destructive batch before it runs", async () => {
     const app = fakeApp();
     const report = vi.fn();
     const room = {
@@ -228,9 +228,46 @@ describe("C9 — errors are reported or rethrown, never swallowed", () => {
     };
     const ex = createExecutor(deps({ room }).d);
     const out = await ex.runPlan([{ axis: "command", name: "panel.close", params: {} }]);
+    expect(out).toMatchObject({ ok: false, code: "SNAPSHOT_FAILED" });
+    expect(app.executed.map((e) => e.name)).not.toContain("panel.close");
+    expect(report).toHaveBeenCalledWith("tower rollback snapshot", expect.stringContaining("theme list refused"));
+  });
+
+  it("a failed layout capture refuses a destructive batch before it runs", async () => {
+    const app = fakeApp();
+    const report = vi.fn();
+    const room = {
+      commands: {
+        execute: vi.fn(async (name: string, params: any) => {
+          if (name === "state.tree") throw new Error("state tree refused");
+          if (name === "status.query") return { ok: true, statuses: [] };
+          return app.room.commands.execute(name, params);
+        }),
+      },
+      report,
+    };
+    const ex = createExecutor(deps({ room }).d);
+    const out = await ex.runPlan([{ axis: "command", name: "panel.close", params: {} }]);
+    expect(out).toMatchObject({ ok: false, code: "SNAPSHOT_FAILED" });
+    expect(app.executed.map((e) => e.name)).not.toContain("panel.close");
+    expect(report).toHaveBeenCalledWith("tower rollback snapshot", expect.stringContaining("state tree refused"));
+  });
+
+  it("a batch without a destructive step needs no snapshot, so failed snapshot reads do not stop it", async () => {
+    const app = fakeApp();
+    const room = {
+      commands: {
+        execute: vi.fn(async (name: string, params: any) => {
+          if (name === "theme.list" || name === "state.tree") throw new Error("snapshot read refused");
+          if (name === "status.query") return { ok: true, statuses: [] };
+          return app.room.commands.execute(name, params);
+        }),
+      },
+      report: () => undefined,
+    };
+    const ex = createExecutor(deps({ room }).d);
+    const out = await ex.runPlan([{ axis: "status", name: "status.query", params: {} }]);
     expect(out.ok).toBe(true);
-    expect(app.executed.map((e) => e.name)).toContain("panel.close");
-    expect(report).toHaveBeenCalledWith("tower rollback snapshot", "theme list refused");
   });
 
   it("a confirm gate that throws rejects its own run and does not block the next confirm", async () => {
