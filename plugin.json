@@ -22,10 +22,6 @@
       "values": ["facil", "turn", "simul"]
     }
   },
-  "sessions": true,
-  "dependencies": {
-    "@soksak/sidecar-vt-alacritty": "^0.0.32"
-  },
   "data": {
     "personas": {
       "schema": { "type": "array", "items": { "type": "object" } },

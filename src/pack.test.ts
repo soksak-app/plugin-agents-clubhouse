@@ -31,9 +31,7 @@ describe("release files", () => {
 
 describe("ACP removal", () => {
   it("declares no plugin dependency and no ACP package", () => {
-    // C3 changed this: `sessions` requires exactly one persistent sidecar in dependencies, so the room depends on that sidecar
-    // only. No plugin is a dependency, and the ACP package stays absent.
-    expect(Object.keys(manifest.dependencies ?? {})).toEqual(["@soksak/sidecar-vt-alacritty"]);
+    expect(manifest.dependencies ?? {}).toEqual({});
     expect(Object.keys(pkg.devDependencies)).not.toContain("@agentclientprotocol/sdk");
   });
 
