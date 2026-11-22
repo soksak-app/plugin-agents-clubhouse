@@ -1,9 +1,10 @@
 // The message relay of the room (C5, docs/spec/room.md) over the members' owned sessions. The mode and the mentions of a message decide
-// which members receive it and whether their turns run one after another or at the same time. The answer of a member is the screen
-// that core.session.read reports after its turn, which the room shows as text.
+// which members receive it and whether their turns run one after another or at the same time. The answer of a member is the reply block
+// of the screen that core.session.read reports after its turn (docs/spec/room.md#answer).
 import { relayMemberMessage, type SessionRelayPort } from "./relay";
 import { sessionProgram, sessionRead, sessionSubmit, type SessionCommandPort } from "./session-channel";
 import { mentionedMembers } from "./mention";
+import { answerText } from "./answer";
 import type { RoomMode } from "./commands";
 
 export interface RelayMember {
@@ -19,7 +20,7 @@ export interface NamedRelayMember extends RelayMember {
 
 export interface MemberAnswer {
   id: string;
-  rows: string[];
+  text: string;
 }
 
 export interface RelayPorts extends SessionCommandPort {
@@ -33,8 +34,8 @@ function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-// Sends the text to one member and resolves with its screen after its turn. A refusal, a turn that is blocked, or a session that
-// leaves core.sessions rejects with the member identifier and the reason.
+// Sends the text to one member and resolves with its answer after its turn. A refusal, a turn that is blocked, a session that leaves
+// core.sessions, or a screen whose reply rows break the rule of the answer rejects with the member identifier and the reason.
 async function relayToMember(ports: RelayPorts, member: RelayMember, text: string): Promise<MemberAnswer> {
   const controller = new AbortController();
   // A value of core.sessions that the relay cannot read ends the turn with this error, so the relay never waits on a bad value.
@@ -56,11 +57,15 @@ async function relayToMember(ports: RelayPorts, member: RelayMember, text: strin
   } catch (error) {
     throw new Error(`member ${member.id}: ${messageOf(failure ?? error)}`);
   }
-  const screen = await sessionRead(ports, member.session);
-  return { id: member.id, rows: screen.rows };
+  try {
+    const screen = await sessionRead(ports, member.session);
+    return { id: member.id, text: answerText(screen.rows) };
+  } catch (error) {
+    throw new Error(`member ${member.id}: ${messageOf(error)}`);
+  }
 }
 
-// Sends the text to each member in order and resolves with the screen of each member. A failed turn rejects with the member and the
+// Sends the text to each member in order and resolves with the answer of each member. A failed turn rejects with the member and the
 // reason, and the members after it receive nothing.
 export async function relayToMembers(ports: RelayPorts, members: RelayMember[], text: string): Promise<MemberAnswer[]> {
   const answers: MemberAnswer[] = [];

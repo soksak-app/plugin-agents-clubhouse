@@ -2,7 +2,7 @@
 
 [English](room.md)
 
-방은 입력창의 메시지를 owned session이 열린 체크된 member에게 전달한다. Member는 메시지를 submit된 한 줄(`core.session.submit`)로 받는다. 그 session의 program 상태가 `working`이 된 뒤 `idle`이 되면 turn이 끝나고, turn 뒤 `core.session.read`가 보고하는 화면이 답이다.
+방은 입력창의 메시지를 owned session이 열린 체크된 member에게 전달한다. Member는 메시지를 submit된 한 줄(`core.session.submit`)로 받는다. 그 session의 program 상태가 `working`이 된 뒤 `idle`이 되면 turn이 끝나고, turn 뒤 `core.session.read`가 보고하는 화면의 reply block이 답이다([답](#answer)).
 
 ## Roster
 
@@ -47,6 +47,17 @@ Mention은 `@` 뒤의 member 이름이나 identifier이며 대소문자를 구�
 - `simul`: 모든 member가 동시에 받는다. 방은 어떤 turn이 끝나기 전에 모든 member에게 submit하고, 모든 turn이 끝나면 resolve한다. 답은 roster 순서(또는 mention 순서)를 지킨다.
 
 실패한 turn은 member와 이유로 relay를 reject한다. `turn`과 `facil`에서는 그 뒤의 member가 아무것도 받지 않는다. `simul`에서는 다른 turn이 끝까지 진행되고, relay는 member 순서로 첫 실패로 reject한다.
+
+## Answer
+
+Member의 답은 turn 뒤 `core.session.read`가 보고하는 화면 행의 마지막 reply block이다. Core는 session의 owner에게 화면의 보이는 행만 text로 주고, program의 reply text를 전하는 channel을 선언하지 않는다. `core.sessions`의 program status는 상태만 전한다. 그래서 방은 다음 규칙으로 행에서 답을 얻는다.
+
+- Reply block은 reply marker `⏺ `로 시작하는 마지막 행에서 시작하고, 이어지는 행 중 공백 두 개로 시작하는 각 행과 각 빈 행으로 이어진다. 공백 두 개로 시작하지 않으면서 빈 행 뒤에 오는 행에서 끝난다. 그 행과 그 뒤의 행, 즉 program의 status line, separator, prompt는 답에 속하지 않는다.
+- Block의 text는 marker를 뺀 첫 행과 공백 두 개를 뺀 다른 각 행을 각각 끝 공백 없이 줄바꿈으로 이은 것이며, 끝의 빈 행은 제거된다.
+- Marker로 시작하는 행이 없는 화면은 `the screen shows no reply row: no row starts with the reply marker`로 거부된다. 첫 행이 화면 위로 벗어난 reply도 이 경우다.
+- 공백 두 개로 시작하지 않으면서 block의 행 바로 뒤에 오는 행은 block을 깨뜨린다. 방은 답을 `the reply rows are broken at screen row <row>: <text>`로 거부하고 아무것도 고치지 않는다. 그런 행은 program과 terminal이 서로 다른 너비로 화면을 배치해서 생기며, 행에 더 이상 program이 쓴 그대로의 reply가 없기 때문이다.
+
+거부된 답은 member의 turn을 `member <id>: <reason>`으로 실패시킨다([mode](#mode)).
 
 ## 공유 기록
 

@@ -2,6 +2,7 @@
 
 ## 미출시
 
+- C41: Member의 답은 화면 행의 마지막 reply block이며 status line, spinner, separator, prompt를 포함하지 않는다. Terminal이 깨뜨린 행은 그 행과 함께 거부된다(`docs/spec/room.md#answer`).
 - C40: 버전은 0.0.6이며 C36부터 C38까지를 출시한다.
 - C38: `docs/spec/room.md#arrangement`는 arrangement가 방이 열지 않은 tab을 닫지 않는다고 밝힌다. Core는 plane의 다른 tab을 방 card의 끝에 남기고, 방 tab은 활성으로 남는다.
 - C37: 방 header는 좁은 card에서 줄바꿈한다. Roster tab은 최소 120 point를 유지하고, button은 한 줄을 유지하며, transport status는 ellipsis로 줄고 전체 text를 tooltip으로 보인다(`docs/spec/room.md#header`).

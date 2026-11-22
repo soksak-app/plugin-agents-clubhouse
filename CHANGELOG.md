@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- C41: The answer of a member is the last reply block of its screen rows, without the status line, the spinner, the separators and the prompt; rows that the terminal broke are refused with the row (`docs/spec/room.md#answer`).
 - C40: The version is 0.0.6, which releases C36 to C38.
 - C38: `docs/spec/room.md#arrangement` states that the arrangement closes no tab that the room did not open: core keeps the other tabs of the plane at the end of the room card, and the room tab stays active.
 - C37: The room header wraps in a narrow card: the roster tabs keep at least 120 points, the buttons keep one line, and the transport status shrinks with an ellipsis and shows its whole text as its tooltip (`docs/spec/room.md#header`).

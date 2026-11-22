@@ -3,10 +3,11 @@
 // answers with the declared shapes and moves a session through idle, working and idle as core would.
 import { describe, expect, it } from "vitest";
 import { relayInMode, relayToMembers, type RelayPorts } from "./room-relay";
+import fixture from "./fixtures/member-screens.json";
 
 interface FakeSession { session: string; program: { state: "idle" | "working" | "blocked" } | null }
 
-function fakeCore(initial: FakeSession[], options: { stuckOn?: string; vanishOn?: string; manual?: boolean } = {}) {
+function fakeCore(initial: FakeSession[], options: { stuckOn?: string; vanishOn?: string; manual?: boolean; screens?: Record<string, string[]> } = {}) {
   let sessions: FakeSession[] = initial.map((entry) => ({ ...entry }));
   const listeners = new Set<(value: unknown) => void>();
   const submitted: { session: string; text: string }[] = [];
@@ -35,7 +36,8 @@ function fakeCore(initial: FakeSession[], options: { stuckOn?: string; vanishOn?
           return {};
         }
         if (name === "core.session.read") {
-          return { rows: [`answer of ${params.session}`, ""], cursor: { row: 0, column: 0 } };
+          const rows = options.screens?.[params.session as string] ?? [`⏺ answer of ${params.session}`, ""];
+          return { rows, cursor: { row: 0, column: 0 } };
         }
         throw new Error(`unexpected command ${name}`);
       },
@@ -52,14 +54,30 @@ function fakeCore(initial: FakeSession[], options: { stuckOn?: string; vanishOn?
 const IDLE = (session: string): FakeSession => ({ session, program: { state: "idle" } });
 
 describe("relayToMembers", () => {
-  it("submits the message to each member in order, waits for each turn, and returns the screen of each member", async () => {
+  it("submits the message to each member in order, waits for each turn, and returns the answer of each member", async () => {
     const core = fakeCore([IDLE("s-1"), IDLE("s-2")]);
     const answers = await relayToMembers(core.ports, [{ id: "reviewer", session: "s-1" }, { id: "writer", session: "s-2" }], "hello");
     expect(core.submitted).toEqual([{ session: "s-1", text: "hello" }, { session: "s-2", text: "hello" }]);
     expect(answers).toEqual([
-      { id: "reviewer", rows: ["answer of s-1", ""] },
-      { id: "writer", rows: ["answer of s-2", ""] },
+      { id: "reviewer", text: "answer of s-1" },
+      { id: "writer", text: "answer of s-2" },
     ]);
+  });
+
+  it("answers the reply rows of the screen only, without the status line, the separators and the prompt", async () => {
+    const rows = fixture.screens[0].rows;
+    const core = fakeCore([IDLE("s-1")], { screens: { "s-1": rows } });
+    const answers = await relayToMembers(core.ports, [{ id: "harness-harness", session: "s-1" }], "hello");
+    expect(answers).toEqual([
+      { id: "harness-harness", text: "승민선배, 저는 harness고 코드 변경을 꼼꼼히 확인하고\n커밋하는 일을 잘하는데요, 아직 앞에서 말한 사람이\n없어서 덧붙일 말은 없어요." },
+    ]);
+  });
+
+  it("rejects with the member when the reply rows on its screen are broken", async () => {
+    const core = fakeCore([IDLE("s-1")], { screens: { "s-1": fixture.screens[1].rows } });
+    await expect(relayToMembers(core.ports, [{ id: "moai-manager-lead", session: "s-1" }], "hello")).rejects.toThrow(
+      'member moai-manager-lead: the reply rows are broken at screen row 1: "보고"',
+    );
   });
 
   it("refuses a member that is working, with the member named, and submits nothing to it", async () => {

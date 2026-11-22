@@ -2,7 +2,7 @@
 
 [한국어](room.ko.md)
 
-The room relays each message of the composer to the checked members whose owned session is open. A member receives the message as one submitted line (`core.session.submit`); its turn ends when the program state of its session goes `working` and then `idle`, and its answer is the screen that `core.session.read` reports after the turn.
+The room relays each message of the composer to the checked members whose owned session is open. A member receives the message as one submitted line (`core.session.submit`); its turn ends when the program state of its session goes `working` and then `idle`, and its answer is the reply block of the screen that `core.session.read` reports after the turn ([answer](#answer)).
 
 ## Roster
 
@@ -47,6 +47,17 @@ The mode of the room (`facil`, `turn`, `simul`) decides who receives a message w
 - `simul`: each member at the same time. The room submits the message to every member before any turn ends, and resolves when every turn has ended; the answers keep roster order (or mention order).
 
 A failed turn rejects the relay with the member and the reason. In `turn` and `facil` the members after it receive nothing; in `simul` the other turns run to their end, and the relay rejects with the first failure in member order.
+
+## Answer
+
+The answer of a member is the last reply block of the screen rows that `core.session.read` reports after its turn. Core gives the owner of a session only the visible rows of its screen as text, and declares no channel that carries the reply text of a program: the program status of `core.sessions` carries the state alone. So the room takes the answer from the rows by this rule:
+
+- A reply block starts at the last row that begins with the reply marker `⏺ ` and continues with each following row that begins with two spaces and with each blank row. It ends at a row that does not begin with two spaces and follows a blank row; that row and the rows after it, such as the status line, the separators and the prompt of the program, are not part of the answer.
+- The text of the block is its first row without the marker and each other row without the two spaces, each without its trailing blanks, joined with line breaks; the trailing blank rows are removed.
+- A screen without a row that begins with the marker is refused with `the screen shows no reply row: no row starts with the reply marker`; this is also the case of a reply whose first row has left the top of the screen.
+- A row that does not begin with two spaces and directly follows a row of the block breaks the block. The room refuses the answer with `the reply rows are broken at screen row <row>: <text>` and repairs nothing, because such rows come from a program and a terminal that laid out the screen at different widths, and the rows no longer hold the reply as the program wrote it.
+
+A refused answer fails the turn of the member with `member <id>: <reason>` ([modes](#modes)).
 
 ## Shared record
 

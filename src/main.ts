@@ -385,10 +385,8 @@ function buildRoom({ settings, collections }: RoomContext): RoomHandlers {
     const answers = await relayInMode(relayPorts, mode, taught, text);
     const shown = answers.map((answer) => {
       const member = targets.find((entry) => entry.id === answer.id)!;
-      const last = answer.rows.map((row) => row.trimEnd()).reduce((end, row, index) => (row === "" ? end : index + 1), 0);
-      const answerText = answer.rows.slice(0, last).join("\n");
-      appendMessage(member.name, answerText);
-      return { member, text: answerText };
+      appendMessage(member.name, answer.text);
+      return { member, text: answer.text };
     });
     // A mention narrowed the receivers: the other members receive the record of the exchange and answer nothing that the room
     // shows (docs/spec/room.md#shared-record).
