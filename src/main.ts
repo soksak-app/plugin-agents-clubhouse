@@ -31,8 +31,8 @@ import { createSubmitQueue } from "./room/submit-queue";
 import { CLAIM_COMMAND, RELEASE_COMMAND, REPORT_COMMAND, createWorkReports, type WorkReports } from "./room/work-reports";
 import { answerSections } from "./room/sections";
 import { createRoomRecord, leaderRoute, settledRelay } from "./room/room-record";
-import { maxMembersOf, summonedEntry, teamName, type TeamEntry } from "./room/team";
-import { createConversationStatus } from "./room/conversation-status";
+import { maxMembersOf, mergedCommit, releasedEntry, releaseTeam, summonedEntry, teamName, teamView, type TeamEntry } from "./room/team";
+import { createConversationStatus, waitLabel } from "./room/conversation-status";
 import { createProtocolInjector } from "./room/protocol";
 import { parseRoomState, serializedRoomState, type RoomState as RoomTabState } from "./room/room-state";
 import { ownedSessionIds, shownByOf } from "./room/session-channel";
@@ -620,14 +620,18 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
       if (!waitStarts.has(key)) waitStarts.set(key, Date.now());
       const line = elText("div", "", "st-pending st-waiting");
       line.dataset.key = key;
-      line.dataset.text = tp("waitingFor", lang, { name: memberName(wait.member), step: wait.step, program: String(wait.program) });
+      line.dataset.text = tp("waitingFor", lang, { name: memberName(wait.member), step: waitLabel(wait), program: String(wait.program) });
       return line;
     });
     const keys = new Set(waitRows.map((line) => line.dataset.key!));
     for (const key of [...waitStarts.keys()]) if (!keys.has(key)) waitStarts.delete(key);
     // A draw keeps the scroll position; the follow mode decides whether the view moves to the new entries.
     const top = msgs.scrollTop;
-    msgs.replaceChildren(...rows, ...waitRows);
+    // The team view lists each team member with its role, directory, branch, merge and session state (docs/spec/room.md#team).
+    const teamRows = value.team.map((entry) =>
+      elText("div", [entry.name, entry.role, entry.directory, entry.branch, entry.merged === null ? "not merged" : `merged ${entry.merged}`, String(entry.state)].filter((part) => part !== "").join(" · "), "st-note st-team"),
+    );
+    msgs.replaceChildren(...rows, ...waitRows, ...teamRows);
     msgs.scrollTop = top;
     tickWaits();
     seen.disconnect();
@@ -677,6 +681,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   // The sections of an answer name the addressees by the mention rules among the roster (docs/spec/room.md#sections).
   const conversationStatus = createConversationStatus(conversation, () => sessionsValue, () => deliveryEntries(), (entry) =>
     entry.speaker === "owner" || entry.speaker === "clubhouse" ? [] : answerSections(entry.text, roster),
+    () => teamView(team, definitions, (id) => memberSessions.get(id) ?? null, sessionsValue),
   );
   conversationStatus.subscribe(() => showConversation());
   sessionListeners.add((value) => {
@@ -763,16 +768,43 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   const teachMembers = async (): Promise<void> => {
     await taughtMembers(openMembers());
   };
+  // The leader and the tokens of its open turns, which the commands of the leader take (docs/spec/room.md#team).
+  const leaderTurns = () => {
+    const leader = leaderEntry();
+    return leader === undefined ? null : { id: leader.id, turns: answers.tokens().filter((token) => token.member === leader.id).map((token) => token.turn) };
+  };
+  const endSession = async (session: string): Promise<void> => {
+    await room.commands.execute("core.session.end", { session });
+  };
+  // member.release ends the session of a team member and closes its tab through the arrangement; git is not touched.
+  const releaseMember = async (params: unknown): Promise<{ member: string }> => {
+    const entry = releasedEntry(params, team, leaderTurns());
+    const session = memberSessions.get(entry.id);
+    if (session !== undefined) await endSession(session);
+    team.splice(team.indexOf(entry), 1);
+    record.append("clubhouse", `@${teamName(entry, definitions)} was released`);
+    summon();
+    return { member: entry.id };
+  };
+  const recordMerged = async (params: unknown): Promise<{ member: string; commit: string }> => {
+    const { entry, commit } = mergedCommit(params, team, leaderTurns());
+    entry.merged = commit;
+    persist();
+    conversationStatus.changed();
+    return { member: entry.id, commit };
+  };
+  // conversation.stop ends the session of every team member (docs/spec/room.md#commands).
+  const releaseAll = (): number => {
+    const count = team.length;
+    releaseTeam(team, (id) => memberSessions.get(id) ?? null, endSession, (text) => record.append("clubhouse", text))
+      .then(() => summon())
+      .catch((error: unknown) => report("room team", String((error as Error)?.message ?? error)));
+    return count;
+  };
   // member.summon adds a team member with the turn token of the leader, opens its session in its directory, and resolves after its
   // protocol turn; a refused open removes the entry again (docs/spec/room.md#team).
   const summonMember = async (params: unknown): Promise<{ member: string; session: string }> => {
-    const leader = leaderEntry();
-    const entry = summonedEntry(params, {
-      team,
-      definitions,
-      leader: leader === undefined ? null : { id: leader.id, turns: answers.tokens().filter((token) => token.member === leader.id).map((token) => token.turn) },
-      maxMembers,
-    });
+    const entry = summonedEntry(params, { team, definitions, leader: leaderTurns(), maxMembers });
     team.push(entry);
     persist();
     try {
@@ -838,7 +870,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
     followUp: () => work?.followUp(),
     stopWaits: () => {
       for (const listener of [...stopListeners]) listener();
-      return answers.closeWaits().length;
+      return answers.closeWaits().length + releaseAll();
     },
     failed: (reason) => report("room relay", reason),
   });
@@ -887,6 +919,8 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
       ...operations,
       [ANSWER_COMMAND]: async (params: unknown) => answers.deliver(params),
       [`${EXPOSE}.member.summon`]: async (params: unknown) => summonMember(params),
+      [`${EXPOSE}.member.release`]: async (params: unknown) => releaseMember(params),
+      [`${EXPOSE}.member.merged`]: async (params: unknown) => recordMerged(params),
       [REPORT_COMMAND]: async (params: unknown) => work!.reportCommand(params),
       [CLAIM_COMMAND]: async (params: unknown) => work!.claim(params),
       [RELEASE_COMMAND]: async (params: unknown) => work!.release(params),

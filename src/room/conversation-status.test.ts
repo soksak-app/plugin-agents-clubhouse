@@ -2,7 +2,7 @@
 // published at each change of the record.
 import { describe, expect, it } from "vitest";
 import manifest from "../../plugin.json";
-import { createConversationStatus } from "./conversation-status";
+import { createConversationStatus, waitLabel } from "./conversation-status";
 import { createRoomRecord, type RecordLine } from "./room-record";
 
 const NAME = "soksak-plugin-agents-clubhouse.conversation";
@@ -17,7 +17,7 @@ describe("conversation status", () => {
         waiting: { type: "array", items: { required: ["member", "session", "step", "program"], properties: { step: { enum: ["protocol", "turn", "answer"] } } } },
         delivery: { type: "array", items: { required: ["member", "session", "sent", "delivered", "length", "unreceived"] } },
       },
-      required: ["entries", "waiting", "delivery"],
+      required: ["entries", "waiting", "delivery", "team"],
     });
   });
 
@@ -27,17 +27,17 @@ describe("conversation status", () => {
     const record = createRoomRecord(lines, {}, (speaker) => speaker, () => status.changed(), {}, () => 1000);
     const values: unknown[] = [];
     const stop = status.subscribe((value) => values.push(value));
-    expect(status.read()).toEqual({ entries: [], waiting: [], delivery: [] });
+    expect(status.read()).toEqual({ entries: [], waiting: [], delivery: [], team: [] });
     record.append("owner", "hello");
     record.append("reviewer", "hi");
-    expect(status.read()).toEqual({ entries: [{ speaker: "owner", text: "hello", at: 1000, elapsedMs: null, sections: [] }, { speaker: "reviewer", text: "hi", at: 1000, elapsedMs: null, sections: [] }], waiting: [], delivery: [] });
+    expect(status.read()).toEqual({ entries: [{ speaker: "owner", text: "hello", at: 1000, elapsedMs: null, sections: [] }, { speaker: "reviewer", text: "hi", at: 1000, elapsedMs: null, sections: [] }], waiting: [], delivery: [], team: [] });
     record.append("owner", "again");
     record.withdrawLast(2);
     expect(values).toEqual([
-      { entries: [{ speaker: "owner", text: "hello", at: 1000, elapsedMs: null, sections: [] }], waiting: [], delivery: [] },
-      { entries: [{ speaker: "owner", text: "hello", at: 1000, elapsedMs: null, sections: [] }, { speaker: "reviewer", text: "hi", at: 1000, elapsedMs: null, sections: [] }], waiting: [], delivery: [] },
-      { entries: [{ speaker: "owner", text: "hello", at: 1000, elapsedMs: null, sections: [] }, { speaker: "reviewer", text: "hi", at: 1000, elapsedMs: null, sections: [] }, { speaker: "owner", text: "again", at: 1000, elapsedMs: null, sections: [] }], waiting: [], delivery: [] },
-      { entries: [{ speaker: "owner", text: "hello", at: 1000, elapsedMs: null, sections: [] }, { speaker: "reviewer", text: "hi", at: 1000, elapsedMs: null, sections: [] }], waiting: [], delivery: [] },
+      { entries: [{ speaker: "owner", text: "hello", at: 1000, elapsedMs: null, sections: [] }], waiting: [], delivery: [], team: [] },
+      { entries: [{ speaker: "owner", text: "hello", at: 1000, elapsedMs: null, sections: [] }, { speaker: "reviewer", text: "hi", at: 1000, elapsedMs: null, sections: [] }], waiting: [], delivery: [], team: [] },
+      { entries: [{ speaker: "owner", text: "hello", at: 1000, elapsedMs: null, sections: [] }, { speaker: "reviewer", text: "hi", at: 1000, elapsedMs: null, sections: [] }, { speaker: "owner", text: "again", at: 1000, elapsedMs: null, sections: [] }], waiting: [], delivery: [], team: [] },
+      { entries: [{ speaker: "owner", text: "hello", at: 1000, elapsedMs: null, sections: [] }, { speaker: "reviewer", text: "hi", at: 1000, elapsedMs: null, sections: [] }], waiting: [], delivery: [], team: [] },
     ]);
     stop();
     record.append("owner", "after");
@@ -101,5 +101,13 @@ describe("conversation status", () => {
     const status = createConversationStatus([], () => "x", () => []);
     expect(() => status.read()).toThrow("core.sessions is not a list");
     expect(() => status.waiting({ id: "reviewer", session: "s-1" }, "protocol")).toThrow("core.sessions is not a list");
+  });
+});
+
+describe("waitLabel (docs/spec/room.md#conversation-status)", () => {
+  it("shows an answer wait of an idle session as idle without answer, and every other wait by its step", () => {
+    expect(waitLabel({ member: "a", session: "s", step: "answer", program: "idle" })).toBe("idle without answer");
+    expect(waitLabel({ member: "a", session: "s", step: "answer", program: "working" })).toBe("answer");
+    expect(waitLabel({ member: "a", session: "s", step: "protocol", program: "idle" })).toBe("protocol");
   });
 });

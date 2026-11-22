@@ -227,8 +227,8 @@ describe("soksak knowledge", () => {
 // The team protocol (docs/spec/room.md#team): the leader line states the summon and the merge, and the worker line the worktree
 // lifecycle inside the project, because Claude Code keeps a cd of the shell only inside the folders of the session.
 // The team rules have no other carrier than the protocol line of a team member, so a line with them has its own bound
-// (docs/spec/room.md#team): the longest measured team line, a leader with the MCP form, holds 3859 characters.
-const TEAM_BOUND = 3900;
+// (docs/spec/room.md#team): the longest measured team line, a leader with the MCP form, holds 4073 characters.
+const TEAM_BOUND = 4100;
 
 describe("the team protocol", () => {
   it("tells the leader that it leads, how to summon and that its settled answer ends the conversation", () => {
@@ -259,5 +259,15 @@ describe("a failed room command", () => {
     const line = roomProtocolLine("Claude", ["Codex"], "room-1");
     expect(line).toContain("When a room command fails, run it again with the same token until it is accepted or refused as not open.");
     expect(line.length).toBeLessThan(3500);
+  });
+});
+
+describe("the work rules of the team (C90)", () => {
+  it("states the work rules of the leader and of a worker", () => {
+    const lead = roomProtocolLine("Lead", ["W1"], "room-1", "", true, { leader: null });
+    expect(lead).toContain("Fix the API contract in each brief, merge the server branches first, have dependent workers update from integration, and have each worker unit-test and merge integration into its branch before it asks for a merge.");
+    const worker = roomProtocolLine("W1", ["Lead"], "room-1", "", true, { leader: "Lead" });
+    expect(worker).toContain("Your brief is your scope. Unit-test thoroughly, merge the latest integration into your branch and resolve conflicts before you report done, and leave no background task running when you answer.");
+    for (const line of [lead, worker]) expect(line.length).toBeLessThan(TEAM_BOUND);
   });
 });

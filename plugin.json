@@ -128,9 +128,26 @@
                 },
                 "required": ["member", "session", "sent", "delivered", "length", "unreceived"]
               }
+            },
+            "team": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "member": { "type": "string" },
+                  "name": { "type": "string" },
+                  "role": { "type": "string" },
+                  "directory": { "type": "string" },
+                  "branch": { "type": "string" },
+                  "merged": { "type": ["string", "null"] },
+                  "session": { "type": ["string", "null"] },
+                  "state": { "type": ["string", "null"], "enum": ["idle", "working", "blocked", "ended", null] }
+                },
+                "required": ["member", "name", "role", "directory", "branch", "merged", "session", "state"]
+              }
             }
           },
-          "required": ["entries", "waiting", "delivery"]
+          "required": ["entries", "waiting", "delivery", "team"]
         }
       },
       {
@@ -232,6 +249,30 @@
           "type": "object",
           "properties": { "member": { "type": "string" }, "session": { "type": "string" } },
           "required": ["member", "session"]
+        }
+      },
+      {
+        "name": "soksak-plugin-agents-clubhouse.member.release",
+        "description": "End the session of the team member with the turn token of the leader, close its tab and remove it from the team; git is not touched.",
+        "params": {
+          "type": "object",
+          "properties": { "turn": { "type": "string" }, "member": { "type": "string" } },
+          "required": ["turn", "member"]
+        },
+        "result": { "type": "object", "properties": { "member": { "type": "string" } }, "required": ["member"] }
+      },
+      {
+        "name": "soksak-plugin-agents-clubhouse.member.merged",
+        "description": "Record with the turn token of the leader that the branch of the team member is merged in commit, which the team view shows; the room reads no git state.",
+        "params": {
+          "type": "object",
+          "properties": { "turn": { "type": "string" }, "member": { "type": "string" }, "commit": { "type": "string" } },
+          "required": ["turn", "member", "commit"]
+        },
+        "result": {
+          "type": "object",
+          "properties": { "member": { "type": "string" }, "commit": { "type": "string" } },
+          "required": ["member", "commit"]
         }
       },
       {

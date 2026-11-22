@@ -35,12 +35,14 @@ function teamRules(self: string, surface: string, team: TeamPlace): string[] {
       "You lead: you get every record line, split the work, and your settled answer ends the conversation.",
       `Summon a worker with sok soksak-plugin-agents-clubhouse.member.summon --surface ${surface} --params '{"turn": "<token>", "definition": "<definition>", "role": "<role>", "directory": "<project folder>"}' and brief it by mention; workers mentioned in one answer start together.`,
       "Add .worktrees/ to .gitignore if missing. Merge each ready branch and name the merge commit.",
+      "Fix the API contract in each brief, merge the server branches first, have dependent workers update from integration, and have each worker unit-test and merge integration into its branch before it asks for a merge.",
     ];
   }
   return [
     `You work for @${team.leader}: you get the owner lines and the lines that mention you.`,
     `First run git worktree add -q .worktrees/${self} -b ${self} && cd .worktrees/${self} in one Bash call and work there.`,
     `Tell @${team.leader} when your branch is ready. After it names the merge commit, check your work and its unit tests in the integration branch, cd to the project root, run git worktree remove .worktrees/${self}, delete branch ${self}, and report it.`,
+    "Your brief is your scope. Unit-test thoroughly, merge the latest integration into your branch and resolve conflicts before you report done, and leave no background task running when you answer.",
   ];
 }
 

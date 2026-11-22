@@ -5,6 +5,7 @@
 // when it ends. Each subscriber receives the new value, so the status follows these events without a timer.
 import { sessionProgram } from "./session-channel";
 import type { AnswerSection } from "./sections";
+import type { TeamViewEntry } from "./team";
 
 export interface ConversationEntry {
   // `owner` or the identifier of a member.
@@ -50,6 +51,14 @@ export interface ConversationValue {
   entries: StatusEntry[];
   waiting: WaitingMember[];
   delivery: DeliveryEntry[];
+  // The team view of a room with a leader (docs/spec/room.md#team), [] without a team.
+  team: TeamViewEntry[];
+}
+
+// The label of a wait in the view: an answer wait whose session is idle shows `idle without answer`, a display only
+// (docs/spec/room.md#conversation-status).
+export function waitLabel(wait: WaitingMember): string {
+  return wait.step === "answer" && wait.program === "idle" ? "idle without answer" : wait.step;
 }
 
 // Begins a wait for the member and returns the function that ends it; ending it again changes nothing.
@@ -73,6 +82,7 @@ export function createConversationStatus(
   sessions: () => unknown,
   delivery: () => DeliveryEntry[],
   sections: (entry: ConversationEntry) => AnswerSection[] = () => [],
+  team: () => TeamViewEntry[] = () => [],
 ): ConversationStatus {
   const listeners = new Set<(value: ConversationValue) => void>();
   const waits = new Set<{ member: string; session: string; step: WaitingStep }>();
@@ -83,6 +93,7 @@ export function createConversationStatus(
       entries: lines.map((line) => ({ speaker: line.speaker, text: line.text, at: line.at, elapsedMs: line.elapsedMs, sections: sections(line) })),
       waiting: [...waits].map((wait) => ({ ...wait, program: programOf(value as { session?: unknown }[], wait.session) })),
       delivery: delivery().map((entry) => ({ ...entry })),
+      team: team().map((entry) => ({ ...entry })),
     };
   };
   const changed = (): void => {
