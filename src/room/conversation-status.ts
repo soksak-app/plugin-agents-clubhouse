@@ -21,9 +21,10 @@ export interface StatusEntry extends ConversationEntry {
   sections: AnswerSection[];
 }
 
+// `turn` while a turn waits for the idle of a working session (docs/spec/room.md#modes);
 // `protocol` from the start of the protocol turn, which waits for the first idle, to its end; `answer` from the submit of a relayed
 // line to its answer or its failure; `record` from the submit of a record line to its acknowledgement or the stop of its wait.
-export type WaitingStep = "protocol" | "answer" | "record";
+export type WaitingStep = "protocol" | "turn" | "answer" | "record";
 
 export interface WaitingMember {
   member: string;

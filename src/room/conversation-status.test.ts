@@ -14,7 +14,7 @@ describe("conversation status", () => {
       type: "object",
       properties: {
         entries: { type: "array", items: { required: ["speaker", "text", "at", "elapsedMs", "sections"] } },
-        waiting: { type: "array", items: { required: ["member", "session", "step", "program"], properties: { step: { enum: ["protocol", "answer", "record"] } } } },
+        waiting: { type: "array", items: { required: ["member", "session", "step", "program"], properties: { step: { enum: ["protocol", "turn", "answer", "record"] } } } },
         delivery: { type: "array", items: { required: ["member", "session", "sent", "delivered", "length", "pending"] } },
       },
       required: ["entries", "waiting", "delivery"],

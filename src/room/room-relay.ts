@@ -63,32 +63,42 @@ function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-// Resolves when the session has no open line: a session with an open token waits for its answer or acknowledgement and then for a
-// program state that is not working, so the next line never lands in a turn of the program (docs/spec/room.md#room-record). A session
-// without an open token resolves at once, and the relay refuses its program state as before.
-async function lineFree(ports: RelayPorts, session: string): Promise<void> {
-  if (!ports.answers.has(session)) return;
-  await ports.answers.settled(session);
-  await new Promise<void>((resolve) => {
-    let stop: (() => void) | null = null;
-    let done = false;
-    const check = (value: unknown): void => {
-      if (done) return;
-      let state: string | null;
-      try {
-        state = sessionProgram(value, session);
-      } catch {
-        // A session that core.sessions no longer lists, or a value that the relay cannot read, ends the wait; the relay reports it.
-        state = "unreadable";
-      }
-      if (state === "working") return;
-      done = true;
-      stop?.();
-      resolve();
-    };
-    check(ports.sessions());
-    if (!done) stop = ports.watchSessions(check);
-  });
+// Resolves true when the session has no open line and its program is not working: a session with an open token waits for its answer
+// or acknowledgement, and a working session, such as a member whose program has not gone idle after its answer, waits for the next
+// value of core.sessions that shows it not working, so the next line never lands in a turn of the program (docs/spec/room.md#modes).
+// The wait is the step `turn` of the conversation status. A stop of the owner ends the wait with false. The relay refuses the other
+// program states, blocked or ended, as before.
+async function lineFree(ports: RelayPorts, member: RelayMember, stopping?: ConversationBound["stopping"]): Promise<boolean> {
+  const session = member.session;
+  if (ports.answers.has(session)) await ports.answers.settled(session);
+  const stateOf = (value: unknown): string => {
+    try {
+      return sessionProgram(value, session) ?? "none";
+    } catch {
+      // A session that core.sessions no longer lists, or a value that the relay cannot read, ends the wait; the relay reports it.
+      return "unreadable";
+    }
+  };
+  if (stateOf(ports.sessions()) !== "working") return true;
+  const endWait = ports.waiting(member, "turn");
+  try {
+    return await new Promise<boolean>((resolve) => {
+      let done = false;
+      const end = (free: boolean): void => {
+        if (done) return;
+        done = true;
+        stopWatch();
+        stopStop();
+        resolve(free);
+      };
+      const stopWatch = ports.watchSessions((value) => {
+        if (stateOf(value) !== "working") end(true);
+      });
+      const stopStop = stopping ? stopping(() => end(false)) : () => {};
+    });
+  } finally {
+    endWait();
+  }
 }
 
 // Sends one member the record lines that it has not received, followed by the token of its turn, and resolves with the text of its
@@ -102,8 +112,9 @@ async function relayToMember(
   record: RoomRecord,
   accepted: () => void,
   roles: string | null = null,
+  stopping?: ConversationBound["stopping"],
 ): Promise<MemberAnswer> {
-  await lineFree(ports, member.session);
+  if (!(await lineFree(ports, member, stopping))) throw new TurnStopped();
   const pending = record.pending(member.session, member.id);
   if (pending === null) throw new Error(`member ${member.id}: the room record holds no line that the member has not received`);
   const controller = new AbortController();
@@ -168,6 +179,15 @@ export interface ConversationBound {
   limit: number;
   stopped(): boolean;
   accepted(): void;
+  // Subscribes to the stop of the owner, which ends a turn that waits for the idle of its session; the returned function ends it.
+  stopping?: (listener: () => void) => () => void;
+}
+
+// The stop of the owner ended a turn that waited for the idle of its session.
+class TurnStopped extends Error {
+  constructor() {
+    super("the owner stopped the conversation");
+  }
 }
 
 const LIMIT_MAX = 64;
@@ -245,7 +265,14 @@ async function runTurns(
     }
     const turn = queue.shift()!;
     if (turn.byAnswer) started += 1;
-    const answer = await relayToMember(ports, turn.member, record, bound.accepted, rolesLine(turn.member, members));
+    let answer: MemberAnswer;
+    try {
+      answer = await relayToMember(ports, turn.member, record, bound.accepted, rolesLine(turn.member, members), bound.stopping);
+    } catch (error) {
+      if (!(error instanceof TurnStopped)) throw error;
+      record.append("clubhouse", "the conversation ended: the owner stopped it");
+      break;
+    }
     record.append(turn.member.id, answer.text, answer.elapsedMs);
     answers.push(answer);
     if (closing) queueMentions(queue, answer.text, turn.member, members);
@@ -281,11 +308,17 @@ export async function relayInMode(
     }
     const targets = others;
     if (targets.length === 0) return [...first, ...(await runTurns(ports, [], members, record, bound, first))];
-    const results = await Promise.allSettled(targets.map((member) => relayToMember(ports, member, record, bound.accepted, rolesLine(member, members))));
+    const results = await Promise.allSettled(
+      targets.map((member) => relayToMember(ports, member, record, bound.accepted, rolesLine(member, members), bound.stopping)),
+    );
     // The answers that arrived are record lines in member order, also when another turn failed.
     for (const [index, result] of results.entries()) if (result.status === "fulfilled") record.append(targets[index].id, result.value.text, result.value.elapsedMs);
-    const failed = results.find((result): result is PromiseRejectedResult => result.status === "rejected");
+    const failed = results.find((result): result is PromiseRejectedResult => result.status === "rejected" && !(result.reason instanceof TurnStopped));
     if (failed) throw failed.reason;
+    if (results.some((result) => result.status === "rejected")) {
+      record.append("clubhouse", "the conversation ended: the owner stopped it");
+      return [...first, ...results.flatMap((result) => (result.status === "fulfilled" ? [result.value] : []))];
+    }
     const answers = [...first, ...results.map((result) => (result as PromiseFulfilledResult<MemberAnswer>).value)];
     const queue: Turn[] = [];
     for (const [index, answer] of answers.slice(first.length).entries()) queueMentions(queue, answer.text, targets[index], members);

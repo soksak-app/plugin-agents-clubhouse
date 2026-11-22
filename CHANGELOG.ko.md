@@ -2,6 +2,7 @@
 
 ## 미출시
 
+- C75: Session이 working인 member에게 가는 turn은 relay를 실패시키지 않고 core.sessions의 idle 값을 기다린다. Status는 step `turn`을 보여 주고, `conversation.stop`이 기다림을 끝낸다(`docs/spec/room.md#modes`).
 - C74: 대화 view는 bottom에서만 새 항목을 따라가고, reading mode에서는 scroll이 유지되며 pill이 보이지 않은 viewport 아래 항목을 보여 주고 `conversation.scroll.bottom`을 실행한다. Status `view`는 `{following, unseen}`을 가진다(`docs/spec/room.md#follow-mode`).
 - C71: 대화 view는 이름, role, roster 색이 있는 말풍선, system 줄인 방의 줄, note인 report, claim, release, block인 section, round마다 구분선을 그린다. 각 항목은 `at`을, 답은 `elapsedMs`를 가지며 말풍선이 그것을 보여 주고, 기다리는 member는 display frame마다 counter를 보여 준다(`docs/spec/room.md#conversation-view`, `docs/spec/room.md#timing`).
 - C73: 방은 각 member CLI를 isolation table의 인자 `claude: ["--setting-sources", "project,local"]`로 시작하므로 member는 사람의 개인 instruction을 읽지 않는다. Transport status는 격리되지 않은 member를 `notIsolated`에 밝히고, 격리된 member는 shell 형식만 받는다(`docs/spec/room.md#isolation`).

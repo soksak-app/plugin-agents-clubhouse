@@ -57,6 +57,8 @@ Mention은 `@` 뒤의 member 이름이나 identifier이며 대소문자를 구�
 
 모든 member는 room record 전체를 읽는다([room record](#room-record)). Member가 자기 turn 시작에 받는 줄은 그 member가 아직 받지 않은 모든 record 줄을 record 순서로 담고, 그 member의 turn token인 ` | [@clubhouse] turn <token>`으로 끝난다([답](#answer)). Member들이 메시지를 차례로 받을 때(`turn`, 그리고 `turn`과 `facil`에서 mention된 member) 이번 relay에서 앞 member들의 답은 record 줄이므로, 각 member는 자기 turn 전에 나온 말을 읽는다. `simul`에서는 방이 어떤 turn이 끝나기 전에 모든 member에게 submit하므로 각 줄은 owner의 메시지에서 끝나고, 그 relay의 답은 각 member의 다음 turn에 전달된다.
 
+Session이 `working`인 member, 예를 들어 답을 보냈지만 program이 아직 idle이 되지 않은 member에게 가는 turn은 core.sessions가 session이 working이 아니라고 보여 주는 값을 기다린 뒤 session의 submit queue로 줄을 submit한다([work reports](#work-reports)). 방은 timer를 쓰지 않는다. 기다리는 동안 [conversation status](#conversation-status)는 그 member를 step `turn`, program `working`으로 보여 준다. `conversation.stop`은 기다림을 끝낸다. 그 turn은 아무것도 submit하지 않고 방은 `[@clubhouse] the conversation ended: the owner stopped it`을 덧붙인다. Blocked이거나 끝난 session은 전처럼 turn을 실패시킨다.
+
 실패한 turn은 member와 이유로 relay를 reject하고, `message.send`가 그것을 보고한다([command](#command)). Core가 submit을 하나도 받아들이지 않은 relay는 owner의 줄을 room record와 대화에서 거둔다. 그 밖의 실패한 relay는 owner의 줄과 도착한 모든 답을 유지하고 방의 줄 `[@clubhouse] the relay failed: <reason>`을 덧붙인다([room record](#room-record)). `turn`과 `facil`에서는 그 뒤의 member가 아무것도 받지 않는다. `simul`에서는 다른 turn이 끝까지 진행되고, relay는 member 순서로 첫 실패로 reject한다.
 
 ## Conversation

@@ -696,12 +696,18 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   // The relay resolves with the answer of each member in relay order.
   // A relay in which core accepted no submit withdraws the line of the owner, any other failed relay appends the failure line, and the
   // closing delivery runs after it (docs/spec/room.md#room-record).
+  // conversation.stop ends each turn that waits for the idle of its session (docs/spec/room.md#modes).
+  const stopListeners = new Set<() => void>();
+  const stopping = (listener: () => void): (() => void) => {
+    stopListeners.add(listener);
+    return () => void stopListeners.delete(listener);
+  };
   const relayMessage = (text: string, stopped: () => boolean): Promise<{ id: string; text: string }[]> =>
     delivery!.relay(() =>
       settledRelay(record, async (accepted) => {
         const taught = await taughtMembers(openMembers());
         if (taught.length === 0) throw new Error("no member has the room protocol");
-        const answers = await relayInMode(relayPorts, mode, taught, text, record, { limit: conversationTurns, stopped, accepted });
+        const answers = await relayInMode(relayPorts, mode, taught, text, record, { limit: conversationTurns, stopped, accepted, stopping });
         return answers.map((answer) => ({ id: answer.id, text: answer.text }));
       }),
     );
@@ -730,7 +736,10 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
       stop.disabled = !value && !delivery!.waits();
     },
     relay: relayMessage,
-    stopWaits: () => delivery!.stopWaits(),
+    stopWaits: () => {
+      for (const listener of [...stopListeners]) listener();
+      return delivery!.stopWaits();
+    },
     failed: (reason) => report("room relay", reason),
   });
   // message.send has shown each of its refusals and failures through the error display before it rejects, so the bindings show none

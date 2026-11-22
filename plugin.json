@@ -68,7 +68,7 @@
       },
       {
         "name": "soksak-plugin-agents-clubhouse.conversation",
-        "description": "The conversation that the room shows: the entries of the room record in record order, speaker being owner, the identifier of a member, or clubhouse for a line of the room, and each member whose turn the room waits for, with its step (protocol until the protocol turn ends, answer until the answer arrives, record until the record acknowledgement arrives) and the program state of its session in core.sessions (null while core reports none, ended when core.sessions no longer lists it), and each session of the closing delivery with its sent and delivered numbers; each entry carries the sections of its answer, one per addressee, or [] without them, the record length and whether it waits for its next idle.",
+        "description": "The conversation that the room shows: the entries of the room record in record order, speaker being owner, the identifier of a member, or clubhouse for a line of the room, and each member whose turn the room waits for, with its step (protocol until the protocol turn ends, turn while a turn waits for its working session to become idle, answer until the answer arrives, record until the record acknowledgement arrives) and the program state of its session in core.sessions (null while core reports none, ended when core.sessions no longer lists it), and each session of the closing delivery with its sent and delivered numbers; each entry carries the sections of its answer, one per addressee, or [] without them, the record length and whether it waits for its next idle.",
         "schema": {
           "type": "object",
           "properties": {
@@ -100,7 +100,7 @@
                 "properties": {
                   "member": { "type": "string" },
                   "session": { "type": "string" },
-                  "step": { "type": "string", "enum": ["protocol", "answer", "record"] },
+                  "step": { "type": "string", "enum": ["protocol", "turn", "answer", "record"] },
                   "program": { "type": ["string", "null"], "enum": ["idle", "working", "blocked", "ended", null] }
                 },
                 "required": ["member", "session", "step", "program"]

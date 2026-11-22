@@ -81,7 +81,7 @@ function fakeCore(
     },
   };
   ports.lines = createSubmitQueue(ports);
-  return { ports, submitted, submits, finish, status, bound };
+  return { ports, submitted, submits, finish, status, bound, setState };
 }
 
 // A conversation bound that never ends a relay early.
@@ -135,10 +135,35 @@ describe("relayInMode one member at a time", () => {
     expect(() => core.ports.answers.deliver({ status: "settled", turn: "t-1", text: "again" })).toThrow("turn t-1 is not an open turn of this room");
   });
 
-  it("refuses a member that is working, with the member named, and submits nothing to it", async () => {
+  it("waits for a working member to become idle, shows the wait with the step turn, and then relays (docs/spec/room.md#modes)", async () => {
     const core = fakeCore([{ session: "s-1", program: { state: "working" } }]);
-    await expect(relayInMode(core.ports, "turn", [MEMBERS[0]], "hi", roomRecord("hi"), OPEN)).rejects.toThrow("member reviewer: member is working");
+    const relay = relayInMode(core.ports, "turn", [MEMBERS[0]], "hi", roomRecord("hi"), OPEN);
+    await new Promise<void>((resolve) => setImmediate(resolve));
     expect(core.submitted).toEqual([]);
+    expect(core.status.read().waiting).toEqual([{ member: "reviewer", session: "s-1", step: "turn", program: "working" }]);
+    core.setState("s-1", "idle");
+    expect((await relay).map((answer) => answer.text)).toEqual(["answer of s-1"]);
+    expect(core.status.read().waiting).toEqual([]);
+  });
+
+  it("conversation.stop ends the wait for a working member and records the stop", async () => {
+    const stops = new Set<() => void>();
+    let stopped = false;
+    const core = fakeCore([{ session: "s-1", program: { state: "working" } }]);
+    const record = roomRecord("hi");
+    const relay = relayInMode(core.ports, "turn", [MEMBERS[0]], "hi", record, {
+      limit: 8,
+      stopped: () => stopped,
+      accepted: () => {},
+      stopping: (listener) => (stops.add(listener), () => void stops.delete(listener)),
+    });
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    stopped = true;
+    for (const listener of [...stops]) listener();
+    expect(await relay).toEqual([]);
+    expect(core.submitted).toEqual([]);
+    expect(record.lines.at(-1)).toMatchObject({ speaker: "clubhouse", text: "the conversation ended: the owner stopped it" });
+    expect(core.status.read().waiting).toEqual([]);
   });
 
   it("fails with the reason when the session leaves core.sessions during its turn", async () => {
@@ -238,9 +263,18 @@ describe("relayInMode (docs/spec/room.md#modes)", () => {
   });
 
   it("simul: lets the other turns end and rejects with the first failure in member order", async () => {
-    const core = fakeCore([{ session: "s-1", program: { state: "working" } }, IDLE("s-2")]);
-    await expect(relayInMode(core.ports, "simul", MEMBERS, "hi", roomRecord("hi"), OPEN)).rejects.toThrow("member reviewer: member is working");
+    const core = fakeCore([{ session: "s-1", program: { state: "blocked" } }, IDLE("s-2")]);
+    await expect(relayInMode(core.ports, "simul", MEMBERS, "hi", roomRecord("hi"), OPEN)).rejects.toThrow("member reviewer:");
     expect(core.submitted.map((entry) => entry.session)).toEqual(["s-2"]);
+  });
+
+  it("simul: waits for a working member to become idle and then relays to it", async () => {
+    const core = fakeCore([{ session: "s-1", program: { state: "working" } }, IDLE("s-2")]);
+    const relay = relayInMode(core.ports, "simul", MEMBERS, "hi", roomRecord("hi"), OPEN);
+    await core.submits(1);
+    expect(core.submitted.map((entry) => entry.session)).toEqual(["s-2"]);
+    core.setState("s-1", "idle");
+    expect((await relay).map((answer) => answer.id)).toEqual(["reviewer", "writer"]);
   });
 });
 
