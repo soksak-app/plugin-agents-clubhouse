@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- C70: Each roster member has a role, set with `member.role` and stated in the protocol line and in each turn line; mentioned members take the first turns and the other members follow in roster order, so a mention no longer narrows the receivers; the protocol states the working rules; `conversationTurns` defaults to 48 (`docs/spec/room.md#roles`).
+- C69: An answer holds `@<name>:` and `@all:` sections, the view draws one block per section, and status entries carry `sections` (`docs/spec/room.md#sections`).
+- C68: Each answer declares `continue` or `settled`; the room runs rounds while a member continues and records whether the conversation settled (`docs/spec/room.md#settling`).
+- C67: `report`, `claim` and `release` append record lines that the room injects without a token into working sessions through a per-session submit queue; the tab state keeps `sent` and the roster `role` (`docs/spec/room.md#work-reports`).
+
 - C66: Before the arrangement applies, the room closes each tab that shows a member session with params that no entry of the plan reuses, such as the earlier entry form `{session}`, and plans again, so the new tab of the entry shows the session (`docs/spec/room.md#arrangement`).
 - C64: Every open member session receives every room record line once and in order: the delivered number rises only on the answer or the acknowledgement `record.ack` of the token of a line, each relay ends with a closing delivery of record lines that replaces the shared record, a session has one open line, a session that is not idle is pending until its next idle, a relay that core accepted keeps the owner line with the line `the relay failed`, the open tokens survive a restart in the tab state field `turns`, the conversation status carries `delivery` and the step `record`, and the member session store is keyed by `<room surface>/<agentId>` (`docs/spec/room.md#room-record`, `docs/spec/room.md#closing-delivery`).
 - C63: The version is 0.0.15, which releases C62.

@@ -6,7 +6,7 @@ import type { OpenToken } from "./answer";
 
 export interface RoomState {
   // The roster order and the checked state of each entry.
-  roster: { id: string; checked: boolean }[];
+  roster: { id: string; checked: boolean; role: string }[];
   mode: RoomMode;
   // The conversation as the room shows it: the owner or the member identifier, and the text.
   conversation: { speaker: string; text: string }[];
@@ -16,6 +16,9 @@ export interface RoomState {
   protocolSessions: string[];
   // The number of room record lines that the room delivered to each member session (docs/spec/room.md#room-record).
   delivered: Record<string, number>;
+  // The number of room record lines that the room submitted to each member session, at least its delivered number
+  // (docs/spec/room.md#work-reports).
+  sent: Record<string, number>;
   // The open tokens of turns and record lines, so an answer or an acknowledgement after a restart is accepted
   // (docs/spec/room.md#restart).
   turns: OpenToken[];
@@ -33,7 +36,7 @@ export function serializedRoomState(state: RoomState): string {
 }
 
 const MODES: readonly string[] = ["facil", "turn", "simul"];
-const FIELDS: readonly string[] = ["roster", "mode", "conversation", "sessions", "protocolSessions", "delivered", "turns"];
+const FIELDS: readonly string[] = ["roster", "mode", "conversation", "sessions", "protocolSessions", "delivered", "sent", "turns"];
 const KINDS: readonly string[] = ["answer", "record"];
 
 const isText = (value: unknown): value is string => typeof value === "string" && value !== "";
@@ -44,8 +47,8 @@ export function parseRoomState(value: unknown): RoomState | null {
   const state = value as Record<string, unknown>;
   for (const field of Object.keys(state)) if (!FIELDS.includes(field)) throw new Error(`room tab state: unknown field ${field}`);
   const roster = state.roster;
-  if (!Array.isArray(roster) || !roster.every((entry) => isText(entry?.id) && typeof entry?.checked === "boolean")) {
-    throw new Error("room tab state: roster must be an array of {id, checked}");
+  if (!Array.isArray(roster) || !roster.every((entry) => isText(entry?.id) && typeof entry?.checked === "boolean" && typeof entry?.role === "string")) {
+    throw new Error("room tab state: roster must be an array of {id, checked, role}");
   }
   if (!MODES.includes(state.mode as string)) {
     throw new Error(`room tab state: mode must be facil, turn or simul, got ${JSON.stringify(state.mode)}`);
@@ -67,6 +70,19 @@ export function parseRoomState(value: unknown): RoomState | null {
       throw new Error(`room tab state: delivered ${session} must be an integer from 0 to ${conversation.length}, got ${JSON.stringify(count)}`);
     }
   }
+  const sent = state.sent;
+  if (typeof sent !== "object" || sent === null || Array.isArray(sent)) {
+    throw new Error(`room tab state: sent must be an object of session counts, got ${JSON.stringify(sent)}`);
+  }
+  for (const [session, count] of Object.entries(sent)) {
+    const least = (delivered as Record<string, number>)[session] ?? 0;
+    if (session === "" || !Number.isInteger(count) || (count as number) < least || (count as number) > conversation.length) {
+      throw new Error(`room tab state: sent ${session} must be an integer from ${least} to ${conversation.length}, got ${JSON.stringify(count)}`);
+    }
+  }
+  for (const session of Object.keys(delivered as object)) {
+    if (!(session in sent)) throw new Error(`room tab state: sent has no count for the delivered session ${session}`);
+  }
   const turns = state.turns;
   if (!Array.isArray(turns)) throw new Error(`room tab state: turns must be an array of open tokens, got ${JSON.stringify(turns)}`);
   for (const token of turns) {
@@ -82,12 +98,13 @@ export function parseRoomState(value: unknown): RoomState | null {
     }
   }
   return {
-    roster: roster.map((entry) => ({ id: entry.id, checked: entry.checked })),
+    roster: roster.map((entry) => ({ id: entry.id, checked: entry.checked, role: entry.role })),
     mode: state.mode as RoomMode,
     conversation: conversation.map((entry) => ({ speaker: entry.speaker, text: entry.text })),
     sessions: [...(state.sessions as string[])],
     protocolSessions: [...(state.protocolSessions as string[])],
     delivered: { ...(delivered as Record<string, number>) },
+    sent: { ...(sent as Record<string, number>) },
     turns: turns.map((token) => ({ turn: token.turn, session: token.session, member: token.member, kind: token.kind, count: token.count })),
   };
 }

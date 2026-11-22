@@ -8,9 +8,9 @@ const P = "soksak-plugin-agents-clubhouse";
 
 function room(overrides: Partial<OperationDeps> = {}) {
   const roster: RosterEntry[] = [
-    { id: "a", name: "A", checked: false },
-    { id: "b", name: "B", checked: true },
-    { id: "c", name: "C", checked: false },
+    { id: "a", name: "A", checked: false, role: "" },
+    { id: "b", name: "B", checked: true, role: "" },
+    { id: "c", name: "C", checked: false, role: "" },
   ];
   let mode: RoomMode = "facil";
   const log: string[] = [];
@@ -49,9 +49,9 @@ describe("member.set", () => {
 
   it("refuses an unknown id and a checked value that is not a boolean", async () => {
     const r = room();
-    await expect(r.commands[`${P}.member.set`]({ id: "zz", checked: true })).rejects.toThrow("member zz is not in the roster");
+    await expect(r.commands[`${P}.member.set`]({ id: "zz", checked: true, role: "" })).rejects.toThrow("member zz is not in the roster");
     await expect(r.commands[`${P}.member.set`]({ id: "a", checked: "yes" })).rejects.toThrow('checked must be a boolean, got "yes"');
-    await expect(r.commands[`${P}.member.set`]({ checked: true })).rejects.toThrow("id must be a non-empty string, got undefined");
+    await expect(r.commands[`${P}.member.set`]({ checked: true, role: "" })).rejects.toThrow("id must be a non-empty string, got undefined");
     expect(r.log).toEqual([]);
   });
 });

@@ -13,9 +13,9 @@ describe("conversation status", () => {
     expect(status?.schema).toMatchObject({
       type: "object",
       properties: {
-        entries: { type: "array", items: { required: ["speaker", "text"] } },
+        entries: { type: "array", items: { required: ["speaker", "text", "sections"] } },
         waiting: { type: "array", items: { required: ["member", "session", "step", "program"], properties: { step: { enum: ["protocol", "answer", "record"] } } } },
-        delivery: { type: "array", items: { required: ["member", "session", "delivered", "length", "pending"] } },
+        delivery: { type: "array", items: { required: ["member", "session", "sent", "delivered", "length", "pending"] } },
       },
       required: ["entries", "waiting", "delivery"],
     });
@@ -30,14 +30,14 @@ describe("conversation status", () => {
     expect(status.read()).toEqual({ entries: [], waiting: [], delivery: [] });
     record.append("owner", "hello");
     record.append("reviewer", "hi");
-    expect(status.read()).toEqual({ entries: [{ speaker: "owner", text: "hello" }, { speaker: "reviewer", text: "hi" }], waiting: [], delivery: [] });
+    expect(status.read()).toEqual({ entries: [{ speaker: "owner", text: "hello", sections: [] }, { speaker: "reviewer", text: "hi", sections: [] }], waiting: [], delivery: [] });
     record.append("owner", "again");
     record.withdrawLast(2);
     expect(values).toEqual([
-      { entries: [{ speaker: "owner", text: "hello" }], waiting: [], delivery: [] },
-      { entries: [{ speaker: "owner", text: "hello" }, { speaker: "reviewer", text: "hi" }], waiting: [], delivery: [] },
-      { entries: [{ speaker: "owner", text: "hello" }, { speaker: "reviewer", text: "hi" }, { speaker: "owner", text: "again" }], waiting: [], delivery: [] },
-      { entries: [{ speaker: "owner", text: "hello" }, { speaker: "reviewer", text: "hi" }], waiting: [], delivery: [] },
+      { entries: [{ speaker: "owner", text: "hello", sections: [] }], waiting: [], delivery: [] },
+      { entries: [{ speaker: "owner", text: "hello", sections: [] }, { speaker: "reviewer", text: "hi", sections: [] }], waiting: [], delivery: [] },
+      { entries: [{ speaker: "owner", text: "hello", sections: [] }, { speaker: "reviewer", text: "hi", sections: [] }, { speaker: "owner", text: "again", sections: [] }], waiting: [], delivery: [] },
+      { entries: [{ speaker: "owner", text: "hello", sections: [] }, { speaker: "reviewer", text: "hi", sections: [] }], waiting: [], delivery: [] },
     ]);
     stop();
     record.append("owner", "after");
@@ -45,7 +45,7 @@ describe("conversation status", () => {
   });
 
   it("carries the delivery entries of the closing delivery (docs/spec/room.md#conversation-status)", () => {
-    const entry = { member: "reviewer", session: "s-1", delivered: 1, length: 2, pending: true };
+    const entry = { member: "reviewer", session: "s-1", sent: 1, delivered: 1, length: 2, pending: true };
     const status = createConversationStatus([], () => [], () => [entry]);
     expect(status.read().delivery).toEqual([entry]);
   });

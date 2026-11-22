@@ -2,6 +2,11 @@
 
 ## 미출시
 
+- C70: 각 roster member는 `member.role`로 정하는 role을 가지며 protocol 줄과 각 turn 줄이 이를 밝힌다. Mention된 member가 먼저 turn을 받고 다른 member가 roster 순서로 뒤따르므로 mention은 받는 member를 줄이지 않는다. Protocol은 작업 규칙을 밝히고, `conversationTurns` 기본값은 48이다(`docs/spec/room.md#roles`).
+- C69: 답은 `@<name>:`과 `@all:` section을 가지고, view는 section마다 block 하나를 그리며, status 항목은 `sections`를 가진다(`docs/spec/room.md#sections`).
+- C68: 각 답은 `continue` 또는 `settled`를 밝히고, 방은 member가 continue인 동안 round를 진행하며 대화가 수렴했는지 적는다(`docs/spec/room.md#settling`).
+- C67: `report`, `claim`, `release`가 record 줄을 덧붙이고, 방은 session별 submit queue로 working session에 token 없이 주입한다. Tab state는 `sent`와 roster `role`을 가진다(`docs/spec/room.md#work-reports`).
+
 - C66: Arrangement가 apply하기 전에 방은 이전 entry 형식 `{session}`처럼 plan의 어떤 entry도 재사용하지 않는 params로 member session을 보이는 tab을 닫고 다시 plan하므로, entry의 새 tab이 session을 보인다(`docs/spec/room.md#arrangement`).
 - C64: 열린 모든 member session이 room record의 모든 줄을 순서대로 한 번 받는다. delivered number는 줄의 token에 대한 답이나 acknowledgement `record.ack`가 올 때만 오르고, relay마다 shared record를 대신하는 record line의 closing delivery로 끝나며, session은 열린 줄을 하나만 가지고, idle이 아닌 session은 다음 idle까지 pending이며, core가 받아들인 relay는 owner 줄과 `the relay failed` 줄을 남기고, 열린 token은 tab state field `turns`로 restart 뒤에도 남으며, conversation status는 `delivery`와 step `record`를 담고, member session store의 key는 `<room surface>/<agentId>`다(`docs/spec/room.md#room-record`, `docs/spec/room.md#closing-delivery`).
 - C63: 버전은 0.0.15이며 C62를 출시한다.

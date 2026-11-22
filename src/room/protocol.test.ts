@@ -18,7 +18,7 @@ function fakeCore(initial: Record<string, State | null>) {
   };
   // The conversation status of the room is the tracker of the awaited members (docs/spec/room.md#conversation-status).
   const status = createConversationStatus([], value, () => []);
-  const ports: Omit<RelayPorts, "answers"> = {
+  const ports: Omit<RelayPorts, "answers" | "lines"> = {
     waiting: status.waiting,
     commands: {
       execute: async (name, params) => {
@@ -73,8 +73,8 @@ describe("roomProtocolLine", () => {
     const line = roomProtocolLine("Claude", [], "room-1");
     for (const part of [
       "[@clubhouse] turn <token>",
-      'command_run with name soksak-plugin-agents-clubhouse.answer, surface room-1 and params {"turn": "<token>", "text": "<your answer>"}',
-      "sok soksak-plugin-agents-clubhouse.answer --surface room-1 --turn <token> --text=\"$(cat <<'EOF'",
+      'command_run with name soksak-plugin-agents-clubhouse.answer, surface room-1 and params {"turn": "<token>", "text": "<your answer>", "status": "continue or settled"}',
+      "sok soksak-plugin-agents-clubhouse.answer --surface room-1 --turn <token> --status <continue or settled> --text=\"$(cat <<'EOF'",
       "This protocol line takes no answer.",
     ]) {
       expect(line).toContain(part);

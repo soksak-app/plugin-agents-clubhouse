@@ -15,36 +15,36 @@ describe("createAnswerChannel", () => {
     const turn = channel.open("s-1", "m", "answer", 0);
     expect(turn.turn).toBe("t-1");
     const text = Array.from({ length: 451 }, (_, index) => `row ${index}`).join("\n");
-    expect(channel.deliver({ turn: "t-1", text })).toEqual({ turn: "t-1" });
-    await expect(turn.answer).resolves.toBe(text);
+    expect(channel.deliver({ status: "settled", turn: "t-1", text })).toEqual({ turn: "t-1" });
+    await expect(turn.answer).resolves.toEqual({ text, status: "settled" });
   });
 
   it("refuses a token of no open turn, also a second answer of one turn and an answer after the close of its turn", () => {
     const channel = createAnswerChannel({ newTurn: counter(), delivered: () => {}, restoredAnswer: () => {}, changed: () => {} });
-    expect(() => channel.deliver({ turn: "t-9", text: "hi" })).toThrow("turn t-9 is not an open turn of this room");
+    expect(() => channel.deliver({ status: "settled", turn: "t-9", text: "hi" })).toThrow("turn t-9 is not an open turn of this room");
     channel.open("s-1", "m", "answer", 0);
-    channel.deliver({ turn: "t-1", text: "first" });
-    expect(() => channel.deliver({ turn: "t-1", text: "second" })).toThrow("turn t-1 is not an open turn of this room");
+    channel.deliver({ status: "settled", turn: "t-1", text: "first" });
+    expect(() => channel.deliver({ status: "settled", turn: "t-1", text: "second" })).toThrow("turn t-1 is not an open turn of this room");
     channel.open("s-1", "m", "answer", 0).close();
-    expect(() => channel.deliver({ turn: "t-2", text: "late" })).toThrow("turn t-2 is not an open turn of this room");
+    expect(() => channel.deliver({ status: "settled", turn: "t-2", text: "late" })).toThrow("turn t-2 is not an open turn of this room");
   });
 
   it("gives each turn its own token, so the answer of one member never ends the turn of another", async () => {
     const channel = createAnswerChannel({ newTurn: counter(), delivered: () => {}, restoredAnswer: () => {}, changed: () => {} });
     const first = channel.open("s-1", "m", "answer", 0);
     const second = channel.open("s-2", "m", "answer", 0);
-    channel.deliver({ turn: second.turn, text: "of s-2" });
-    channel.deliver({ turn: first.turn, text: "of s-1" });
-    await expect(first.answer).resolves.toBe("of s-1");
-    await expect(second.answer).resolves.toBe("of s-2");
+    channel.deliver({ status: "settled", turn: second.turn, text: "of s-2" });
+    channel.deliver({ status: "settled", turn: first.turn, text: "of s-1" });
+    await expect(first.answer).resolves.toEqual({ text: "of s-1", status: "settled" });
+    await expect(second.answer).resolves.toEqual({ text: "of s-2", status: "settled" });
   });
 
   it("refuses invalid parameters with the parameter and the value", () => {
     const channel = createAnswerChannel({ newTurn: counter(), delivered: () => {}, restoredAnswer: () => {}, changed: () => {} });
     channel.open("s-1", "m", "answer", 0);
-    expect(() => channel.deliver({ turn: "", text: "x" })).toThrow('turn must be a non-empty string, got ""');
-    expect(() => channel.deliver({ turn: "t-1", text: "  " })).toThrow('text must be a non-empty string, got "  "');
-    expect(() => channel.deliver({ turn: "t-1", text: 3 })).toThrow("text must be a non-empty string, got 3");
+    expect(() => channel.deliver({ status: "settled", turn: "", text: "x" })).toThrow('turn must be a non-empty string, got ""');
+    expect(() => channel.deliver({ status: "settled", turn: "t-1", text: "  " })).toThrow('text must be a non-empty string, got "  "');
+    expect(() => channel.deliver({ status: "settled", turn: "t-1", text: 3 })).toThrow("text must be a non-empty string, got 3");
   });
 
   it("refuses a second open turn of one session", () => {
@@ -63,9 +63,9 @@ describe("createAnswerChannel", () => {
     const turn = channel.open("s-1", "a", "answer", 3);
     const record = channel.open("s-2", "b", "record", 4);
     expect(raised).toEqual([]);
-    channel.deliver({ turn: turn.turn, text: "hi" });
+    channel.deliver({ status: "settled", turn: turn.turn, text: "hi" });
     expect(channel.ack({ turn: record.turn })).toEqual({ turn: record.turn });
-    await expect(record.answer).resolves.toBe("");
+    await expect(record.answer).resolves.toEqual({ text: "", status: null });
     expect(raised).toEqual(["s-1=3", "s-2=4"]);
   });
 
@@ -73,7 +73,7 @@ describe("createAnswerChannel", () => {
     const channel = createAnswerChannel({ newTurn: counter(), delivered: () => {}, restoredAnswer: () => {}, changed: () => {} });
     channel.open("s-1", "a", "answer", 1);
     channel.open("s-2", "b", "record", 1);
-    expect(() => channel.deliver({ turn: "t-2", text: "x" })).toThrow(`turn t-2 is a record line: acknowledge it with ${RECORD_ACK_COMMAND}`);
+    expect(() => channel.deliver({ status: "settled", turn: "t-2", text: "x" })).toThrow(`turn t-2 is a record line: acknowledge it with ${RECORD_ACK_COMMAND}`);
     expect(() => channel.ack({ turn: "t-1" })).toThrow(`turn t-1 is a turn: answer it with ${ANSWER_COMMAND}`);
     expect(() => channel.ack({ turn: "t-9" })).toThrow("turn t-9 is not an open record line of this room");
   });
@@ -93,7 +93,7 @@ describe("createAnswerChannel", () => {
       changed: () => {},
     });
     expect(channel.tokens()).toEqual(restored);
-    channel.deliver({ turn: "old-1", text: "late answer" });
+    channel.deliver({ status: "settled", turn: "old-1", text: "late answer" });
     channel.ack({ turn: "old-2" });
     expect(raised).toEqual(["s-1=2", "s-2=3"]);
     expect(answered).toEqual(["a:late answer"]);

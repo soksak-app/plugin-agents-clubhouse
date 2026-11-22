@@ -22,10 +22,16 @@ export interface RoomRecord {
   readonly lines: readonly RecordLine[];
   // The delivered number of each session, as the tab state keeps it.
   delivered(): Record<string, number>;
+  // The sent number of each session: the record lines that the room submitted to it; a delivered number never exceeds it
+  // (docs/spec/room.md#work-reports).
+  sent(): Record<string, number>;
+  // Raises the sent number of the session to count after core accepted a submit of the lines up to count.
+  markSent(session: string, count: number): void;
   append(speaker: string, text: string): void;
-  // The lines that `session` of the member `self` has not received; null when there is none.
+  // The lines from the sent number of `session` of the member `self` to the end, without its own lines; null when there is none.
   pending(session: string, self: string): PendingLines | null;
-  // Raises the delivered number of the session to count; a delivered number never falls.
+  // Raises the delivered number of the session to its sent number, at least count, at the answer or the acknowledgement of a token;
+  // a delivered number never falls.
   markDelivered(session: string, count: number): void;
   // Removes the line at `index` when it is the last line of the record and no session has received it. Returns whether it removed the line.
   withdrawLast(index: number): boolean;
@@ -39,17 +45,35 @@ export function createRoomRecord(
   delivered: Record<string, number>,
   nameOf: (speaker: string) => string,
   changed: () => void,
+  // The sent numbers of the tab state; a record without them starts at the delivered numbers.
+  sent: Record<string, number> = delivered,
 ): RoomRecord {
   const counts = new Map(Object.entries(delivered));
+  const sentCounts = new Map(Object.entries(sent));
+  for (const [session, count] of counts) {
+    if ((sentCounts.get(session) ?? 0) < count) throw new Error(`sent ${session} must be at least its delivered number ${count}`);
+  }
+  const check = (name: string, session: string, count: number): void => {
+    if (!Number.isInteger(count) || count < 0 || count > lines.length) {
+      throw new Error(`${name} ${session} must be an integer from 0 to ${lines.length}, got ${JSON.stringify(count)}`);
+    }
+  };
   return {
     lines,
     delivered: () => Object.fromEntries(counts),
+    sent: () => Object.fromEntries(sentCounts),
+    markSent(session, count) {
+      check("sent", session, count);
+      if (count <= (sentCounts.get(session) ?? 0) && sentCounts.has(session)) return;
+      sentCounts.set(session, count);
+      changed();
+    },
     append(speaker, text) {
       lines.push({ speaker, text });
       changed();
     },
     pending(session, self) {
-      const from = counts.get(session) ?? 0;
+      const from = sentCounts.get(session) ?? 0;
       const own = lines.slice(from).filter((line) => line.speaker !== self);
       if (own.length === 0) return null;
       return {
@@ -58,10 +82,10 @@ export function createRoomRecord(
         count: lines.length,
       };
     },
-    markDelivered(session, count) {
-      if (!Number.isInteger(count) || count < 0 || count > lines.length) {
-        throw new Error(`delivered ${session} must be an integer from 0 to ${lines.length}, got ${JSON.stringify(count)}`);
-      }
+    markDelivered(session, given) {
+      check("delivered", session, given);
+      const count = Math.max(given, sentCounts.get(session) ?? 0);
+      if (count > (sentCounts.get(session) ?? 0) || !sentCounts.has(session)) sentCounts.set(session, count);
       const current = counts.get(session) ?? 0;
       if (count < current) throw new Error(`delivered ${session} cannot fall from ${current} to ${count}`);
       if (count === current && counts.has(session)) return;
@@ -70,7 +94,7 @@ export function createRoomRecord(
     },
     withdrawLast(index) {
       if (index !== lines.length - 1) return false;
-      for (const [session, count] of counts) if (count > index) throw new Error(`record line ${index} was delivered to session ${session}`);
+      for (const [session, count] of sentCounts) if (count > index) throw new Error(`record line ${index} was delivered to session ${session}`);
       lines.pop();
       changed();
       return true;

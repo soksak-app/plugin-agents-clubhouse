@@ -39,11 +39,11 @@ Member가 첫 전달 메시지를 받기 전에 방은 session마다 한 번 roo
 
 ## Mention
 
-Mention은 `@` 뒤의 member 이름이나 identifier이며 대소문자를 구분하지 않고 비교한다. 메시지의 시작이나 공백 뒤에서 시작하고, 공백, `-`, `_`, `.`이 아닌 문장 부호, 또는 메시지의 끝에서 끝난다. Mention 끝의 `.`은 mention에 속하지 않는다. 어떤 member도 가리키지 않는 mention은 text다. 메시지가 member를 mention하면 mode와 관계없이 mention된 member만 처음 mention된 순서대로 메시지를 받는다.
+Mention은 `@` 뒤의 member 이름이나 identifier이며 대소문자를 구분하지 않고 비교한다. 메시지의 시작이나 공백 뒤에서 시작하고, 공백, `-`, `_`, `.`이 아닌 문장 부호, 또는 메시지의 끝에서 끝난다. Mention 끝의 `.`은 mention에 속하지 않는다. 어떤 member도 가리키지 않는 mention은 text다. Mention은 turn의 순서를 정하고 받는 member를 줄이지 않는다. Mention된 member가 처음 mention된 순서로 차례로 첫 turn을 받고, mode의 다른 member가 roster 순서로 뒤따르므로, 뒤의 각 member는 mention된 member의 답을 읽는다. Roster가 A, B, C일 때 메시지 `@B 정리해 줘. 나머지는 보태 줘.`는 turn을 B, A, C 순서로 주고, A의 turn 줄은 B의 답을 담는다. 답의 section `@<name>:`([section](#sections))도 mention이다.
 
 ## Mode
 
-방의 mode(`facil`, `turn`, `simul`)는 mention이 없는 메시지를 누가 어떤 순서로 받는지 정한다.
+방의 mode(`facil`, `turn`, `simul`)는 메시지를 누가 어떤 순서로 받는지 정한다. Mention된 member가 먼저 turn을 받는다([mention](#mention)).
 
 - `turn`: 모든 member가 roster 순서로 차례로 받는다. 앞 member의 turn이 끝난 뒤 다음 member가 받는다.
 - `facil`: member 하나, 즉 roster 순서에서 session이 `idle`인 첫 member가 받는다. `idle`인 member가 없으면 send는 `no member is idle`로 거부된다. Mention된 member들은 차례로 받는다.
@@ -57,7 +57,25 @@ Mention은 `@` 뒤의 member 이름이나 identifier이며 대소문자를 구�
 
 한 메시지의 member들은 그 relay 안에서 대화한다. 방이 답을 record에 덧붙일 때, relay의 member, 즉 열린 session과 room protocol이 있는 체크된 member 사이에서 [mention 규칙](#mention)으로 그 답의 mention을 읽는다. 화자 자신의 mention과 다른 이름의 mention은 text다. 이 relay의 turn을 아직 기다리지 않는 각 mention된 member는 이미 기다리는 turn 뒤에 처음 mention된 순서로 turn을 받고, 받지 않은 record 줄을 받으므로([room record](#room-record)) 자기를 mention한 답을 읽는다. 그 답이 다시 다른 member를 mention할 수 있고, 대화는 같은 방식으로 이어진다. `simul`에서 방은 모든 turn이 끝난 뒤 그 relay의 답의 mention을 member 순서로 읽는다. 답이 시작하는 turn은 모든 mode에서 차례로 진행된다.
 
-Plugin setting `conversationTurns`는 0부터 64까지의 정수이고 기본값은 8이며, owner의 메시지 하나에 대해 답이 시작하는 turn의 최대 수다. Turn이 기다리고 그런 turn이 그 수만큼 진행되었으면 relay는 끝나고 방은 record 줄 `[@clubhouse] the conversation ended: it reached the limit of <n> member turns`를 덧붙인다. Owner는 `conversation.stop`으로 대화를 끝낸다([command](#command)). 이미 시작한 turn은 끝까지 진행되고 더 이상 turn이 시작되지 않으며, 기다리던 turn이 있었으면 방은 `[@clubhouse] the conversation ended: the owner stopped it`을 덧붙인다. 방의 줄은 speaker가 `clubhouse`인 record와 [conversation status](#conversation-status)의 항목이며, 각 member는 다음 turn에 그것을 받는다. 한도와 중지는 실패 없이 relay를 끝내므로 `message.send`는 도착한 답으로 끝난다. 대화의 turn이 실패하면 [mode](#mode)에서처럼 relay가 실패하고 도착한 답은 유지된다.
+Plugin setting `conversationTurns`는 0부터 64까지의 정수이고 기본값은 48이며, owner의 메시지 하나에 대해 mention과 [settling](#settling)의 round가 시작하는 turn의 최대 수다. Turn이 기다리고 그런 turn이 그 수만큼 진행되었으면 relay는 끝나고 방은 record 줄 `[@clubhouse] the conversation ended: it reached the limit of <n> member turns`를 덧붙인다. Owner는 `conversation.stop`으로 대화를 끝낸다([command](#command)). 이미 시작한 turn은 끝까지 진행되고 더 이상 turn이 시작되지 않으며, 기다리던 turn이 있었으면 방은 `[@clubhouse] the conversation ended: the owner stopped it`을 덧붙인다. 방의 줄은 speaker가 `clubhouse`인 record와 [conversation status](#conversation-status)의 항목이며, 각 member는 다음 turn에 그것을 받는다. 한도와 중지는 실패 없이 relay를 끝내므로 `message.send`는 도착한 답으로 끝난다. 대화의 turn이 실패하면 [mode](#mode)에서처럼 relay가 실패하고 도착한 답은 유지된다.
+
+## Settling
+
+각 답은 status를 밝힌다. 열린 질문, 이견, 남은 작업이 있으면 `continue`, member의 몫이 끝나고 검증되었으며 더 할 말이 없으면 `settled`다. 답 command는 그 밖의 값을 `status must be continue or settled, got <value>`로 거부한다. Relay의 turn이 기다리지 않고 relay의 어떤 member의 마지막 답이 `continue`이면 방은 round를 시작한다. Relay의 모든 member가 roster 순서로 turn을 받고 받지 않은 record 줄을 받으므로, owner의 메시지 하나가 대화를 끝까지 진행한다. 모든 member의 마지막 답이 `settled`이면 방은 `[@clubhouse] the conversation settled`를 덧붙인다. 다른 member의 결론보다 먼저 `continue`로 답한 member는 다음 round의 turn과 함께 결론을 받는다. Round는 `conversationTurns`에 들어간다. Member가 continue인 채로 한도가 relay를 끝내면 방은 마지막 답이 `continue`인 각 member를 밝혀 `[@clubhouse] the conversation ended without settling: it reached the limit of <n> member turns; @<name> continue`를 덧붙인다. 기본값 48은 member 세 명의 round 16번이며, 계획 합의, 구현, 검증 보고를 거치는 개발 작업 하나의 크기다.
+
+## Sections
+
+여러 화자에게 답하는 답은 말한 화자의 순서대로 화자마다 section 하나를 둔다. Section은 자기 줄의 `@<name>:`로 시작하며, `<name>`은 member의 이름이나 identifier 또는 `owner`이고 대소문자를 구분하지 않는다. `@all:`은 나머지를 담고, 첫 section 앞의 text는 `all`에 속한다. Record는 답의 text를 바꾸지 않는다. Room view는 section마다 addressee를 머리로 단 block 하나를 그리고, [conversation status](#conversation-status)의 각 항목은 `sections: [{to, text}]`를 가지며 `to`는 `owner`, `all` 또는 member identifier다. Section 줄이 없는 답은 `[]`이다.
+
+## Roles
+
+각 roster 항목은 role을 가진다. Role은 control 문자가 없는 0자에서 200자의 text이며, member의 roster input이나 `member.role {id, role}`로 정하고 tab state에 남는다. Protocol 줄은 member의 role을 밝히고, relay의 어떤 member에게 role이 있으면 각 turn 줄은 token 앞에 `[@clubhouse] roles: you are <role>; <name>: <role>, ...`를 담으므로, 각 member는 자기 role과 다른 member의 role을 읽는다.
+
+## Work reports
+
+Member는 turn 동안 `soksak-plugin-agents-clubhouse.report {turn, text}`로 작업을 보고하고, 고칠 path를 `claim {turn, paths}`로 claim하고 `release {turn, paths}`로 release한다. 각 command는 member를 증명하는 열린 turn의 token만 받는다. Record token은 `turn <token> is a record line: only the token of a turn reports, claims or releases`로 거부된다. 각각은 member의 record 줄 `(report) <text>`, `(claim) <paths>`, `(release) <paths>`이다. 두 path가 같거나 하나가 다른 하나 뒤에 `/`가 이어진 것이면 두 claim은 겹친다. 방은 다른 handler보다 먼저 끝까지 실행되는 handler에서 각 claim을 정하므로, 다른 member의 claim과 겹치는 claim은 `paths <path> are claimed by <member>`로, member가 가지지 않은 path의 release는 `path <path> is not claimed by <member>`로 거부된다. Turn의 claim은 turn이 닫힐 때 release된다.
+
+방은 보내지 않은 줄을 program이 `working`인 각 session에 바로 submit한다. 줄은 `답하지 말고 하던 작업을 계속해.`로 시작하고 token이 없으므로, member는 작업 중에 읽고 답하지 않는다. Idle session은 다음 turn 줄이나 record 줄과 함께 받고, blocked session은 core.sessions의 event가 다시 working을 보여 줄 때 받는다. 방은 session마다 두 수를 둔다. `sent`는 core가 받아들인 줄의 record 길이이며 다음 줄이 여기서 시작하고, `delivered`는 답이나 acknowledgement가 올 때만 `max(count, sent)`로 오른다. Session마다 submit queue가 하나이므로, session의 다음 줄은 core가 앞 submit에 답한 뒤에만 sent 수로 만들어진다.
 
 ## Room record
 

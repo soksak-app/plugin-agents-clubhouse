@@ -24,6 +24,9 @@ import { serialRunner, summonAndArrange, type TriggerDeps } from "./room/trigger
 import { createOpenedSessions } from "./room/summon";
 import { conversationTurnsOf, relayInMode, type RelayPorts } from "./room/room-relay";
 import { createClosingDelivery, type ClosingDelivery } from "./room/closing-delivery";
+import { createSubmitQueue } from "./room/submit-queue";
+import { CLAIM_COMMAND, RELEASE_COMMAND, REPORT_COMMAND, createWorkReports, type WorkReports } from "./room/work-reports";
+import { answerSections } from "./room/sections";
 import { createRoomRecord, settledRelay } from "./room/room-record";
 import { createConversationStatus } from "./room/conversation-status";
 import { createProtocolInjector } from "./room/protocol";
@@ -54,6 +57,8 @@ const CSS = `
 .st-tab.drag{cursor:grabbing;opacity:.95;border-color:currentColor;box-shadow:0 3px 10px rgba(0,0,0,.35);transform:scale(1.06);position:relative;z-index:3}
 .st-tab .chk{width:13px;height:13px;border-radius:4px;border:1.5px solid currentColor;display:inline-flex;align-items:center;justify-content:center;font-size:10px;line-height:1}
 .st-tab .nm{font-weight:600}
+.st-role{width:72px;font:inherit;font-size:11px;background:transparent;color:inherit;border:0;border-bottom:1px dashed rgba(127,127,127,.4);padding:0 2px}
+.st-section{padding-left:12px;white-space:pre-wrap}
 .st-roster-rail{display:flex;flex-direction:column;height:100%;min-height:0;overflow-y:auto;padding:8px}
 .st-roster-rail .st-tabs{flex-direction:column;align-items:stretch;flex:0 0 auto;overflow:visible}
 .st-roster-rail .st-tab{justify-content:flex-start}
@@ -185,19 +190,20 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   const saved = parseRoomState(await bridge!.calls.request("tab.state.read", null));
   let mode: RoomMode = saved?.mode ?? modeSetting;
   // The roster of the saved state orders and checks the first roster that the definitions give.
-  let seed: RosterEntry[] = (saved?.roster ?? []).map((entry) => ({ id: entry.id, name: "", checked: entry.checked }));
+  let seed: RosterEntry[] = (saved?.roster ?? []).map((entry) => ({ id: entry.id, name: "", checked: entry.checked, role: entry.role }));
   const conversation: RoomTabState["conversation"] = [...(saved?.conversation ?? [])];
   // The member sessions that this room opened, and the sessions that received the room protocol.
   const roomSessions = new Set<string>(saved?.sessions ?? []);
   const taughtSessions = new Set<string>(saved?.protocolSessions ?? []);
   const persist = (): void => {
     const value: RoomTabState = {
-      roster: roster.map((entry) => ({ id: entry.id, checked: entry.checked })),
+      roster: roster.map((entry) => ({ id: entry.id, checked: entry.checked, role: entry.role })),
       mode,
       conversation,
       sessions: [...roomSessions],
       protocolSessions: [...taughtSessions],
       delivered: record.delivered(),
+      sent: record.sent(),
       turns: answers.tokens(),
     };
     let json: string;
@@ -276,6 +282,19 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
       tab.dataset.id = entry.id;
       tab.dataset.expose = `${EXPOSE}.tab`;
       tab.append(elText("span", entry.checked ? "✓" : "", "chk"), elText("span", entry.name, "nm"));
+      // The role input of the entry runs member.role when its text changes (docs/spec/room.md#roles).
+      const role = document.createElement("input");
+      role.className = "st-role";
+      role.value = entry.role;
+      role.placeholder = t("rolePlaceholder", lang);
+      role.dataset.expose = `${EXPOSE}.role`;
+      role.addEventListener("click", (event) => event.stopPropagation());
+      role.addEventListener("pointerdown", (event) => event.stopPropagation());
+      bound(
+        expose.bind(role, `${EXPOSE}.member.role`, () => ({ id: entry.id, role: role.value }), { event: "change", failed: failed("member.role") }),
+        "member.role",
+      );
+      tab.append(role);
       // A click runs member.set with the toggled state; the click that ends a drag runs nothing (docs/spec/room.md#commands).
       bound(
         expose.bind(tab, `${EXPOSE}.member.set`, () => ({ id: entry.id, checked: !entry.checked }), {
@@ -435,21 +454,26 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   // (docs/spec/room.md). Each member delivers its answer with the answer command, and the conversation shows it as text.
   // The closing delivery of the room; it is created after the record and the protocol that it reads.
   let delivery: ClosingDelivery | null = null;
+  let work: WorkReports | null = null;
   // The answer or the acknowledgement of a token raises the delivered number of its session; an answer of a turn kept from before a
   // restart is the answer of its member (docs/spec/room.md#restart).
   const answers = createAnswerChannel({
     restored: saved?.turns ?? [],
     delivered: (session, count) => record.markDelivered(session, count),
     restoredAnswer: (token, text) => record.append(token.member, text),
+    closed: (token) => work?.closed(token),
     changed: () => {
       persist();
       delivery?.tokensChanged();
       stop.disabled = !busy && !(delivery?.waits() ?? false);
     },
   });
+  // One submit queue per member session, so each line is built from the sent number that the previous submit left.
+  const lines = createSubmitQueue(room);
   const relayPorts: RelayPorts = {
     commands: room.commands,
     answers,
+    lines,
     surface,
     sessions: () => sessionsValue,
     waiting: (member, step) => conversationStatus.waiting(member, step),
@@ -470,7 +494,18 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
       return;
     }
     msgs.replaceChildren(
-      ...value.entries.map((entry) => elText("div", `${entry.speaker === "owner" ? (lang === "ko" ? "나" : "You") : memberName(entry.speaker)}: ${entry.text}`, "st-msg")),
+      ...value.entries.map((entry) => {
+        const who = entry.speaker === "owner" ? (lang === "ko" ? "나" : "You") : memberName(entry.speaker);
+        if (entry.sections.length === 0) return elText("div", `${who}: ${entry.text}`, "st-msg");
+        // An answer with sections shows one block per addressee under its speaker, so a reader sees who answered whom.
+        const block = el("div", "st-msg st-sections");
+        block.append(elText("div", who, "st-who-name"));
+        for (const section of entry.sections) {
+          const to = section.to === "all" ? "@all" : section.to === "owner" ? "@owner" : `@${memberName(section.to)}`;
+          block.append(elText("div", `→ ${to}: ${section.text}`, "st-section"));
+        }
+        return block;
+      }),
       ...value.waiting.map((wait) =>
         elText("div", tp("waitingFor", lang, { name: memberName(wait.member), step: wait.step, program: String(wait.program) }), "st-pending st-waiting"),
       ),
@@ -481,10 +516,14 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   const speakerName = (speaker: string): string => (speaker === "owner" ? "owner" : memberName(speaker));
   // The declared conversation status carries the entries that the page shows and the members that the room waits for; the page draws
   // each value, and each value of core.sessions publishes the program states again (docs/spec/room.md#conversation-status).
-  const conversationStatus = createConversationStatus(conversation, () => sessionsValue, () => delivery?.entries() ?? []);
+  // The sections of an answer name the addressees by the mention rules among the roster (docs/spec/room.md#sections).
+  const conversationStatus = createConversationStatus(conversation, () => sessionsValue, () => delivery?.entries() ?? [], (entry) =>
+    entry.speaker === "owner" || entry.speaker === "clubhouse" ? [] : answerSections(entry.text, roster),
+  );
   conversationStatus.subscribe(() => showConversation());
   sessionListeners.add((value) => {
     delivery?.sessionsChanged(value);
+    work?.inject();
     try {
       conversationStatus.changed();
     } catch (error) {
@@ -494,7 +533,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   const record = createRoomRecord(conversation, saved?.delivered ?? {}, speakerName, () => {
     conversationStatus.changed();
     persist();
-  });
+  }, saved?.sent ?? {});
   showConversation();
   // Each member session receives the room protocol once, after it first reports idle and before its first relayed message
   // (docs/spec/room.md#room-protocol). The injector reports each refusal itself and resolves with the outcome of each member.
@@ -505,16 +544,16 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
       persist();
     },
   });
-  type OpenMember = { id: string; name: string; session: string };
+  type OpenMember = { id: string; name: string; session: string; role: string };
   const openMembers = (): OpenMember[] =>
     roster
       // The stored relation is read again after each change of core.sessions; until then a session that has ended is left out.
       .filter((entry) => entry.checked && memberSessions.has(entry.id) && openSessionIds.has(memberSessions.get(entry.id)!))
-      .map((entry) => ({ id: entry.id, name: entry.name, session: memberSessions.get(entry.id)! }));
+      .map((entry) => ({ id: entry.id, name: entry.name, session: memberSessions.get(entry.id)!, role: entry.role }));
   // After each relay every checked member session with the protocol receives the record lines that it has not received
   // (docs/spec/room.md#closing-delivery).
   delivery = createClosingDelivery(
-    { commands: room.commands, answers, sessions: () => sessionsValue, waiting: relayPorts.waiting, report, changed: () => {
+    { commands: room.commands, answers, lines, sessions: () => sessionsValue, waiting: relayPorts.waiting, report, changed: () => {
       stop.disabled = !busy && !delivery!.waits();
       try {
         conversationStatus.changed();
@@ -526,10 +565,16 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
     speakerName,
     () => openMembers().filter((member) => taughtSessions.has(member.session)),
   );
+  // The work reports, claims and releases of the members, injected into the working sessions (docs/spec/room.md#work-reports).
+  work = createWorkReports({ answers, lines, sessions: () => sessionsValue, report }, record, () =>
+    openMembers().filter((member) => taughtSessions.has(member.session)),
+  );
   // Resolves with the members whose protocol turn has ended; a refused member receives no relayed message.
   const taughtMembers = async (members: OpenMember[]): Promise<OpenMember[]> => {
     const outcomes = await Promise.all(
-      members.map((member) => protocol.ensure(member, members.filter((other) => other !== member).map((other) => other.name))),
+      members.map((member) =>
+        protocol.ensure(member, members.filter((other) => other !== member).map((other) => (other.role === "" ? other.name : `${other.name} (${other.role})`))),
+      ),
     );
     return members.filter((_, index) => outcomes[index].ok);
   };
@@ -545,7 +590,8 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
       settledRelay(record, async (accepted) => {
         const taught = await taughtMembers(openMembers());
         if (taught.length === 0) throw new Error("no member has the room protocol");
-        return relayInMode(relayPorts, mode, taught, text, record, { limit: conversationTurns, stopped, accepted });
+        const answers = await relayInMode(relayPorts, mode, taught, text, record, { limit: conversationTurns, stopped, accepted });
+        return answers.map((answer) => ({ id: answer.id, text: answer.text }));
       }),
     );
   const operations = createRoomOperations({
@@ -609,6 +655,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
     [`${EXPOSE}.stop`]: stop,
     [`${EXPOSE}.input`]: input,
     [`${EXPOSE}.tab`]: tabTargets,
+    [`${EXPOSE}.role`]: () => [...tabsEl.querySelectorAll<HTMLElement>(".st-role")],
     [`${EXPOSE}.mode`]: kib,
     [`${EXPOSE}.tower`]: towerButton,
   };
@@ -618,6 +665,9 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
       ...operations,
       [ANSWER_COMMAND]: async (params: unknown) => answers.deliver(params),
       [RECORD_ACK_COMMAND]: async (params: unknown) => answers.ack(params),
+      [REPORT_COMMAND]: async (params: unknown) => work!.reportCommand(params),
+      [CLAIM_COMMAND]: async (params: unknown) => work!.claim(params),
+      [RELEASE_COMMAND]: async (params: unknown) => work!.release(params),
     },
     elements,
     statuses: {

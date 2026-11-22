@@ -5,6 +5,7 @@
 import { describe, expect, it } from "vitest";
 import { conversationTurnsOf, relayInMode, type ConversationBound, type RelayPorts } from "./room-relay";
 import { createRoomRecord, settledRelay, type RoomRecord } from "./room-record";
+import { createSubmitQueue } from "./submit-queue";
 import { createAnswerChannel } from "./answer";
 import { createConversationStatus } from "./conversation-status";
 
@@ -40,7 +41,7 @@ function fakeCore(
   const finish = (session: string) => {
     const scripted = options.script?.[session]?.shift();
     const reply = scripted ?? (options.replies && session in options.replies ? options.replies[session] : `answer of ${session}`);
-    if (reply !== null) answers.deliver({ turn: turns.get(session)!, text: reply });
+    if (reply !== null) answers.deliver({ status: "settled", turn: turns.get(session)!, text: reply });
     setState(session, "idle");
   };
   // The conversation status of the room is the tracker of the awaited members (docs/spec/room.md#conversation-status).
@@ -70,6 +71,8 @@ function fakeCore(
       },
     },
     answers,
+    // Replaced below by the submit queue over these ports, so a test that replaces execute changes the submits too.
+    lines: null as never,
     surface: "room-1",
     sessions: () => sessions.map((entry) => ({ ...entry })),
     watchSessions: (listener) => {
@@ -77,6 +80,7 @@ function fakeCore(
       return () => void listeners.delete(listener);
     },
   };
+  ports.lines = createSubmitQueue(ports);
   return { ports, submitted, submits, finish, status, bound };
 }
 
@@ -114,7 +118,7 @@ describe("relayInMode one member at a time", () => {
     const reply = Array.from({ length: 451 }, (_, index) => `row ${index}`).join("\n");
     const core = fakeCore([IDLE("s-1")], { replies: { "s-1": reply } });
     const answers = await relayInMode(core.ports, "turn", [MEMBERS[0]], "hello", roomRecord("hello"), OPEN);
-    expect(answers).toEqual([{ id: "reviewer", text: reply }]);
+    expect(answers).toEqual([{ id: "reviewer", text: reply, status: "settled" }]);
   });
 
   it("fails the turn of a member whose program reports idle without an answer, and the members after it receive nothing", async () => {
@@ -128,7 +132,7 @@ describe("relayInMode one member at a time", () => {
   it("closes the turn after the answer, so a later answer of the same session is refused", async () => {
     const core = fakeCore([IDLE("s-1")]);
     await relayInMode(core.ports, "turn", [MEMBERS[0]], "hi", roomRecord("hi"), OPEN);
-    expect(() => core.ports.answers.deliver({ turn: "t-1", text: "again" })).toThrow("turn t-1 is not an open turn of this room");
+    expect(() => core.ports.answers.deliver({ status: "settled", turn: "t-1", text: "again" })).toThrow("turn t-1 is not an open turn of this room");
   });
 
   it("refuses a member that is working, with the member named, and submits nothing to it", async () => {
@@ -209,10 +213,10 @@ describe("relayInMode (docs/spec/room.md#modes)", () => {
     expect(answers.map((answer) => answer.id)).toEqual(["writer"]);
   });
 
-  it("facil: a mention names the member that receives the message", async () => {
+  it("facil: a mentioned member takes the first turn and the other members follow", async () => {
     const core = fakeCore([IDLE("s-1"), IDLE("s-2")]);
     await relayInMode(core.ports, "facil", MEMBERS, "@Codex please", roomRecord("@Codex please"), OPEN);
-    expect(core.submitted.map((entry) => entry.session)).toEqual(["s-2"]);
+    expect(core.submitted.map((entry) => entry.session)).toEqual(["s-2", "s-1"]);
   });
 
   it("facil: refuses the send when no member is idle", async () => {
@@ -247,11 +251,11 @@ describe("the room record across turns (docs/spec/room.md#room-record)", () => {
     await send(core, "turn", THREE, record, "introduce yourselves");
     await send(core, "turn", THREE, record, "what did the others say");
     expect(core.submitted.slice(3)).toEqual([
-      { session: "s-1", text: "[@Codex] answer of s-2 | [@Tester] answer of s-3 | [@owner] what did the others say | [@clubhouse] turn t-4" },
-      { session: "s-2", text: "[@Tester] answer of s-3 | [@owner] what did the others say | [@Claude] answer of s-1 | [@clubhouse] turn t-5" },
-      { session: "s-3", text: "[@owner] what did the others say | [@Claude] answer of s-1 | [@Codex] answer of s-2 | [@clubhouse] turn t-6" },
+      { session: "s-1", text: "[@Codex] answer of s-2 | [@Tester] answer of s-3 | [@clubhouse] the conversation settled | [@owner] what did the others say | [@clubhouse] turn t-4" },
+      { session: "s-2", text: "[@Tester] answer of s-3 | [@clubhouse] the conversation settled | [@owner] what did the others say | [@Claude] answer of s-1 | [@clubhouse] turn t-5" },
+      { session: "s-3", text: "[@clubhouse] the conversation settled | [@owner] what did the others say | [@Claude] answer of s-1 | [@Codex] answer of s-2 | [@clubhouse] turn t-6" },
     ]);
-    expect(record.delivered()).toEqual({ "s-1": 5, "s-2": 6, "s-3": 7 });
+    expect(record.delivered()).toEqual({ "s-1": 6, "s-2": 7, "s-3": 8 });
   });
 
   it("simul: at its next turn each member receives the answers of the other members of the earlier relay", async () => {
@@ -260,20 +264,17 @@ describe("the room record across turns (docs/spec/room.md#room-record)", () => {
     await send(core, "simul", MEMBERS, record, "first");
     await send(core, "simul", MEMBERS, record, "second");
     expect(core.submitted.slice(2).map((entry) => entry.text)).toEqual([
-      "[@Codex] answer of s-2 | [@owner] second | [@clubhouse] turn t-3",
-      "[@Claude] answer of s-1 | [@owner] second | [@clubhouse] turn t-4",
+      "[@Codex] answer of s-2 | [@clubhouse] the conversation settled | [@owner] second | [@clubhouse] turn t-3",
+      "[@Claude] answer of s-1 | [@clubhouse] the conversation settled | [@owner] second | [@clubhouse] turn t-4",
     ]);
   });
 
-  it("a member that a mention left out receives the lines it missed at its next turn", async () => {
-    const core = fakeCore([IDLE("s-1"), IDLE("s-2")]);
+  it("the owner mentions B: B takes the first turn, then A and C in roster order, and A reads the answer of B (docs/spec/room.md#mentions)", async () => {
+    const core = fakeCore([IDLE("s-1"), IDLE("s-2"), IDLE("s-3")]);
     const record = roomRecord();
-    await send(core, "turn", MEMBERS, record, "@codex only you");
-    await send(core, "turn", MEMBERS, record, "everyone now");
-    expect(core.submitted[1]).toEqual({
-      session: "s-1",
-      text: "[@owner] @codex only you | [@Codex] answer of s-2 | [@owner] everyone now | [@clubhouse] turn t-2",
-    });
+    await send(core, "turn", THREE, record, "@Codex 정리해 줘. 나머지는 보태 줘.");
+    expect(core.submitted.map((entry) => entry.session)).toEqual(["s-2", "s-1", "s-3"]);
+    expect(core.submitted[1].text).toBe("[@owner] @Codex 정리해 줘. 나머지는 보태 줘. | [@Codex] answer of s-2 | [@clubhouse] turn t-2");
   });
 
   it("a send whose submit core refused leaves no owner line, so repeated refused sends leave none", async () => {
@@ -314,10 +315,10 @@ describe("the conversation of the members (docs/spec/room.md#conversation)", () 
     const record = roomRecord();
     const answers = await send(core, "turn", THREE, record, "@claude start");
     expect(answers).toEqual([
-      { id: "reviewer", text: "@Codex and @tester, your view?" },
-      { id: "writer", text: "@Claude I disagree" },
-      { id: "tester", text: "fine" },
-      { id: "reviewer", text: "agreed" },
+      { id: "reviewer", text: "@Codex and @tester, your view?", status: "settled" },
+      { id: "writer", text: "@Claude I disagree", status: "settled" },
+      { id: "tester", text: "fine", status: "settled" },
+      { id: "reviewer", text: "agreed", status: "settled" },
     ]);
     expect(core.submitted.map((entry) => entry.text)).toEqual([
       "[@owner] @claude start | [@clubhouse] turn t-1",
@@ -330,8 +331,9 @@ describe("the conversation of the members (docs/spec/room.md#conversation)", () 
   it("ignores a mention of the speaker itself and of a name outside the members of the relay", async () => {
     const core = fakeCore([IDLE("s-1"), IDLE("s-2")], { script: { "s-1": ["@claude thinks, @nobody knows, @Tester is away"] } });
     const answers = await send(core, "turn", MEMBERS, roomRecord(), "@claude go");
-    expect(answers.map((answer) => answer.id)).toEqual(["reviewer"]);
-    expect(core.submitted).toHaveLength(1);
+    // The owner mentioned Claude, so Claude takes the first turn and Codex follows; the answer of Claude starts no further turn.
+    expect(answers.map((answer) => answer.id)).toEqual(["reviewer", "writer"]);
+    expect(core.submitted).toHaveLength(2);
   });
 
   it("queues no second turn for a member that already waits for a turn of the relay", async () => {
@@ -349,7 +351,8 @@ describe("the conversation of the members (docs/spec/room.md#conversation)", () 
     const answers = await settledRelay(record, (accepted) =>
       relayInMode(core.ports, "facil", MEMBERS, "@claude ping", record, { limit: 2, stopped: () => false, accepted }),
     );
-    expect(answers.map((answer) => answer.text)).toEqual(["@codex 1", "@claude 2", "@codex 3"]);
+    // Claude and then Codex take the turns of the message; the mentions of the answers start the turns that the limit counts.
+    expect(answers.map((answer) => answer.text)).toEqual(["@codex 1", "@claude 2", "@codex 3", "@claude 4"]);
     expect(record.lines.at(-1)).toEqual({ speaker: "clubhouse", text: "the conversation ended: it reached the limit of 2 member turns" });
     expect(core.status.read().waiting).toEqual([]);
   });
@@ -358,7 +361,7 @@ describe("the conversation of the members (docs/spec/room.md#conversation)", () 
     const core = fakeCore([IDLE("s-1"), IDLE("s-2")], { script: { "s-1": ["@codex next"] } });
     const record = roomRecord("@claude hi");
     const answers = await relayInMode(core.ports, "turn", MEMBERS, "@claude hi", record, { limit: 0, stopped: () => false, accepted: () => {} });
-    expect(answers.map((answer) => answer.id)).toEqual(["reviewer"]);
+    expect(answers.map((answer) => answer.id)).toEqual(["reviewer", "writer"]);
     expect(record.lines.at(-1)?.speaker).toBe("clubhouse");
   });
 
@@ -376,11 +379,11 @@ describe("the conversation of the members (docs/spec/room.md#conversation)", () 
     expect(core.status.read().waiting).toEqual([]);
   });
 
-  it("records no end line when the conversation ended by itself", async () => {
+  it("records that the conversation settled when it ended by itself (docs/spec/room.md#settling)", async () => {
     const core = fakeCore([IDLE("s-1")]);
     const record = roomRecord("hi");
     await relayInMode(core.ports, "turn", [MEMBERS[0]], "hi", record, { limit: 0, stopped: () => false, accepted: () => {} });
-    expect(record.lines.map((line) => line.speaker)).toEqual(["owner", "reviewer"]);
+    expect(record.lines.map((line) => line.text)).toEqual(["hi", "answer of s-1", "the conversation settled"]);
   });
 
   it("simul: reads the mentions of the answers after every turn, in member order, and runs those turns one after another", async () => {
@@ -390,6 +393,22 @@ describe("the conversation of the members (docs/spec/room.md#conversation)", () 
     const answers = await send(core, "simul", THREE, roomRecord(), "all");
     expect(answers.map((answer) => answer.id)).toEqual(["reviewer", "writer", "tester", "tester", "reviewer"]);
     expect(core.submitted.slice(3).map((entry) => entry.session)).toEqual(["s-3", "s-1"]);
+  });
+});
+
+describe("roles in the turn lines (docs/spec/room.md#roles)", () => {
+  it("states the role of the member and the roles of the others in each turn line", async () => {
+    const core = fakeCore([IDLE("s-1"), IDLE("s-2"), IDLE("s-3")]);
+    const roles = THREE.map((member, index) => ({ ...member, role: ["frontend", "server", "server"][index] }));
+    await send(core, "turn", roles, roomRecord(), "build it");
+    expect(core.submitted[0].text).toBe("[@owner] build it | [@clubhouse] roles: you are frontend; Codex: server, Tester: server | [@clubhouse] turn t-1");
+    expect(core.submitted[1].text).toContain("[@clubhouse] roles: you are server; Claude: frontend, Tester: server | [@clubhouse] turn t-2");
+  });
+
+  it("states no roles when no member has one", async () => {
+    const core = fakeCore([IDLE("s-1")]);
+    await send(core, "turn", [MEMBERS[0]], roomRecord(), "hi");
+    expect(core.submitted[0].text).toBe("[@owner] hi | [@clubhouse] turn t-1");
   });
 });
 

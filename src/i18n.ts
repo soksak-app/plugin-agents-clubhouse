@@ -118,6 +118,10 @@ const strings = {
     en: "Conversation",
     ko: "대화",
   },
+  rolePlaceholder: {
+    en: "role",
+    ko: "역할",
+  },
   waitingFor: {
     en: "waiting for {name}: {step}, program {program}",
     ko: "{name} 기다리는 중: {step}, program {program}",

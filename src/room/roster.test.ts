@@ -11,21 +11,21 @@ const def = (id: string, name = id.toUpperCase()): AgentDefinition => ({
 describe("rosterFrom", () => {
   it("lists each definition with its name, all unchecked when there is no earlier roster", () => {
     expect(rosterFrom([def("a"), def("b", "Writer")], [])).toEqual([
-      { id: "a", name: "A", checked: false },
-      { id: "b", name: "Writer", checked: false },
+      { id: "a", name: "A", checked: false, role: "" },
+      { id: "b", name: "Writer", checked: false, role: "" },
     ]);
   });
 
   it("keeps the checked state and the order of the earlier roster, drops a removed definition, and adds a new one unchecked", () => {
     const previous = [
-      { id: "b", name: "B", checked: false },
-      { id: "gone", name: "Gone", checked: true },
-      { id: "a", name: "A", checked: true },
+      { id: "b", name: "B", checked: false, role: "" },
+      { id: "gone", name: "Gone", checked: true, role: "" },
+      { id: "a", name: "A", checked: true, role: "" },
     ];
     expect(rosterFrom([def("a"), def("b"), def("c")], previous)).toEqual([
-      { id: "b", name: "B", checked: false },
-      { id: "a", name: "A", checked: true },
-      { id: "c", name: "C", checked: false },
+      { id: "b", name: "B", checked: false, role: "" },
+      { id: "a", name: "A", checked: true, role: "" },
+      { id: "c", name: "C", checked: false, role: "" },
     ]);
   });
 
@@ -45,10 +45,10 @@ describe("reattachedChecks", () => {
       new Set(["s-1", "s-3", "s-other"]),
     );
     expect(checks).toEqual([
-      { id: "a", name: "", checked: true },
-      { id: "b", name: "", checked: false },
-      { id: "c", name: "", checked: true },
-      { id: "d", name: "", checked: false },
+      { id: "a", name: "", checked: true, role: "" },
+      { id: "b", name: "", checked: false, role: "" },
+      { id: "c", name: "", checked: true, role: "" },
+      { id: "d", name: "", checked: false, role: "" },
     ]);
   });
 });

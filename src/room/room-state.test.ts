@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { parseRoomState, serializedRoomState, type RoomState } from "./room-state";
 
 const state: RoomState = {
-  roster: [{ id: "harness-harness", checked: true }, { id: "moai-manager-lead", checked: false }],
+  roster: [{ id: "harness-harness", checked: true, role: "" }, { id: "moai-manager-lead", checked: false, role: "" }],
   mode: "turn",
   conversation: [
     { speaker: "owner", text: "한 문장씩만" },
@@ -13,6 +13,7 @@ const state: RoomState = {
   sessions: ["owned-1"],
   protocolSessions: ["owned-1"],
   delivered: { "owned-1": 2 },
+  sent: { "owned-1": 2 },
   turns: [{ turn: "t-1", session: "owned-1", member: "harness-harness", kind: "record", count: 2 }],
 };
 
@@ -48,7 +49,7 @@ describe("parseRoomState", () => {
 
   it("refuses a value of another form with the field and the value it found", () => {
     expect(() => parseRoomState({ ...state, mode: "solo" })).toThrow('room tab state: mode must be facil, turn or simul, got "solo"');
-    expect(() => parseRoomState({ ...state, roster: [{ id: 1 }] })).toThrow("room tab state: roster must be an array of {id, checked}");
+    expect(() => parseRoomState({ ...state, roster: [{ id: 1 }] })).toThrow("room tab state: roster must be an array of {id, checked, role}");
     expect(() => parseRoomState({ ...state, conversation: "x" })).toThrow("room tab state: conversation must be an array of {speaker, text}");
     expect(() => parseRoomState({ ...state, protocolSessions: [3] })).toThrow(
       "room tab state: protocolSessions must be an array of session identifiers",

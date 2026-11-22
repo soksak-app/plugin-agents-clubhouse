@@ -64,7 +64,7 @@ describe("ACP removal", () => {
 describe("the conversation bound (docs/spec/room.md#conversation)", () => {
   it("declares the setting conversationTurns, the stop command and the stop button", () => {
     const full = JSON.parse(read("plugin.json"));
-    expect(full.settings.conversationTurns).toMatchObject({ type: "integer", default: 8, minimum: 0, maximum: 64 });
+    expect(full.settings.conversationTurns).toMatchObject({ type: "integer", default: 48, minimum: 0, maximum: 64 });
     expect(manifest.exposes.commands.map((c) => c.name)).toContain("soksak-plugin-agents-clubhouse.conversation.stop");
     expect(manifest.exposes.element.map((e) => e.name)).toContain("soksak-plugin-agents-clubhouse.stop");
   });

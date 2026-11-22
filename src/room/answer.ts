@@ -10,6 +10,17 @@
 export const ANSWER_COMMAND = "soksak-plugin-agents-clubhouse.answer";
 export const RECORD_ACK_COMMAND = "soksak-plugin-agents-clubhouse.record.ack";
 
+// The state that an answer declares (docs/spec/room.md#settling): `continue` while an open question, a disagreement or work remains, and
+// `settled` when the member agrees and its work is done.
+export type AnswerStatus = "continue" | "settled";
+const STATUSES: readonly string[] = ["continue", "settled"];
+
+export interface Reply {
+  text: string;
+  // null for the acknowledgement of a record line.
+  status: AnswerStatus | null;
+}
+
 // `answer` for the token of a turn, `record` for the token of a record line of the closing delivery.
 export type TokenKind = "answer" | "record";
 
@@ -27,8 +38,8 @@ export interface OpenToken {
 export interface OpenTurn {
   // The token that the line carries as `[@clubhouse] turn <token>` or `[@clubhouse] record <token>`.
   turn: string;
-  // Resolves with the text of the answer, or with "" for the acknowledgement of a record line.
-  answer: Promise<string>;
+  // Resolves with the answer, or with {text: "", status: null} for the acknowledgement of a record line.
+  answer: Promise<Reply>;
   // Ends the token: a later answer or acknowledgement of it is refused.
   close(): void;
 }
@@ -47,6 +58,8 @@ export interface AnswerChannel {
   settled(session: string): Promise<void>;
   // Closes the open record tokens and the tokens kept from before a restart, and returns them; the tokens of a running relay stay.
   closeWaits(): OpenToken[];
+  // The open turn token of `turn` for a work report, a claim or a release; it throws the refusal for any other token.
+  turnOf(params: unknown): OpenToken;
 }
 
 export interface AnswerChannelOptions {
@@ -59,11 +72,13 @@ export interface AnswerChannelOptions {
   restoredAnswer: (token: OpenToken, text: string) => void;
   // Runs after each change of the open tokens.
   changed: () => void;
+  // Runs when a token closes, by its answer, its acknowledgement or its close.
+  closed?: (token: OpenToken) => void;
 }
 
 interface Entry extends OpenToken {
   // The resolver of the relay that waits, or null for a restored token.
-  resolve: ((text: string) => void) | null;
+  resolve: ((reply: Reply) => void) | null;
 }
 
 export function createAnswerChannel(options: AnswerChannelOptions): AnswerChannel {
@@ -72,15 +87,20 @@ export function createAnswerChannel(options: AnswerChannelOptions): AnswerChanne
   for (const token of options.restored ?? []) open.set(token.turn, { ...token, resolve: null });
   const settleListeners = new Set<() => void>();
   const removed = (turn: string): void => {
-    if (!open.delete(turn)) return;
+    const entry = open.get(turn);
+    if (!entry || !open.delete(turn)) return;
+    options.closed?.(tokenOf(entry));
     options.changed();
     for (const listener of [...settleListeners]) listener();
   };
-  const take = (params: unknown, kind: TokenKind): { entry: Entry; text: string } => {
-    const { turn, text } = (params ?? {}) as { turn?: unknown; text?: unknown };
+  const take = (params: unknown, kind: TokenKind): { entry: Entry; reply: Reply } => {
+    const { turn, text, status } = (params ?? {}) as { turn?: unknown; text?: unknown; status?: unknown };
     if (typeof turn !== "string" || turn === "") throw new Error(`turn must be a non-empty string, got ${JSON.stringify(turn)}`);
     if (kind === "answer" && (typeof text !== "string" || text.trim() === "")) {
       throw new Error(`text must be a non-empty string, got ${JSON.stringify(text)}`);
+    }
+    if (kind === "answer" && !STATUSES.includes(status as string)) {
+      throw new Error(`status must be continue or settled, got ${JSON.stringify(status)}`);
     }
     const entry = open.get(turn);
     if (!entry) throw new Error(kind === "answer" ? `turn ${turn} is not an open turn of this room` : `turn ${turn} is not an open record line of this room`);
@@ -91,35 +111,43 @@ export function createAnswerChannel(options: AnswerChannelOptions): AnswerChanne
           : `turn ${turn} is a turn: answer it with ${ANSWER_COMMAND}`,
       );
     }
-    return { entry, text: kind === "answer" ? (text as string) : "" };
+    return { entry, reply: kind === "answer" ? { text: text as string, status: status as AnswerStatus } : { text: "", status: null } };
   };
-  const settle = (entry: Entry, text: string): void => {
+  const settle = (entry: Entry, reply: Reply): void => {
     options.delivered(entry.session, entry.count);
     removed(entry.turn);
-    if (entry.resolve) entry.resolve(text);
-    else if (entry.kind === "answer") options.restoredAnswer(tokenOf(entry), text);
+    if (entry.resolve) entry.resolve(reply);
+    else if (entry.kind === "answer") options.restoredAnswer(tokenOf(entry), reply.text);
   };
   return {
     open(session, member, kind, count) {
       for (const entry of open.values()) if (entry.session === session) throw new Error(`session ${session} has an open turn`);
       const turn = newTurn();
-      let resolve: (text: string) => void = () => {};
-      const answer = new Promise<string>((done) => (resolve = done));
+      let resolve: (reply: Reply) => void = () => {};
+      const answer = new Promise<Reply>((done) => (resolve = done));
       open.set(turn, { turn, session, member, kind, count, resolve });
       options.changed();
       return { turn, answer, close: () => removed(turn) };
     },
     deliver(params) {
-      const { entry, text } = take(params, "answer");
-      settle(entry, text);
+      const { entry, reply } = take(params, "answer");
+      settle(entry, reply);
       return { turn: entry.turn };
     },
     ack(params) {
       const { entry } = take(params, "record");
-      settle(entry, "");
+      settle(entry, { text: "", status: null });
       return { turn: entry.turn };
     },
     tokens: () => [...open.values()].map(tokenOf),
+    turnOf(params) {
+      const turn = (params as { turn?: unknown } | null)?.turn;
+      if (typeof turn !== "string" || turn === "") throw new Error(`turn must be a non-empty string, got ${JSON.stringify(turn)}`);
+      const entry = open.get(turn);
+      if (!entry) throw new Error(`turn ${turn} is not an open turn of this room`);
+      if (entry.kind !== "answer") throw new Error(`turn ${turn} is a record line: only the token of a turn reports, claims or releases`);
+      return tokenOf(entry);
+    },
     has: (session) => [...open.values()].some((entry) => entry.session === session),
     settled(session) {
       return new Promise<void>((resolve) => {

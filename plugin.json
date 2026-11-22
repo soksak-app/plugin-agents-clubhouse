@@ -27,9 +27,9 @@
     },
     "conversationTurns": {
       "label": "대화 turn 한도",
-      "description": "owner 메시지 하나에서 member의 @이름 mention이 시작하는 turn의 최대 수. 그 수만큼 진행되면 방은 relay를 끝내고 대화에 그 사실을 적는다. 0이면 mention이 turn을 시작하지 않는다.",
+      "description": "owner 메시지 하나에서 mention과 continue round가 시작하는 turn의 최대 수. 기본값 48은 member 세 명의 round 16번으로, 계획 합의, 구현, 검증 보고를 거치는 개발 작업 하나에 맞춘 값이다. 한도만큼 진행되면 수렴하지 못했다고 적고 끝낸다.",
       "type": "integer",
-      "default": 8,
+      "default": 48,
       "minimum": 0,
       "maximum": 64
     }
@@ -68,7 +68,7 @@
       },
       {
         "name": "soksak-plugin-agents-clubhouse.conversation",
-        "description": "The conversation that the room shows: the entries of the room record in record order, speaker being owner, the identifier of a member, or clubhouse for a line of the room, and each member whose turn the room waits for, with its step (protocol until the protocol turn ends, answer until the answer arrives, record until the record acknowledgement arrives) and the program state of its session in core.sessions (null while core reports none, ended when core.sessions no longer lists it), and each session of the closing delivery with its delivered number, the record length and whether it waits for its next idle.",
+        "description": "The conversation that the room shows: the entries of the room record in record order, speaker being owner, the identifier of a member, or clubhouse for a line of the room, and each member whose turn the room waits for, with its step (protocol until the protocol turn ends, answer until the answer arrives, record until the record acknowledgement arrives) and the program state of its session in core.sessions (null while core reports none, ended when core.sessions no longer lists it), and each session of the closing delivery with its sent and delivered numbers; each entry carries the sections of its answer, one per addressee, or [] without them, the record length and whether it waits for its next idle.",
         "schema": {
           "type": "object",
           "properties": {
@@ -76,8 +76,19 @@
               "type": "array",
               "items": {
                 "type": "object",
-                "properties": { "speaker": { "type": "string" }, "text": { "type": "string" } },
-                "required": ["speaker", "text"]
+                "properties": {
+                  "speaker": { "type": "string" },
+                  "text": { "type": "string" },
+                  "sections": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": { "to": { "type": "string" }, "text": { "type": "string" } },
+                      "required": ["to", "text"]
+                    }
+                  }
+                },
+                "required": ["speaker", "text", "sections"]
               }
             },
             "waiting": {
@@ -100,11 +111,12 @@
                 "properties": {
                   "member": { "type": "string" },
                   "session": { "type": "string" },
+                  "sent": { "type": "integer" },
                   "delivered": { "type": "integer" },
                   "length": { "type": "integer" },
                   "pending": { "type": "boolean" }
                 },
-                "required": ["member", "session", "delivered", "length", "pending"]
+                "required": ["member", "session", "sent", "delivered", "length", "pending"]
               }
             }
           },
@@ -171,6 +183,20 @@
         }
       },
       {
+        "name": "soksak-plugin-agents-clubhouse.member.role",
+        "description": "Set the role of the roster member id, a text of 0 to 200 characters without control characters; the protocol line and each turn line state the roles. Setting the current role changes nothing.",
+        "params": {
+          "type": "object",
+          "properties": { "id": { "type": "string" }, "role": { "type": "string" } },
+          "required": ["id", "role"]
+        },
+        "result": {
+          "type": "object",
+          "properties": { "id": { "type": "string" }, "role": { "type": "string" } },
+          "required": ["id", "role"]
+        }
+      },
+      {
         "name": "soksak-plugin-agents-clubhouse.member.move",
         "description": "Move the roster member id to the place index, counted from 0.",
         "params": {
@@ -233,7 +259,25 @@
       },
       {
         "name": "soksak-plugin-agents-clubhouse.answer",
-        "description": "Deliver the answer of a member for the turn whose token its relayed line carries as [@clubhouse] turn <token>; run it with the surface of the room. Each token takes one answer while its turn is open.",
+        "description": "Deliver the answer of a member for the turn whose token its relayed line carries as [@clubhouse] turn <token>, with status continue while an open question, a disagreement or work remains, or settled when its part is done and verified; run it with the surface of the room. Each token takes one answer while its turn is open.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "turn": { "type": "string" },
+            "text": { "type": "string" },
+            "status": { "type": "string", "enum": ["continue", "settled"] }
+          },
+          "required": ["turn", "text", "status"]
+        },
+        "result": {
+          "type": "object",
+          "properties": { "turn": { "type": "string" } },
+          "required": ["turn"]
+        }
+      },
+      {
+        "name": "soksak-plugin-agents-clubhouse.report",
+        "description": "Report the work of a member during its open turn with the token of the turn; the room records it as (report) and injects it into the working sessions of the other members at once. The turn goes on.",
         "params": {
           "type": "object",
           "properties": { "turn": { "type": "string" }, "text": { "type": "string" } },
@@ -243,6 +287,34 @@
           "type": "object",
           "properties": { "turn": { "type": "string" } },
           "required": ["turn"]
+        }
+      },
+      {
+        "name": "soksak-plugin-agents-clubhouse.claim",
+        "description": "Claim paths for the member of the open turn before it edits them; refused with the holder when another member claims an overlapping path. The claims of a turn are released when the turn closes.",
+        "params": {
+          "type": "object",
+          "properties": { "turn": { "type": "string" }, "paths": { "type": "array", "items": { "type": "string" } } },
+          "required": ["turn", "paths"]
+        },
+        "result": {
+          "type": "object",
+          "properties": { "turn": { "type": "string" }, "paths": { "type": "array", "items": { "type": "string" } } },
+          "required": ["turn", "paths"]
+        }
+      },
+      {
+        "name": "soksak-plugin-agents-clubhouse.release",
+        "description": "Release paths that the member of the open turn claims.",
+        "params": {
+          "type": "object",
+          "properties": { "turn": { "type": "string" }, "paths": { "type": "array", "items": { "type": "string" } } },
+          "required": ["turn", "paths"]
+        },
+        "result": {
+          "type": "object",
+          "properties": { "turn": { "type": "string" }, "paths": { "type": "array", "items": { "type": "string" } } },
+          "required": ["turn", "paths"]
         }
       },
       {
@@ -390,6 +462,11 @@
       {
         "name": "soksak-plugin-agents-clubhouse.tab",
         "description": "Roster tab of a member: a click runs member.set with the toggled state, a drag over another tab runs member.move",
+        "many": true
+      },
+      {
+        "name": "soksak-plugin-agents-clubhouse.role",
+        "description": "Role input of a roster member: a change runs member.role with the text of the input",
         "many": true
       },
       {

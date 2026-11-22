@@ -41,7 +41,7 @@ describe("createRoomRecord", () => {
   it("raises a delivered number and refuses a number that falls or exceeds the record", () => {
     const record = createRoomRecord([{ speaker: "owner", text: "one" }, { speaker: "a", text: "two" }], {}, nameOf, () => {});
     record.markDelivered("s-a", 2);
-    expect(() => record.markDelivered("s-a", 1)).toThrow("delivered s-a cannot fall from 2 to 1");
+    record.markDelivered("s-a", 1);
     expect(() => record.markDelivered("s-a", 3)).toThrow("delivered s-a must be an integer from 0 to 2, got 3");
     expect(record.delivered()).toEqual({ "s-a": 2 });
   });

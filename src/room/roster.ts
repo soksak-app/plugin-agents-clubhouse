@@ -6,6 +6,8 @@ export interface RosterEntry {
   id: string;
   name: string;
   checked: boolean;
+  // The role of the member in the room, "" without one (docs/spec/room.md#roles).
+  role: string;
 }
 
 export function rosterFrom(definitions: AgentDefinition[], previous: RosterEntry[]): RosterEntry[] {
@@ -14,11 +16,11 @@ export function rosterFrom(definitions: AgentDefinition[], previous: RosterEntry
   const byId = new Map(definitions.map((definition) => [definition.id, definition]));
   const kept = previous
     .filter((entry) => byId.has(entry.id))
-    .map((entry) => ({ id: entry.id, name: byId.get(entry.id)!.name, checked: entry.checked }));
+    .map((entry) => ({ id: entry.id, name: byId.get(entry.id)!.name, checked: entry.checked, role: entry.role }));
   const known = new Set(kept.map((entry) => entry.id));
   const added = definitions
     .filter((definition) => !known.has(definition.id))
-    .map((definition) => ({ id: definition.id, name: definition.name, checked: false }));
+    .map((definition) => ({ id: definition.id, name: definition.name, checked: false, role: "" }));
   return [...kept, ...added];
 }
 
@@ -32,7 +34,7 @@ export async function reattachedChecks(
   const entries: RosterEntry[] = [];
   for (const definition of definitions) {
     const session = await storedSession(definition.id);
-    entries.push({ id: definition.id, name: "", checked: session !== null && owned.has(session) });
+    entries.push({ id: definition.id, name: "", checked: session !== null && owned.has(session), role: "" });
   }
   return entries;
 }

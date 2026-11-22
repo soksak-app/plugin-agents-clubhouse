@@ -3,9 +3,10 @@
 // its turn, and the member delivers its answer with the declared answer command (docs/spec/room.md#answer); the turn ends when the
 // answer arrives. Each member receives every line of the room record that it has not received, so every member reads the whole record.
 import { relayMemberMessage, type SessionRelayPort } from "./relay";
-import { sessionProgram, sessionSubmit, type SessionCommandPort } from "./session-channel";
+import { sessionProgram, type SessionCommandPort } from "./session-channel";
 import { mentionedMembers } from "./mention";
-import { ANSWER_COMMAND, type AnswerChannel } from "./answer";
+import { ANSWER_COMMAND, type AnswerChannel, type AnswerStatus } from "./answer";
+import type { SubmitQueue } from "./submit-queue";
 import type { RoomMode } from "./commands";
 import type { RoomRecord } from "./room-record";
 import type { BeginWaiting } from "./conversation-status";
@@ -19,16 +20,30 @@ export interface RelayMember {
 export interface NamedRelayMember extends RelayMember {
   // The name of the member in the roster, which a mention may use.
   name: string;
+  // The role of the member in the roster, "" without one (docs/spec/room.md#roles).
+  role?: string;
+}
+
+// The roles that a turn line states to its member when a member of the relay has a role: its own role and the roles of the others.
+export function rolesLine(member: NamedRelayMember, members: NamedRelayMember[]): string | null {
+  if (!members.some((entry) => (entry.role ?? "") !== "")) return null;
+  const roleOf = (entry: NamedRelayMember): string => (entry.role ?? "") || "no role";
+  const others = members.filter((entry) => entry.id !== member.id).map((entry) => `${entry.name}: ${roleOf(entry)}`);
+  return `[@clubhouse] roles: you are ${roleOf(member)}${others.length > 0 ? `; ${others.join(", ")}` : ""}`;
 }
 
 export interface MemberAnswer {
   id: string;
   text: string;
+  // The state that the answer declares (docs/spec/room.md#settling).
+  status: AnswerStatus;
 }
 
 export interface RelayPorts extends SessionCommandPort {
   // The open turns of the members and the handler of the answer command.
   answers: AnswerChannel;
+  // The submit queue of each member session.
+  lines: SubmitQueue;
   // The surface of the room, which the answer command of a member names.
   surface: string;
   // The current value of core.sessions, the list of open sessions.
@@ -76,17 +91,27 @@ async function lineFree(ports: RelayPorts, session: string): Promise<void> {
 // accepted the submit. A refusal, a turn that is blocked, a session that leaves core.sessions, or a program that reports idle without an
 // answer rejects with the member identifier and the reason. The member runs the answer command during its turn, and core answers that
 // command after the handler of the room ran, so the answer arrives before the program reports idle.
-async function relayToMember(ports: RelayPorts, member: RelayMember, record: RoomRecord, accepted: () => void): Promise<MemberAnswer> {
+async function relayToMember(
+  ports: RelayPorts,
+  member: RelayMember,
+  record: RoomRecord,
+  accepted: () => void,
+  roles: string | null = null,
+): Promise<MemberAnswer> {
   await lineFree(ports, member.session);
   const pending = record.pending(member.session, member.id);
   if (pending === null) throw new Error(`member ${member.id}: the room record holds no line that the member has not received`);
   const controller = new AbortController();
   // A value of core.sessions that the relay cannot read ends the turn with this error, so the relay never waits on a bad value.
   let failure: unknown = null;
-  const submit = sessionSubmit(ports, member.session);
+  // The line is built at the head of the submit queue of the session, from its sent number (docs/spec/room.md#work-reports).
   const port: SessionRelayPort = {
-    submit: async (line) => {
-      await submit(line);
+    submit: async (end) => {
+      await ports.lines.submit(member.session, () => {
+        const lines = record.pending(member.session, member.id);
+        if (lines === null) throw new Error("the room record holds no line that the member has not received");
+        return { text: `${lines.text} | ${end}`, accepted: () => record.markSent(member.session, lines.count) };
+      });
       accepted();
     },
     program: () => sessionProgram(ports.sessions(), member.session),
@@ -107,11 +132,12 @@ async function relayToMember(ports: RelayPorts, member: RelayMember, record: Roo
   }
   // The room waits for the answer of the member from the submit of its line until the turn ends.
   const endWait = ports.waiting(member, "answer");
-  const ended = relayMemberMessage(port, `${pending.text} | [@clubhouse] turn ${turn.turn}`, { signal: controller.signal }).then(() => {
+  const ended = relayMemberMessage(port, `${roles === null ? "" : `${roles} | `}[@clubhouse] turn ${turn.turn}`, { signal: controller.signal }).then(() => {
     throw new Error(`the member ended its turn without an answer: it ran no ${ANSWER_COMMAND}`);
   });
   try {
-    return { id: member.id, text: await Promise.race([turn.answer, ended]) };
+    const reply = await Promise.race([turn.answer, ended]);
+    return { id: member.id, text: reply.text, status: reply.status as AnswerStatus };
   } catch (error) {
     throw new Error(`member ${member.id}: ${messageOf(failure ?? error)}`);
   } finally {
@@ -157,44 +183,72 @@ function queueMentions(queue: Turn[], text: string, speaker: NamedRelayMember, m
   }
 }
 
+// The members whose last answer of the relay declares `continue`, in member order.
+function continuing(answers: MemberAnswer[], members: NamedRelayMember[]): NamedRelayMember[] {
+  const last = new Map<string, MemberAnswer["status"]>();
+  for (const answer of answers) last.set(answer.id, answer.status);
+  return members.filter((member) => last.get(member.id) === "continue");
+}
+
 // Runs the waiting turns one after another and appends each answer to the record when it arrives, so the next member receives it. The
-// mentions of each answer queue further turns. A stop of the owner or the limit ends the relay before a waiting turn, with a record line
-// of the room. A failed turn rejects with the member and the reason, and the turns after it do not run.
+// mentions of each answer queue further turns. When no turn waits and a member of the relay declared `continue` in its last answer, the
+// room queues a round of every member of the relay in member order (docs/spec/room.md#settling); when every last answer is `settled`,
+// the room records that the conversation settled. A stop of the owner or the limit ends the relay before a waiting turn, with a record
+// line of the room. A failed turn rejects with the member and the reason, and the turns after it do not run.
 async function runTurns(
   ports: RelayPorts,
   queue: Turn[],
   members: NamedRelayMember[],
   record: RoomRecord,
   bound: ConversationBound,
+  earlier: MemberAnswer[] = [],
+  // false for the turns of the mentioned members of a simul relay, after which the other members still take their turns.
+  closing = true,
 ): Promise<MemberAnswer[]> {
   const answers: MemberAnswer[] = [];
   let started = 0;
-  while (queue.length > 0) {
+  for (;;) {
+    if (queue.length === 0) {
+      if (!closing) break;
+      const open = continuing([...earlier, ...answers], members);
+      if (open.length === 0) {
+        if (earlier.length + answers.length > 0) record.append("clubhouse", "the conversation settled");
+        break;
+      }
+      queue.push(...members.map((member) => ({ member, byAnswer: true })));
+    }
     if (bound.stopped()) {
       record.append("clubhouse", "the conversation ended: the owner stopped it");
       break;
     }
     if (queue[0].byAnswer && started >= bound.limit) {
-      record.append("clubhouse", `the conversation ended: it reached the limit of ${bound.limit} member turns`);
+      const open = continuing([...earlier, ...answers], members);
+      record.append(
+        "clubhouse",
+        open.length > 0
+          ? `the conversation ended without settling: it reached the limit of ${bound.limit} member turns; ${open.map((member) => `@${member.name}`).join(", ")} continue`
+          : `the conversation ended: it reached the limit of ${bound.limit} member turns`,
+      );
       break;
     }
     const turn = queue.shift()!;
     if (turn.byAnswer) started += 1;
-    const answer = await relayToMember(ports, turn.member, record, bound.accepted);
+    const answer = await relayToMember(ports, turn.member, record, bound.accepted, rolesLine(turn.member, members));
     record.append(turn.member.id, answer.text);
     answers.push(answer);
-    queueMentions(queue, answer.text, turn.member, members);
+    if (closing) queueMentions(queue, answer.text, turn.member, members);
   }
   return answers;
 }
 
 const turnsOf = (members: NamedRelayMember[]): Turn[] => members.map((member) => ({ member, byAnswer: false }));
 
-// Relays the last message of the owner in the record by the mode of the room (docs/spec/room.md#modes). A message that mentions members
-// goes only to them in mention order: one after another in turn and facil, at the same time in simul. Without a mention, turn relays to
-// each member in roster order, facil to the first member whose session is idle, and simul to every member at the same time. Each member
-// receives the record lines that it has not received (docs/spec/room.md#room-record), and each answer is appended to the record. The
-// answers that mention members start the turns of the conversation within the bound (docs/spec/room.md#conversation).
+// Relays the last message of the owner in the record by the mode of the room (docs/spec/room.md#modes). The members that the message
+// mentions take their turns first in mention order, one after another, and the other members follow in member order: one after another
+// in turn and facil, at the same time in simul. Without a mention, turn relays to each member in roster order, facil to the first member
+// whose session is idle, and simul to every member at the same time. Each member receives the record lines that it has not received
+// (docs/spec/room.md#room-record), and each answer is appended to the record. The answers that mention members start the turns of the
+// conversation, and the rounds continue while a member declares continue, within the bound (docs/spec/room.md#conversation).
 export async function relayInMode(
   ports: RelayPorts,
   mode: RoomMode,
@@ -203,21 +257,29 @@ export async function relayInMode(
   record: RoomRecord,
   bound: ConversationBound,
 ): Promise<MemberAnswer[]> {
+  // The members that the message mentions take their turns first, in mention order, and the other members follow in member order
+  // (docs/spec/room.md#mentions); a mention no longer narrows the receivers.
   const mentioned = mentionedMembers(message, members);
+  const others = members.filter((member) => !mentioned.includes(member));
   if (mode === "simul") {
-    const targets = mentioned.length > 0 ? mentioned : members;
-    const results = await Promise.allSettled(targets.map((member) => relayToMember(ports, member, record, bound.accepted)));
+    const first = mentioned.length > 0 ? await runTurns(ports, turnsOf(mentioned), members, record, { ...bound, limit: Number.POSITIVE_INFINITY }, [], false) : [];
+    if (mentioned.length > 0 && bound.stopped()) {
+      record.append("clubhouse", "the conversation ended: the owner stopped it");
+      return first;
+    }
+    const targets = others;
+    if (targets.length === 0) return [...first, ...(await runTurns(ports, [], members, record, bound, first))];
+    const results = await Promise.allSettled(targets.map((member) => relayToMember(ports, member, record, bound.accepted, rolesLine(member, members))));
     // The answers that arrived are record lines in member order, also when another turn failed.
     for (const [index, result] of results.entries()) if (result.status === "fulfilled") record.append(targets[index].id, result.value.text);
     const failed = results.find((result): result is PromiseRejectedResult => result.status === "rejected");
     if (failed) throw failed.reason;
-    const answers = results.map((result) => (result as PromiseFulfilledResult<MemberAnswer>).value);
+    const answers = [...first, ...results.map((result) => (result as PromiseFulfilledResult<MemberAnswer>).value)];
     const queue: Turn[] = [];
-    for (const [index, answer] of answers.entries()) queueMentions(queue, answer.text, targets[index], members);
-    return [...answers, ...(await runTurns(ports, queue, members, record, bound))];
+    for (const [index, answer] of answers.slice(first.length).entries()) queueMentions(queue, answer.text, targets[index], members);
+    return [...answers, ...(await runTurns(ports, queue, members, record, bound, answers))];
   }
-  if (mentioned.length > 0) return runTurns(ports, turnsOf(mentioned), members, record, bound);
-  if (mode === "turn") return runTurns(ports, turnsOf(members), members, record, bound);
+  if (mode === "turn" || mentioned.length > 0) return runTurns(ports, turnsOf([...mentioned, ...others]), members, record, bound);
   const sessions = ports.sessions();
   const idle = members.find((member) => sessionProgram(sessions, member.session) === "idle");
   if (!idle) throw new Error("no member is idle");

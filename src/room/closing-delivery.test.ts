@@ -7,6 +7,7 @@
 // joined, are the record without the lines of its own member, in record order and without a duplicate, and (c) no session had two open
 // lines at once.
 import { describe, expect, it } from "vitest";
+import { createSubmitQueue } from "./submit-queue";
 import { createAnswerChannel, type AnswerChannel, type OpenToken } from "./answer";
 import { createConversationStatus, type ConversationStatus } from "./conversation-status";
 import { createClosingDelivery, type ClosingDelivery } from "./closing-delivery";
@@ -27,6 +28,8 @@ const PREFACE = /^답은 하지말고 알고있어\. .*?참고해\. \| /;
 interface Behaviour {
   // The answers of the member in order; a missing answer is `reply <n> of <id>`.
   answers?: string[];
+  // The status of each answer in order; a missing status is settled.
+  statuses?: ("continue" | "settled")[];
   // The turns (0-based) at which the program reports idle without an answer.
   failAt?: number[];
   // The member holds its lines until the test releases them.
@@ -48,8 +51,14 @@ function members(behaviour: Record<string, Behaviour> = {}) {
   const room: { answers: AnswerChannel | null } = { answers: null };
   const open = new Map<string, number>();
   let violations = 0;
-  // The lines that each session received: the text of each line whose token its member answered or acknowledged.
-  const received = new Map<string, string[]>();
+  // The lines that the room submitted to each session, and the number of them that an answer or an acknowledgement confirmed: an answer
+  // or an acknowledgement confirms every line submitted before it (docs/spec/room.md#work-reports).
+  const submittedBodies = new Map<string, string[]>();
+  const confirmed = new Map<string, number>();
+  const confirm = (session: string): void => void confirmed.set(session, (submittedBodies.get(session) ?? []).length);
+  const received = {
+    get: (session: string): string[] => (submittedBodies.get(session) ?? []).slice(0, confirmed.get(session) ?? 0),
+  };
   const turnsOf = new Map<string, number>();
   const held: (() => void)[] = [];
   const act = (session: string, text: string): void => {
@@ -57,6 +66,7 @@ function members(behaviour: Record<string, Behaviour> = {}) {
     const own = behaviour[member.id] ?? {};
     const match = /\| \[@clubhouse\] (turn|record) (\S+)$/.exec(text)!;
     const body = text.slice(0, match.index - 1).replace(PREFACE, "");
+    submittedBodies.set(session, [...(submittedBodies.get(session) ?? []), body]);
     const kind = match[1];
     const token = match[2];
     const done = (): void => {
@@ -66,15 +76,15 @@ function members(behaviour: Record<string, Behaviour> = {}) {
     const take = (): void => {
       if (kind === "record") {
         room.answers!.ack({ turn: token });
-        received.set(session, [...(received.get(session) ?? []), body]);
+        confirm(session);
         return done();
       }
       const index = turnsOf.get(session) ?? 0;
       turnsOf.set(session, index + 1);
       if (own.failAt?.includes(index)) return done();
       const reply = own.answers?.[index] ?? `reply ${index} of ${member.id}`;
-      room.answers!.deliver({ turn: token, text: reply });
-      received.set(session, [...(received.get(session) ?? []), body]);
+      room.answers!.deliver({ status: own.statuses?.[index] ?? "settled", turn: token, text: reply });
+      confirm(session);
       done();
     };
     if (own.manual || (kind === "record" && own.manualRecord)) held.push(take);
@@ -145,6 +155,7 @@ function room(core: Core, saved: { lines: RecordLine[]; delivered: Record<string
   const ports: RelayPorts = {
     commands: { execute: core.execute },
     answers,
+    lines: createSubmitQueue({ commands: { execute: core.execute } }),
     surface: "room-1",
     sessions: core.value,
     watchSessions: (listener) => {
@@ -200,7 +211,7 @@ function invariants(core: Core, r: Room): void {
   // (b) the received lines of each session are the record without its own lines, in order and once.
   for (const member of MEMBERS) {
     const expected = r.record.lines.filter((line) => line.speaker !== member.id).map((line) => `[@${nameOf(line.speaker)}] ${line.text.replace(/\n/g, " ")}`);
-    const got = (core.received.get(member.session) ?? []).flatMap((body) => body.split(" | "));
+    const got = core.received.get(member.session).flatMap((body) => body.split(" | "));
     expect(got, `lines of ${member.session}`).toEqual(expected);
   }
   // (c) no session had two open lines at once.
@@ -268,7 +279,9 @@ describe.each(MODES)("the delivery invariants in %s", (mode) => {
     await r.send(mode, "first");
     await quiet(r);
     core.set("s-c", "blocked");
-    await r.send(mode, "@Alpha only");
+    // facil relays to the first idle member only; turn and simul relay to Gamma too, whose blocked turn fails the relay.
+    if (mode === "facil") await r.send(mode, "next");
+    else await expect(r.send(mode, "next")).rejects.toThrow("member c: member waits for an answer: its program is blocked");
     await quiet(r);
     expect(r.status.read().delivery.find((entry) => entry.session === "s-c")).toMatchObject({ pending: true });
     expect(r.reports).toContain("room record: member c is blocked");
@@ -323,11 +336,12 @@ describe("the stop of a record wait (docs/spec/room.md#closing-delivery)", () =>
     await r.send("turn", "@Alpha first");
     await r.delivery.run();
     await new Promise<void>((resolve) => setImmediate(resolve));
+    const before = r.record.delivered()["s-c"];
     expect(r.delivery.waits()).toBe(true);
     expect(r.delivery.stopWaits()).toBe(1);
     expect(r.reports).toContain("room record: member c: record wait stopped");
     expect(r.status.read().waiting).toEqual([]);
-    expect(r.record.delivered()["s-c"] ?? 0).toBe(0);
+    expect(r.record.delivered()["s-c"]).toBe(before);
     core.set("s-c", "idle");
     await r.delivery.run();
     expect(r.answers.has("s-c")).toBe(false);
@@ -336,5 +350,51 @@ describe("the stop of a record wait (docs/spec/room.md#closing-delivery)", () =>
     await r.send("turn", "next");
     await quiet(r);
     expect(r.record.delivered()["s-c"]).toBe(r.record.lines.length);
+  });
+});
+
+// The rounds of a conversation (docs/spec/room.md#settling): while a member declares continue, the room opens a round of every member,
+// so one owner message runs the conversation to its end without a further send.
+describe.each(MODES)("the rounds until settled in %s", (mode) => {
+  it("the first member answers continue and the conclusion comes after its turn: it receives the conclusion and takes the next round", async () => {
+    const core = members({
+      a: { answers: ["open question: the scope", "agreed with the conclusion"], statuses: ["continue", "settled"] },
+      b: { answers: ["the scope is the API", "ok"], statuses: ["settled", "settled"] },
+      c: { answers: ["conclusion: the API only", "ok"], statuses: ["settled", "settled"] },
+    });
+    const r = room(core);
+    await r.send(mode === "facil" ? "turn" : mode, "@Alpha @Beta @Gamma discuss");
+    await quiet(r);
+    const alpha = core.received.get("s-a").join(" | ");
+    expect(alpha).toContain("[@Gamma] conclusion: the API only");
+    expect(r.record.lines.filter((line) => line.speaker === "a").map((line) => line.text)).toEqual(["open question: the scope", "agreed with the conclusion"]);
+    expect(r.record.lines.at(-1)).toEqual({ speaker: "clubhouse", text: "the conversation settled" });
+    invariants(core, r);
+  });
+
+  it("one owner message runs several rounds to settled with no further send", async () => {
+    const core = members({
+      a: { statuses: ["continue", "continue", "settled"] },
+      b: { statuses: ["continue", "settled", "settled"] },
+      c: { statuses: ["settled", "settled", "settled"] },
+    });
+    const r = room(core);
+    await r.send(mode === "facil" ? "turn" : mode, "build the feature");
+    await quiet(r);
+    expect(r.record.lines.filter((line) => line.speaker === "a")).toHaveLength(3);
+    expect(r.record.lines.at(-1)).toEqual({ speaker: "clubhouse", text: "the conversation settled" });
+    invariants(core, r);
+  });
+
+  it("the limit ends a conversation that does not settle and names the members that continue", async () => {
+    const core = members({ a: { statuses: ["continue", "continue", "continue"] } });
+    const r = room(core);
+    await r.send(mode === "facil" ? "turn" : mode, "go", { limit: 3 });
+    await quiet(r);
+    expect(r.record.lines.at(-1)).toEqual({
+      speaker: "clubhouse",
+      text: "the conversation ended without settling: it reached the limit of 3 member turns; @Alpha continue",
+    });
+    invariants(core, r);
   });
 });

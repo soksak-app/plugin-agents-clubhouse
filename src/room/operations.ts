@@ -56,6 +56,21 @@ export function createRoomOperations(deps: OperationDeps): Record<string, (param
       }
       return { id, checked };
     },
+    // member.role sets the role of a roster entry, a text of 0 to 200 characters without control characters (docs/spec/room.md#roles).
+    [`${P}.member.role`]: async (params) => {
+      const id = idOf(params);
+      const role = params?.role;
+      if (typeof role !== "string" || [...role].length > 200 || /[\u0000-\u001f\u007f-\u009f]/.test(role)) {
+        throw new Error(`role must be a text of 0 to 200 characters without control characters, got ${JSON.stringify(role)}`);
+      }
+      const entry = entryOf(deps.roster, id);
+      const next = role.trim();
+      if (entry.role !== next) {
+        entry.role = next;
+        deps.changed();
+      }
+      return { id, role: next };
+    },
     [`${P}.member.move`]: async (params) => {
       const id = idOf(params);
       const index = params?.index;

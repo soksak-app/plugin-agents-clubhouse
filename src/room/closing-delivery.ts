@@ -4,7 +4,8 @@
 // the token channel. A session that is not idle receives nothing and is pending: while no relay runs, the next value of core.sessions in
 // which it is idle, each settled token and the end of the start of the room run the delivery again. Each of these is an event, so the
 // delivery needs no timer.
-import { sessionProgram, sessionSubmit, type SessionCommandPort } from "./session-channel";
+import { sessionProgram, type SessionCommandPort } from "./session-channel";
+import type { SubmitQueue } from "./submit-queue";
 import type { AnswerChannel } from "./answer";
 import type { PendingLines, RoomRecord } from "./room-record";
 import type { BeginWaiting, DeliveryEntry } from "./conversation-status";
@@ -17,6 +18,8 @@ export interface DeliveryMember {
 
 export interface DeliveryPorts extends SessionCommandPort {
   answers: AnswerChannel;
+  // The submit queue of each member session.
+  lines: SubmitQueue;
   // The current value of core.sessions.
   sessions(): unknown;
   waiting: BeginWaiting;
@@ -47,6 +50,9 @@ export function recordText(pending: PendingLines, nameOf: (speaker: string) => s
   const names = pending.speakers.filter((speaker) => speaker !== "owner").map((speaker) => `[@${nameOf(speaker)}]`).join(", ");
   return `답은 하지말고 알고있어. [@owner]와 ${names}의 대화기록이다. 답하지말고 참고해. | ${pending.text}`;
 }
+
+// The record line that confirms the lines injected while the session worked, when no other line is left to send.
+export const CONFIRM_TEXT = "답은 하지말고 알고있어. 작업 중에 받은 기록을 확인해.";
 
 const messageOf = (error: unknown): string => (error instanceof Error ? error.message : String(error));
 
@@ -83,7 +89,10 @@ export function createClosingDelivery(
       return;
     }
     const lines = record.pending(session, member.id);
-    if (lines === null) {
+    // Lines that the room injected while the session worked are sent but not confirmed: a record line without lines asks for the
+    // acknowledgement that confirms them (docs/spec/room.md#work-reports).
+    const unconfirmed = (record.delivered()[session] ?? 0) < (record.sent()[session] ?? 0);
+    if (lines === null && !unconfirmed) {
       // Every line that the session has not received is a line of its own member, so it has nothing to receive.
       record.markDelivered(session, record.lines.length);
       if (pending.delete(session)) ports.changed();
@@ -98,11 +107,16 @@ export function createClosingDelivery(
       }
       return;
     }
-    const token = ports.answers.open(session, member.id, "record", lines.count);
+    const token = ports.answers.open(session, member.id, "record", record.lines.length);
     const endWait = ports.waiting(member, "record");
     waits.set(token.turn, endWait);
     try {
-      await sessionSubmit(ports, session)(`${recordText(lines, nameOf)} | [@clubhouse] record ${token.turn}`);
+      await ports.lines.submit(session, () => {
+        const now = record.pending(session, member.id);
+        const body = now === null ? CONFIRM_TEXT : recordText(now, nameOf);
+        const count = now === null ? record.lines.length : now.count;
+        return { text: `${body} | [@clubhouse] record ${token.turn}`, accepted: () => record.markSent(session, count) };
+      });
       if (pending.delete(session)) ports.changed();
     } catch (error) {
       token.close();
@@ -199,6 +213,7 @@ export function createClosingDelivery(
       return members().map((member) => ({
         member: member.id,
         session: member.session,
+        sent: record.sent()[member.session] ?? 0,
         delivered: delivered[member.session] ?? 0,
         length: record.lines.length,
         pending: pending.has(member.session),
