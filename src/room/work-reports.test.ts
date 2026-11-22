@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 import { createAnswerChannel } from "./answer";
 import { createRoomRecord } from "./room-record";
 import { createSubmitQueue } from "./submit-queue";
-import { INJECT_TEXT, createWorkReports } from "./work-reports";
+import { INJECT_TEXT, OWNER_INJECT_TEXT, createWorkReports } from "./work-reports";
 
 type State = "idle" | "working" | "blocked";
 const MEMBERS = [{ id: "a", name: "Alpha", session: "s-a" }, { id: "b", name: "Beta", session: "s-b" }, { id: "c", name: "Gamma", session: "s-c" }];
@@ -139,6 +139,19 @@ describe("the paths of a report (docs/spec/room.md#work-reports)", () => {
     expect(() => r.work.reportCommand({ turn: a.turn, text: "changed", paths: ["package.json"] })).toThrow("paths package.json are not claimed by a");
     expect(r.work.reportCommand({ turn: a.turn, text: "changed", paths: ["src/ws.js"] })).toEqual({ turn: a.turn });
     expect(r.record.lines.at(-1)).toMatchObject({ speaker: "a", text: "(report) changed [src/ws.js]" });
+  });
+});
+
+describe("an owner line during a relay (docs/spec/room.md#owner-follow-up)", () => {
+  it("is injected into a working session framed as an owner instruction, once", async () => {
+    const r = room({ "s-a": "working", "s-b": "idle", "s-c": "blocked" });
+    for (const m of MEMBERS) r.record.markSent(m.session, 0);
+    r.record.append("owner", "also add a README");
+    r.work.inject();
+    await flush();
+    r.work.inject();
+    await flush();
+    expect(r.submitted).toEqual([{ session: "s-a", text: `${OWNER_INJECT_TEXT} | [@owner] also add a README` }]);
   });
 });
 

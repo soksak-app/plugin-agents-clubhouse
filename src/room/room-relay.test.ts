@@ -478,3 +478,27 @@ describe("the times of the record (docs/spec/room.md#timing)", () => {
     expect(answer.at).toBeGreaterThan(record.lines[0].at!);
   });
 });
+
+describe("an owner line during a relay (docs/spec/room.md#owner-follow-up)", () => {
+  it("reaches the idle member in its next turn line once, and the member that answered before it takes a new round", async () => {
+    const core = fakeCore([IDLE("s-1"), IDLE("s-2")], { manual: true });
+    const record = roomRecord("build it");
+    core.bound.record = record;
+    const relay = relayInMode(core.ports, "turn", MEMBERS, "build it", record, OPEN);
+    await core.submits(1);
+    record.append("owner", "also add a README");
+    core.finish("s-1");
+    await core.submits(2);
+    expect(core.submitted[1].text).toContain("[@owner] also add a README");
+    core.finish("s-2");
+    await core.submits(3);
+    expect(core.submitted[2].session).toBe("s-1");
+    expect(core.submitted[2].text).toContain("[@owner] also add a README");
+    core.finish("s-1");
+    await relay;
+    const counts = core.submitted.map((entry) => entry.text.split("also add a README").length - 1);
+    expect(counts).toEqual([0, 1, 1]);
+    expect(record.lines.at(-1)).toMatchObject({ speaker: "clubhouse", text: "the conversation settled" });
+  });
+});
+

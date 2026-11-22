@@ -2,6 +2,7 @@
 
 ## 미출시
 
+- C82: Relay 중 `message.send`는 owner 줄을 진행 중인 대화에 더한다. Working member는 owner 지시로 inject 받고, idle member는 다음 turn에 받으며, 그 전에 답한 member는 turn을 한 번 더 받는다(`docs/spec/room.md#owner-follow-up`).
 - C81: Claude의 isolation 항목에 `--settings '{"env":{"CLAUDE_CODE_SHELL":"/bin/bash"}}'`를 더하므로 member의 Bash tool은 사람의 `~/.zshrc`를 source하지 않고 그 alias를 받지 않는다(`docs/spec/room.md#isolation`).
 - C80: Protocol은 각 room 명령을 `;`, `&&`, `|`로 잇지 않고 foreground에서 단독으로 실행하고, 시간 초과로 끝나거나 background로 넘어간 room 명령은 `report`로 알린다고 말한다(`docs/spec/room.md#room-protocol`).
 - C78: Test가 `@soksak/plugin-api` 0.0.48 release의 `validateManifest`로 plugin.json을 검증하고, view status schema는 exposure schema subset이 거부하는 `minimum`을 뺀다(`docs/spec/room.md#manifest`).

@@ -745,6 +745,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
       stopState.update(value, delivery!.waits());
     },
     relay: relayMessage,
+    followUp: () => work?.inject(),
     stopWaits: () => {
       for (const listener of [...stopListeners]) listener();
       return delivery!.stopWaits();

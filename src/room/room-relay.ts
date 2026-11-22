@@ -239,15 +239,20 @@ async function runTurns(
 ): Promise<MemberAnswer[]> {
   const answers: MemberAnswer[] = [];
   let started = 0;
+  // The record length at the start of the last turn of each member: an owner line after it has not been answered by that member.
+  const turnStart = new Map<string, number>();
+  const lastOwner = (): number => record.lines.map((line) => line.speaker).lastIndexOf("owner");
   for (;;) {
     if (queue.length === 0) {
       if (!closing) break;
       const open = continuing([...earlier, ...answers], members);
-      if (open.length === 0) {
+      // A member that took its turn before an owner line of the relay takes another turn, so every member answers it (docs/spec/room.md#owner-follow-up).
+      const unanswered = members.filter((member) => turnStart.has(member.id) && turnStart.get(member.id)! <= lastOwner());
+      if (open.length === 0 && unanswered.length === 0) {
         if (earlier.length + answers.length > 0) record.append("clubhouse", "the conversation settled");
         break;
       }
-      queue.push(...members.map((member) => ({ member, byAnswer: true })));
+      queue.push(...(open.length > 0 ? members : unanswered).map((member) => ({ member, byAnswer: true })));
     }
     if (bound.stopped()) {
       record.append("clubhouse", "the conversation ended: the owner stopped it");
@@ -265,6 +270,7 @@ async function runTurns(
     }
     const turn = queue.shift()!;
     if (turn.byAnswer) started += 1;
+    turnStart.set(turn.member.id, record.lines.length);
     let answer: MemberAnswer;
     try {
       answer = await relayToMember(ports, turn.member, record, bound.accepted, rolesLine(turn.member, members), bound.stopping);

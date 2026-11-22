@@ -16,6 +16,8 @@ export const RELEASE_COMMAND = "soksak-plugin-agents-clubhouse.release";
 
 // The preface of an injected line: the member reads it and goes on with its work.
 export const INJECT_TEXT = "답하지 말고 하던 작업을 계속해.";
+// The preface of an injected line that holds an owner line, which the owner sent during the relay (docs/spec/room.md#owner-follow-up).
+export const OWNER_INJECT_TEXT = "방장의 새 지시야. 답하지 말고 하던 작업에 반영해.";
 
 export interface WorkMember {
   id: string;
@@ -86,7 +88,9 @@ export function createWorkReports(ports: WorkPorts, record: RoomRecord, members:
             record.markSent(session, record.lines.length);
             return null;
           }
-          return { text: `${INJECT_TEXT} | ${lines.text}`, accepted: () => record.markSent(session, lines.count) };
+          const from = record.sent()[session] ?? 0;
+          const owner = record.lines.slice(from, lines.count).some((line) => line.speaker === "owner");
+          return { text: `${owner ? OWNER_INJECT_TEXT : INJECT_TEXT} | ${lines.text}`, accepted: () => record.markSent(session, lines.count) };
         })
         .catch((error: unknown) => ports.report("room report", `member ${member.id}: ${error instanceof Error ? error.message : String(error)}`))
         .finally(() => {

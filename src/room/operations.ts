@@ -21,6 +21,8 @@ export interface OperationDeps {
   busy: (value: boolean) => void;
   // Relays the text; `stopped` tells whether the owner stopped the conversation of this relay (docs/spec/room.md#conversation).
   relay: (text: string, stopped: () => boolean) => Promise<{ id: string; text: string }[]>;
+  // Delivers an owner line that a send added during a relay (docs/spec/room.md#owner-follow-up).
+  followUp: () => void;
   // Ends the record waits of the closing delivery and returns their number (docs/spec/room.md#closing-delivery).
   stopWaits: () => number;
   // Shows a refusal or a failed relay of message.send through the error display of the window (docs/spec/room.md#commands).
@@ -117,7 +119,12 @@ export function createRoomOperations(deps: OperationDeps): Record<string, (param
     const raw = params?.text;
     const text = typeof raw === "string" ? raw.trim() : "";
     if (text === "") throw new Error(`text must be a non-empty string, got ${JSON.stringify(raw)}`);
-    if (relaying) throw new Error("the room is relaying a message");
+    if (relaying) {
+      // The running relay takes the owner line: a working member receives it injected, an idle member in its next turn (docs/spec/room.md#owner-follow-up).
+      deps.accept(text);
+      deps.followUp();
+      return { answers: [] };
+    }
     if (deps.openMembers() === 0) throw new Error("no member session is open: check a member of the roster");
     relaying = true;
     stopped = false;

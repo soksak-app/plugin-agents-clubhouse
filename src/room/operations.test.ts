@@ -27,6 +27,7 @@ function room(overrides: Partial<OperationDeps> = {}) {
     busy: (value) => void log.push(`busy ${value}`),
     relay: async (text) => [{ id: "b", text: `answer to ${text}` }],
     stopWaits: () => 0,
+    followUp: () => void log.push("follow-up"),
     failed: (reason) => void log.push(`failed ${reason}`),
     ...overrides,
   };
@@ -90,7 +91,7 @@ describe("message.send", () => {
     expect(r.log).toEqual(["busy true", "accept hello", "busy false"]);
   });
 
-  it("refuses an empty text, a send without an open member session and a send during a relay", async () => {
+  it("refuses an empty text and a send without an open member session, and takes a send during a relay", async () => {
     const empty = room();
     await expect(empty.commands[`${P}.message.send`]({ text: " " })).rejects.toThrow('text must be a non-empty string, got " "');
     expect(empty.log).toEqual(['failed text must be a non-empty string, got " "']);
@@ -102,7 +103,10 @@ describe("message.send", () => {
     let finish: () => void = () => {};
     const r = room({ relay: () => new Promise((resolve) => (finish = () => resolve([]))) });
     const first = r.commands[`${P}.message.send`]({ text: "one" });
-    await expect(r.commands[`${P}.message.send`]({ text: "two" })).rejects.toThrow("the room is relaying a message");
+    // A send during a relay adds the owner line to the running conversation (docs/spec/room.md#owner-follow-up).
+    expect(await r.commands[`${P}.message.send`]({ text: "two" })).toEqual({ answers: [] });
+    expect(r.log).toContain("accept two");
+    expect(r.log).toContain("follow-up");
     finish();
     expect(await first).toEqual({ answers: [] });
   });
