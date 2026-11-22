@@ -2,6 +2,7 @@
 
 ## 미출시
 
+- C56: 버전은 0.0.11이며 C55를 출시한다.
 - C55: Member는 전달된 줄 끝의 token에 대해 선언된 command `soksak-plugin-agents-clubhouse.answer {turn, text}`로 답을 전한다. 답이 도착하면 turn이 끝나고, 답 없이 idle이 된 program은 turn을 실패시키며, tab state는 `taught` 대신 `protocolSessions`를 쓰고, 방은 화면에서 답을 읽지 않는다(`docs/spec/room.md#answer`).
 - C54: 버전은 0.0.10이며 C47과 C53을 출시한다.
 - C53: `message.send`는 command 호출에서도 각 거부와 실패한 relay를 error display로 `error: room relay: <reason>`으로 보인다(`docs/spec/room.md#commands`).
