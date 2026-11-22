@@ -2,6 +2,7 @@
 
 ## 미출시
 
+- C19: `plugin.json`, `package.json`, README의 설명이 현재의 방을 말한다. agents 정의의 member, owned terminal session, roster 순서의 relay다. ACP 의존, 고정 member, 제거된 command는 더 이상 설명하지 않는다.
 - C18: 이 repository는 pnpm, pin한 `@soksak/kit` release의 검사, workflow `ci.yml`과 `release.yml`을 쓴다. `make pack`이 release를 build하고 pack한다. `doctor` script와 그 dependency, 이전 release script, `main.js`, ACP test helper를 제거했고, `repository`는 `https://github.com/soksak-app/plugin-agents-clubhouse`를 가리킨다.
 - C2, C6: 방이 자기 view page(`ui/clubhouse.html`)에서 `plugin.json`의 커맨드, element, status, project data로 돈다. ACP engine, 그 의존과 이를 쓰던 커맨드를 제거했으므로 방은 C3과 C5 전까지 멤버 transport가 없다.
 - C7: project data store(`createPersonaStore`, `createMemberSessionStore`)가 빈 텍스트나 `null` 대신 data API의 오류로 거부한다. 실패한 define은 다음 호출이 다시 시도한다. 실패 경우의 테스트는 `src/room/persona.test.ts`와 `src/room/session-store.test.ts`에 있다.

@@ -1,38 +1,12 @@
 # soksak-plugin-agents-clubhouse
 
-A soksak plugin for collaborating with multiple AI coding agents (Claude, Codex) in **a single conversation** within one workspace.
-Based on ACP (Agent Client Protocol); depends on `soksak-plugin-agents-acp` (engine).
+[한국어](README.ko.md)
 
-Select participating models via checkboxes, order them by tab position, and discuss across three conversation modes. Conversation is the default; the agents touch real files only when you explicitly ask. Addressing a peer directly is unified to a single channel: `@name` in the message body.
+A soksak plugin that holds one conversation room for several coding agents of a project.
 
-> Gemini is temporarily disabled (hidden): gemini-cli service discontinued + antigravity-cli ACP not implemented. Will be restored when the path is recovered.
+The room reads the agent definitions that the agents plugin stores in its project data (`definitions` and `accounts`) and lists them in its roster. Each checked member starts in an owned terminal session (`core.session.open`), and the room arranges the member cards. A message from the composer is submitted to each checked member with an open session in roster order (`core.session.submit`); the room waits for the end of each turn from the program state of the session and shows the member's screen as the answer.
 
-## Conversation Modes (Three Personalities)
-
-- **Facilitator** (default) — The facilitator (👑, assigned in tabs) is the human's single point of contact. Coordinates peers via `@mention`, simultaneous (all at once), or sequential (one by one), and decides when to conclude after each stall (peer response complete). If the facilitator addresses nobody, the turn ends naturally. A hard round cap prevents infinite loops.
-- **Sequential** — Each participant speaks once in tab order, then stops. Fair and complete coverage.
-- **Simultaneous** — Everyone sees the same context (snapshot) and responds once in parallel. Peers cannot see each other's answers (zero anchoring, zero groupthink).
-
-The human always has highest-priority intervention (interrupts an in-progress facilitator turn → preserves the partial response → injects input → restarts). Agents that encounter session errors (including brief disconnections) are automatically unchecked (human re-checks to re-invite).
-
-## Sessions (durable, one per member)
-
-Each member keeps **one durable ACP session**, created at its first turn with its persona injected through the ACP standard `systemPrompt` field (protocol: `[@owner]`/`[@member]`/`[@clubhouse]` line grammar, taught once in the persona; every turn arrives as an envelope carrying only the posts that member has not seen yet). Context growth is handled by each CLI's native in-session compaction; when a session is lost the next turn transparently creates a new one. Session ids persist across view remounts (resume on recovery). A member whose codex thread is held by its TUI has the turn **deferred** (system note, member stays), and every member's roster tab has **▤** — open that member's session in a real terminal card (`claude --resume <id>` / `codex resume <id>`), the same session the room injects into, so you can watch and intervene in the native TUI while the room keeps lifting its replies.
-
-## @Mention
-
-Typing `@` in the input field opens an autocomplete popup of checked participant models (↑↓ · Enter · Esc). If `@model` is present, that model is addressed directly regardless of mode — multiple mentions trigger simultaneous (parallel) delivery; a single mention addresses only that model. The facilitator in Facilitator mode is also bypassed.
-
-## Commands (Headless · CLI/MCP)
-
-- `send` — Send a human message to the active Clubhouse (live run · intervention). `mode` switches the mode before sending (E2E).
-- `state` — Live state of the active Clubhouse (mode · facilitator · conversation count · streaming length of the in-progress turn — for observation · E2E).
-- `ask` — Single agent, single turn.
-- `converse` — Multi-agent, one exchange (one turn each). `agents` accepts a preset id or `{id,cmd,args}` (E2E launch).
-
-## Settings
-
-Permission request policy · default conversation mode (facilitator/sequential/simultaneous) · `@` chaining limit · facilitator mode round cap.
+The mode button offers three conversation modes (facilitator, sequential, simultaneous). The relay does not apply them yet: the members always answer one after another. `@name` mentions are not built. The control tower (`tower.*` commands) plans, checks and runs natural-language requests as declared commands.
 
 ## Development
 
@@ -41,16 +15,10 @@ make install
 make test && make check && make build
 ```
 
-Pure logic (`conversation.ts`) is verified with vitest unit tests; integration is verified via exposed commands (`send`/`state`) + `window.snapshot` screen capture. `host-contract.test.ts` is the host chrome standards compliance gate.
+`make pack OUT=<folder>` writes the release with `plugin.json`, `ui/clubhouse.html` and `ui/clubhouse.js`.
 
-## DOM Exposure (Structural Addresses)
+## Documents
 
-DOM nodes exposed to external access (address-based click/measure · E2E) are declared in `plugin.json` `contributes.nodes` — listed on the consent screen; actual elements receive a `data-node` instance attribute. Elements not declared are inaccessible (`NOT_EXPOSED`).
-
-| Node | data-node | Description |
-|---|---|---|
-| `send` | `send` | Send button |
-| `input` | `input` | Message input field |
-| `tab` | `tab/<agentId>` | Agent tab (checkbox · drag) |
-
-Address example: `content/view/soksak-plugin-agents-clubhouse.clubhouse/node/send`. Use `sok ui.tree` to inspect currently exposed nodes.
+- [Features](docs/features.md)
+- [Control tower](docs/CONTROL-TOWER.md)
+- [Changelog](CHANGELOG.md)

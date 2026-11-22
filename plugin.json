@@ -1,7 +1,7 @@
 {
   "id": "soksak-plugin-agents-clubhouse",
   "name": "에이전트 클럽하우스",
-  "description": "여러 AI 코딩 에이전트(Claude·Codex)를 한 워크스페이스에서 하나의 대화로 묶는 방. 체크박스로 참여자를 고르고, 순차·동시 모드와 @이름 멘션으로 대화한다. 기본은 대화이며, 에이전트는 사용자가 요청할 때만 실제 파일을 건드린다.",
+  "description": "프로젝트의 여러 coding agent가 한 대화에 참여하는 방. agents plugin의 agent 정의에서 member를 고르면 각 member가 owned terminal session으로 시작하고, 방은 메시지를 member마다 차례로 전달하고 각 turn의 화면을 답으로 보여 준다.",
   "mark": "방",
   "icon": "<path d=\"M2 3h12v8H7l-3 2v-2H2z\"/>",
   "surface": {

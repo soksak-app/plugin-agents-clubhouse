@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "packageManager": "pnpm@11.24.0",
-  "description": "soksak 플러그인 — 여러 AI 코딩 에이전트를 한 워크스페이스에서 협업하는 방(체크박스 로스터·탭 순서 턴제/자유/동시 대화·컨트롤 타워). 멤버 연결은 터미널 중계 도입 전까지 없다.",
+  "description": "Agents clubhouse plugin: a conversation room whose members are agent definitions of the agents plugin, each running in an owned terminal session.",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/soksak-app/plugin-agents-clubhouse.git"
