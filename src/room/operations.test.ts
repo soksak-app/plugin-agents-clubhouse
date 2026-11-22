@@ -26,6 +26,7 @@ function room(overrides: Partial<OperationDeps> = {}) {
     accept: (text) => void log.push(`accept ${text}`),
     busy: (value) => void log.push(`busy ${value}`),
     relay: async (text) => [{ id: "b", text: `answer to ${text}` }],
+    failed: (reason) => void log.push(`failed ${reason}`),
     ...overrides,
   };
   return { roster, log, mode: () => mode, commands: createRoomOperations(deps) };
@@ -89,10 +90,14 @@ describe("message.send", () => {
   });
 
   it("refuses an empty text, a send without an open member session and a send during a relay", async () => {
-    await expect(room().commands[`${P}.message.send`]({ text: " " })).rejects.toThrow('text must be a non-empty string, got " "');
-    await expect(room({ openMembers: () => 0 }).commands[`${P}.message.send`]({ text: "hi" })).rejects.toThrow(
+    const empty = room();
+    await expect(empty.commands[`${P}.message.send`]({ text: " " })).rejects.toThrow('text must be a non-empty string, got " "');
+    expect(empty.log).toEqual(['failed text must be a non-empty string, got " "']);
+    const closed = room({ openMembers: () => 0 });
+    await expect(closed.commands[`${P}.message.send`]({ text: "hi" })).rejects.toThrow(
       "no member session is open: check a member of the roster",
     );
+    expect(closed.log).toEqual(["failed no member session is open: check a member of the roster"]);
     let finish: () => void = () => {};
     const r = room({ relay: () => new Promise((resolve) => (finish = () => resolve([]))) });
     const first = r.commands[`${P}.message.send`]({ text: "one" });
@@ -101,9 +106,9 @@ describe("message.send", () => {
     expect(await first).toEqual({ answers: [] });
   });
 
-  it("ends the relay state when the relay fails, and rejects with its error", async () => {
+  it("ends the relay state when the relay fails, reports the failure and rejects with its error", async () => {
     const r = room({ relay: async () => Promise.reject(new Error("member b: turn failed")) });
     await expect(r.commands[`${P}.message.send`]({ text: "hi" })).rejects.toThrow("member b: turn failed");
-    expect(r.log).toEqual(["busy true", "accept hi", "busy false"]);
+    expect(r.log).toEqual(["busy true", "accept hi", "busy false", "failed member b: turn failed"]);
   });
 });

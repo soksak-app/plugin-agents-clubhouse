@@ -497,8 +497,12 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
       send.disabled = value || transport.state !== "ready";
     },
     relay: relayMessage,
+    failed: (reason) => report("room relay", reason),
   });
-  bound(expose.bind(send, `${EXPOSE}.message.send`, () => ({ text: input.value }), { failed: failed("room relay") }), "message.send");
+  // message.send has shown each of its refusals and failures through the error display before it rejects, so the bindings show none
+  // a second time; without failed, the binder would pass the rejection to unhandledrejection of the document.
+  const shownBySend = (): void => {};
+  bound(expose.bind(send, `${EXPOSE}.message.send`, () => ({ text: input.value }), { failed: shownBySend }), "message.send");
   // Enter without Shift sends; the newline that it would insert is prevented. Enter during an IME composition commits the text.
   const sendKey = (event: KeyboardEvent): boolean => event.key === "Enter" && !event.shiftKey && !event.isComposing;
   input.addEventListener("keydown", (event) => {
@@ -508,7 +512,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
     expose.bind(input, `${EXPOSE}.message.send`, () => ({ text: input.value }), {
       event: "keydown",
       when: (event: Event) => sendKey(event as KeyboardEvent),
-      failed: failed("room relay"),
+      failed: shownBySend,
     }),
     "message.send",
   );

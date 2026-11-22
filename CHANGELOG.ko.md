@@ -2,6 +2,7 @@
 
 ## 미출시
 
+- C53: `message.send`는 command 호출에서도 각 거부와 실패한 relay를 error display로 `error: room relay: <reason>`으로 보인다(`docs/spec/room.md#commands`).
 - C47: Member의 답은 방이 submit된 줄 뒤에서 absolute line number로 최대 200행씩 읽는 그 turn의 행의 마지막 reply block이므로, 화면보다 긴 답도 전부 읽는다(`docs/spec/room.md#answer`).
 - C51: 버전은 0.0.9이며 C49와 C50을 출시한다.
 - C50: 상태가 없는 방 tab은 `core.sessions`가 방을 owner로 나열하는 저장된 session의 member를 체크하고 다시 붙는다(`docs/spec/room.md#restart`).

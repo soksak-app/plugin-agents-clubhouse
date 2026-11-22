@@ -20,6 +20,8 @@ export interface OperationDeps {
   accept: (text: string) => void;
   busy: (value: boolean) => void;
   relay: (text: string) => Promise<{ id: string; text: string }[]>;
+  // Shows a refusal or a failed relay of message.send through the error display of the window (docs/spec/room.md#commands).
+  failed: (reason: string) => void;
 }
 
 function idOf(params: any): string {
@@ -74,21 +76,30 @@ export function createRoomOperations(deps: OperationDeps): Record<string, (param
       }
       return { mode };
     },
+    // message.send reports each refusal and failure itself, so a command call that no element started shows it in the room too.
     [`${P}.message.send`]: async (params) => {
-      const raw = params?.text;
-      const text = typeof raw === "string" ? raw.trim() : "";
-      if (text === "") throw new Error(`text must be a non-empty string, got ${JSON.stringify(raw)}`);
-      if (relaying) throw new Error("the room is relaying a message");
-      if (deps.openMembers() === 0) throw new Error("no member session is open: check a member of the roster");
-      relaying = true;
-      deps.busy(true);
       try {
-        deps.accept(text);
-        return { answers: await deps.relay(text) };
-      } finally {
-        relaying = false;
-        deps.busy(false);
+        return await sendMessage(params);
+      } catch (error) {
+        deps.failed(error instanceof Error ? error.message : String(error));
+        throw error;
       }
     },
   };
+  async function sendMessage(params: any): Promise<{ answers: { id: string; text: string }[] }> {
+    const raw = params?.text;
+    const text = typeof raw === "string" ? raw.trim() : "";
+    if (text === "") throw new Error(`text must be a non-empty string, got ${JSON.stringify(raw)}`);
+    if (relaying) throw new Error("the room is relaying a message");
+    if (deps.openMembers() === 0) throw new Error("no member session is open: check a member of the roster");
+    relaying = true;
+    deps.busy(true);
+    try {
+      deps.accept(text);
+      return { answers: await deps.relay(text) };
+    } finally {
+      relaying = false;
+      deps.busy(false);
+    }
+  }
 }
