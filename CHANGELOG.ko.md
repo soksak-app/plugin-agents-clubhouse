@@ -12,3 +12,4 @@
 - C3: 소환은 고른 member마다 owned session(`core.session.open`)을 열고, member와 session의 관계를 project data에 저장한다. `plugin.json`은 `sessions`를 선언하지 않고 sidecar에도 의존하지 않는다. core는 sessions를 선언하지 않은 plugin의 열기만 거부한다. 열기 호출은 `cols`, `rows` 대신 `size`(`{width, height, scale}`)를 받고, 저장된 session은 `core.sessions`가 열린 것으로 나열할 때만 재사용한다. 정의 출처와 트리거는 아직 연결하지 않았다(C3은 열려 있다).
 - C12: room은 각 실패를 window 오류 표시(`tab.error`)로 보여 주며, 거부된 표시는 `runtime.error`로 기록한다.
 - C4: room은 방 card와 member card의 배치를 `core.layout.plan`으로 계획하고, feasible한 계획은 `core.layout.apply`로 짓는다. 아니면 member의 owned session을 tab으로 열고 계획의 reason을 선언된 arrangement status에 남긴다. 소환 뒤의 호출 지점은 아직 연결되지 않았다(C4는 열려 있다).
+- 경계: 방 테스트는 member를 실행하는 plugin을 실제 plugin id 대신 각 테스트가 선언한 fixture id(`fixture-terminal`)로 쓴다. 방 코드는 plugin id를 갖지 않는다. member의 plugin은 호출자가 넘긴다.

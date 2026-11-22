@@ -4,9 +4,12 @@ import { describe, expect, it, vi } from "vitest";
 import { ROOM_PLUGIN, arrangeMembers, arrangementTree, createArrangementStatus, type Member } from "./arrangement";
 
 // Each member is the owned session of C3: its card shows the session, so no member starts a process of its own.
+// The plugin of each member is a fixture id that this test declares; the room receives it from its caller.
+const FIXTURE_PLUGIN = "fixture-terminal";
+
 const members: Member[] = [
-  { plugin: "terminal", session: "s-claude" },
-  { plugin: "terminal", session: "s-codex" },
+  { plugin: FIXTURE_PLUGIN, session: "s-claude" },
+  { plugin: FIXTURE_PLUGIN, session: "s-codex" },
 ];
 
 function port(plan: unknown, options: { applyRejects?: boolean; planRejects?: boolean } = {}) {
@@ -50,8 +53,8 @@ describe("arrangementTree", () => {
           {
             direction: "column",
             children: [
-              { tabs: [{ plugin: "terminal", params: { session: "s-claude" } }] },
-              { tabs: [{ plugin: "terminal", params: { session: "s-codex" } }] },
+              { tabs: [{ plugin: FIXTURE_PLUGIN, params: { session: "s-claude" } }] },
+              { tabs: [{ plugin: FIXTURE_PLUGIN, params: { session: "s-codex" } }] },
             ],
           },
         ],
@@ -61,7 +64,7 @@ describe("arrangementTree", () => {
 
   it("uses one member card directly when there is a single member", () => {
     const tree = arrangementTree([members[0]]) as { tree: { children: unknown[] } };
-    expect(tree.tree.children[1]).toEqual({ tabs: [{ plugin: "terminal", params: { session: "s-claude" } }] });
+    expect(tree.tree.children[1]).toEqual({ tabs: [{ plugin: FIXTURE_PLUGIN, params: { session: "s-claude" } }] });
   });
 
   it("refuses an empty member list at the boundary", () => {
@@ -69,7 +72,7 @@ describe("arrangementTree", () => {
   });
 
   it("refuses a member without a session, because its card would start a second process", () => {
-    expect(() => arrangementTree([{ plugin: "terminal", session: "" }])).toThrow("arrangement member needs a session");
+    expect(() => arrangementTree([{ plugin: FIXTURE_PLUGIN, session: "" }])).toThrow("arrangement member needs a session");
   });
 });
 
@@ -94,8 +97,8 @@ describe("arrangeMembers", () => {
       "core.layout.open",
       "core.layout.open",
     ]);
-    expect(calls[1][1]).toEqual({ card: "current", plugin: "terminal", params: { session: "s-claude" } });
-    expect(calls[2][1]).toEqual({ card: "current", plugin: "terminal", params: { session: "s-codex" } });
+    expect(calls[1][1]).toEqual({ card: "current", plugin: FIXTURE_PLUGIN, params: { session: "s-claude" } });
+    expect(calls[2][1]).toEqual({ card: "current", plugin: FIXTURE_PLUGIN, params: { session: "s-codex" } });
     expect(status.read()).toEqual({ state: "tabs", reason: infeasible.reason });
   });
 

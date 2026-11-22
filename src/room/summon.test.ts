@@ -20,10 +20,13 @@ function fakeData(): PersonaDataApi & { docs: Map<string, Record<string, unknown
   };
 }
 
-// Two definitions with a neutral plugin reference: the room reads them from the agents definitions, not from its code.
+// The plugin that runs a member is a fixture id that this test declares: the room reads it from the definitions, never from its code.
+const FIXTURE_PLUGIN = "fixture-terminal";
+
+// Two definitions that name the fixture plugin.
 const DEFINITIONS: MemberDefinition[] = [
-  { id: "alpha", plugin: "example.terminal", params: { program: "alpha-cli", args: [] }, cwd: "/work/app" },
-  { id: "beta", plugin: "example.terminal", params: { program: "beta-cli", args: ["--fast"] }, cwd: "/work/app" },
+  { id: "alpha", plugin: FIXTURE_PLUGIN, params: { program: "alpha-cli", args: [] }, cwd: "/work/app" },
+  { id: "beta", plugin: FIXTURE_PLUGIN, params: { program: "beta-cli", args: ["--fast"] }, cwd: "/work/app" },
 ];
 
 const SIZE = { width: 400, height: 300, scale: 2 };
@@ -50,8 +53,8 @@ describe("summonMembers — one owned session per checked member", () => {
     const { room, calls } = roomPort(openedSession);
     const out = await summonMembers({ room, sessions, now: () => 42, openSessions: openSessions() }, { definitions: DEFINITIONS, checked: ["alpha", "beta"], size: SIZE });
     expect(calls).toEqual([
-      { name: "core.session.open", params: { plugin: "example.terminal", params: { program: "alpha-cli", args: [] }, size: SIZE } },
-      { name: "core.session.open", params: { plugin: "example.terminal", params: { program: "beta-cli", args: ["--fast"] }, size: SIZE } },
+      { name: "core.session.open", params: { plugin: FIXTURE_PLUGIN, params: { program: "alpha-cli", args: [] }, size: SIZE } },
+      { name: "core.session.open", params: { plugin: FIXTURE_PLUGIN, params: { program: "beta-cli", args: ["--fast"] }, size: SIZE } },
     ]);
     expect(out.map((r) => [r.id, r.opened])).toEqual([["alpha", true], ["beta", true]]);
     expect(data.docs.get("alpha")).toEqual({ agentId: "alpha", sessionId: out[0].session, cwd: "/work/app", savedAt: 42 });
@@ -92,12 +95,12 @@ describe("summonMembers — one owned session per checked member", () => {
     const data = fakeData();
     const sessions = createMemberSessionStore(data)!;
     const { room } = roomPort((_name, params) => {
-      if (params.params.program === "beta-cli") throw new Error("plugin example.terminal declares no sessions");
+      if (params.params.program === "beta-cli") throw new Error("plugin FIXTURE_PLUGIN declares no sessions");
       return openedSession(_name, params);
     });
     await expect(
       summonMembers({ room, sessions, now: () => 3, openSessions: openSessions() }, { definitions: DEFINITIONS, checked: ["alpha", "beta"], size: SIZE }),
-    ).rejects.toThrow("plugin example.terminal declares no sessions");
+    ).rejects.toThrow("plugin FIXTURE_PLUGIN declares no sessions");
     expect(data.docs.has("alpha")).toBe(true);
     expect(data.docs.has("beta")).toBe(false);
   });
