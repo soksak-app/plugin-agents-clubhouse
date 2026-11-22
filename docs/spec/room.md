@@ -4,6 +4,19 @@
 
 The room relays each message of the composer to the checked members whose owned session is open. A member receives the message as one submitted line (`core.session.submit`); its turn ends when the program state of its session goes `working` and then `idle`, and its answer is the screen that `core.session.read` reports after the turn.
 
+## Roster
+
+The roster lists one entry per agent definition of the agents plugin. An entry keeps its checked state and its place while its definition exists; a removed definition leaves the roster, and a new definition joins it at the end unchecked, because inviting a member is the choice of the person. A change of the checked members summons the checked members that have no open session.
+
+## Commands
+
+Every operation of the room runs a declared command, and the elements of the room are connected to these commands through the binder of the page (`expose.bind`), so a click and a command call run the same path. Each command refuses an invalid parameter with an error that names the parameter and the value.
+
+- `soksak-plugin-agents-clubhouse.member.set {id, checked}`: sets the checked state of the roster entry `id` and summons the checked members. It is idempotent: setting the current state changes nothing and summons nothing. An unknown `id` is refused with `member <id> is not in the roster`. The result is `{id, checked}`. A click on a roster tab (`soksak-plugin-agents-clubhouse.tab`) runs it with the toggled state.
+- `soksak-plugin-agents-clubhouse.member.move {id, index}`: moves the roster entry `id` to the place `index` (0 to the roster length minus 1). A drag of a roster tab over another tab runs it with the index of that tab. The result is `{id, index}`.
+- `soksak-plugin-agents-clubhouse.mode.set {mode}`: sets the conversation mode to `facil`, `turn` or `simul`. The result is `{mode}`. Each button of the mode element (`soksak-plugin-agents-clubhouse.mode`) runs it with its mode.
+- `soksak-plugin-agents-clubhouse.message.send {text}`: relays `text` (trimmed, not empty) to the members by the mode and the mentions, shows it and each answer in the conversation, and resolves after every turn with `{answers: [{id, text}]}` in the order of the relay. It is refused with `the room is relaying a message` while an earlier message is relayed, and with `no member session is open: check a member of the roster` without an open member session. The send button (`soksak-plugin-agents-clubhouse.send`) and Enter without Shift in the input (`soksak-plugin-agents-clubhouse.input`) run it with the text of the input, and the input is cleared when the command accepts the text.
+
 ## Speaker labels
 
 Every line that the room submits to a member names its speaker in the form `[@<name>]`: the person is `owner`, a member is its roster name, and the room itself is `clubhouse`. A relayed message is submitted as `[@owner] <text>`.

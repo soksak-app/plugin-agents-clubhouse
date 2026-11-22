@@ -1,5 +1,5 @@
-// The roster of the room (C3): one entry per agent definition, in the order of the definitions, each checked unless the person
-// unchecked it. A definition that the status no longer lists leaves the roster; a new one is checked.
+// The roster of the room (C3, C34): one entry per agent definition, in the order of the definitions. A definition that the agents
+// data no longer lists leaves the roster; a new one joins unchecked, because inviting a member is the choice of the person.
 import { describe, expect, it } from "vitest";
 import { rosterFrom } from "./roster";
 import type { AgentDefinition } from "./definitions";
@@ -9,14 +9,14 @@ const def = (id: string, name = id.toUpperCase()): AgentDefinition => ({
 });
 
 describe("rosterFrom", () => {
-  it("lists each definition with its name, all checked when there is no earlier roster", () => {
+  it("lists each definition with its name, all unchecked when there is no earlier roster", () => {
     expect(rosterFrom([def("a"), def("b", "Writer")], [])).toEqual([
-      { id: "a", name: "A", checked: true },
-      { id: "b", name: "Writer", checked: true },
+      { id: "a", name: "A", checked: false },
+      { id: "b", name: "Writer", checked: false },
     ]);
   });
 
-  it("keeps the checked state and the order of the earlier roster, drops a removed definition, and checks a new one", () => {
+  it("keeps the checked state and the order of the earlier roster, drops a removed definition, and adds a new one unchecked", () => {
     const previous = [
       { id: "b", name: "B", checked: false },
       { id: "gone", name: "Gone", checked: true },
@@ -25,7 +25,7 @@ describe("rosterFrom", () => {
     expect(rosterFrom([def("a"), def("b"), def("c")], previous)).toEqual([
       { id: "b", name: "B", checked: false },
       { id: "a", name: "A", checked: true },
-      { id: "c", name: "C", checked: true },
+      { id: "c", name: "C", checked: false },
     ]);
   });
 

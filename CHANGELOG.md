@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- C34: A new agent definition joins the roster unchecked (`src/room/roster.ts`), so importing definitions invites no member; the person checks each member to summon it.
 - C32: The description of `plugin.json` has 152 characters, within the 1 to 200 that core checks at installation; v0.0.2 exceeded it. `src/manifest-rules.test.ts` pins the length rules.
 - C31: `engines.soksak` is `^0.0.47`, the dependency `@soksak/plugin-agents` is `>=0.0.1`, and the version is 0.0.3.
 - C29: The version is 0.0.2, which releases C18 to C28.

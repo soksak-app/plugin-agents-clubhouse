@@ -1,5 +1,5 @@
-// The roster of the room (C3): one entry per agent definition of the agents status. The order of an earlier roster stays, a removed
-// definition leaves it, and a new definition joins it checked, because a person checks the members to summon them.
+// The roster of the room (C3, C34): one entry per agent definition of the agents data. The order of an earlier roster stays, a
+// removed definition leaves it, and a new definition joins it unchecked, because inviting a member is the choice of the person.
 import type { AgentDefinition } from "./definitions";
 
 export interface RosterEntry {
@@ -18,6 +18,6 @@ export function rosterFrom(definitions: AgentDefinition[], previous: RosterEntry
   const known = new Set(kept.map((entry) => entry.id));
   const added = definitions
     .filter((definition) => !known.has(definition.id))
-    .map((definition) => ({ id: definition.id, name: definition.name, checked: true }));
+    .map((definition) => ({ id: definition.id, name: definition.name, checked: false }));
   return [...kept, ...added];
 }
