@@ -17,6 +17,8 @@ import type { RoomPort } from "./room/port";
 import { createTrace } from "./tower/trace";
 import { createRoomReport } from "./room/report";
 import { createArrangementStatus } from "./room/arrangement";
+import { parseAgentDefinitions } from "./room/definitions";
+import { rosterFrom, type RosterEntry } from "./room/roster";
 import { createMacroStore } from "./tower/macro";
 import { setupTower } from "./tower/header";
 import { TOWER_LIVE_TOPIC } from "./tower/modal";
@@ -25,11 +27,6 @@ const MODES: { id: RoomMode; key: "modeFacil" | "modeTurn" | "modeSimul" }[] = [
   { id: "facil", key: "modeFacil" },
   { id: "turn", key: "modeTurn" },
   { id: "simul", key: "modeSimul" },
-];
-// The members of the room. Their sessions are opened by C3; until then the tabs only choose the roster.
-const MEMBERS: { id: string; label: string; color: string }[] = [
-  { id: "claude", label: "Claude", color: "#d97757" },
-  { id: "codex", label: "Codex", color: "#10a37f" },
 ];
 const EXPOSE = "soksak-plugin-agents-clubhouse";
 
@@ -103,10 +100,6 @@ const CSS = `
 `;
 
 
-interface Tab {
-  id: string;
-  checked: boolean;
-}
 
 // The page bootstrap. Errors of the page and of its start go through the window error display (tab.error, src/room/report.ts),
 // which shows them and writes them to the application log; reports that come before the bridge exists wait for it.
@@ -179,7 +172,8 @@ function buildRoom({ settings, collections }: RoomContext): RoomHandlers {
     throw new Error(`settings.kibitzDefault must be facil, turn or simul, got ${JSON.stringify(modeSetting)}`);
   }
   let mode: RoomMode = modeSetting;
-  const roster: Tab[] = MEMBERS.map((m) => ({ id: m.id, checked: true }));
+  // The roster lists the agent definitions of the agents plugin (C13); it is empty until the status arrives.
+  const roster: RosterEntry[] = [];
   const transport = { state: "unavailable" as const, reason: t("transportUnavailable", lang) };
   const arrangement = createArrangementStatus();
   const state = (): RoomState => ({
@@ -221,12 +215,10 @@ function buildRoom({ settings, collections }: RoomContext): RoomHandlers {
   function renderTabs(): void {
     tabsEl.replaceChildren();
     for (const entry of roster) {
-      const member = MEMBERS.find((m) => m.id === entry.id)!;
       const tab = el("span", `st-tab${entry.checked ? "" : " off"}`);
       tab.dataset.id = entry.id;
       tab.dataset.expose = `${EXPOSE}.tab`;
-      tab.style.color = member.color;
-      tab.append(elText("span", entry.checked ? "✓" : "", "chk"), elText("span", member.label, "nm"));
+      tab.append(elText("span", entry.checked ? "✓" : "", "chk"), elText("span", entry.name, "nm"));
       tab.addEventListener("click", () => {
         entry.checked = !entry.checked;
         renderTabs();
@@ -274,6 +266,16 @@ function buildRoom({ settings, collections }: RoomContext): RoomHandlers {
 
   renderTabs();
   renderMode();
+
+  // Each change of the status agents.definitions replaces the roster, and a value of another form is reported as an error.
+  Promise.resolve(bridge!.runtime.status.watch("agents.definitions", (value: unknown) => {
+    try {
+      roster.splice(0, roster.length, ...rosterFrom(parseAgentDefinitions(value), roster));
+      renderTabs();
+    } catch (error) {
+      report("agents.definitions", String((error as Error)?.message ?? error));
+    }
+  })).catch((error: unknown) => report("agents.definitions", `status watch: ${String((error as Error)?.message ?? error)}`));
 
   // The trace and the macros of the tower are project data of the room, kept per project root.
   const trace = createTrace(collections, { sessionId: sessionIdOf(), report });

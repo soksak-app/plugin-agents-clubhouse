@@ -15,3 +15,4 @@
 - 경계: 방 테스트는 member를 실행하는 plugin을 실제 plugin id 대신 각 테스트가 선언한 fixture id(`fixture-terminal`)로 쓴다. 방 코드는 plugin id를 갖지 않는다. member의 plugin은 호출자가 넘긴다.
 - C5: 방은 message를 member의 owned session에 `core.session.submit`으로 보내고, `core.session.read`로 화면을 읽으며(형식 검사), program 상태는 `core.sessions`에서 읽는다. 중계(`src/room/relay.ts`)는 program이 idle일 때만 보내고, working을 거쳐 다시 idle이 되면 차례를 끝낸다. page 연결은 C3-1과 core F1062-7 release를 기다린다(C5은 열려 있다).
 - C13: Room은 `dependencies`에 agents plugin을 적고 status `agents.definitions`를 `src/room/definitions.ts`로 읽는다. 이 모듈은 다른 형식을 status 이름을 담은 오류로 거부하며, 정의마다 plugin과 시작 값을 준다. Red: `src/room/definitions.test.ts`가 `Cannot find module`로 실패했다. Green: 279개 test와 typecheck가 통과한다. Window check는 core F1074를 기다린다.
+- C14: Roster는 status `agents.definitions`의 정의를 `src/room/roster.ts`의 `rosterFrom`으로 보여 준다. 선택 상태와 순서를 유지하고, 새 정의는 선택된 상태로 넣는다. Red: `src/room/roster.test.ts`가 `Cannot find module`로 실패했다. Green: 282개 test와 typecheck가 통과한다.

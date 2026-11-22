@@ -23,6 +23,8 @@ declare module "@soksak/plugin-api/view" {
     runtime: {
       native: { on(name: string, listener: (event: any) => void): Promise<() => void> };
       settings: { read(): Promise<unknown> };
+      // A status of the workbench or of another plugin named in dependencies (core docs/spec/plugins.md#dependencies, F1074); the stop function ends the watch.
+      status: { watch(name: string, listener: (value: unknown) => void): Promise<() => void> };
       data: {
         get(key: string): Promise<unknown>;
         set(key: string, value: unknown): Promise<unknown>;
