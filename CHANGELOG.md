@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- C63: The version is 0.0.15, which releases C62.
 - C62: An answer that mentions other members of the relay gives each of them a turn of the same `message.send` relay in mention order, up to the setting `conversationTurns` (0 to 64, default 8); the limit and the new command `conversation.stop` with its stop button end the relay with a `[@clubhouse]` record line, and the protocol line states that a mention passes the next turn (`docs/spec/room.md#conversation`).
 - C61: The version is 0.0.14, which releases C39.
 - C39: Each member tab entry of the arrangement is `{plugin, params: {session, title}}`, with the name that the room shows for the member as the tab title of the terminal plugin 0.0.53, and a name outside 1 to 256 characters without control characters is refused before a layout command (`docs/spec/room.md#arrangement`).
