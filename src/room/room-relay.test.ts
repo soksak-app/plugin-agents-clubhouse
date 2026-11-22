@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import { relayInMode, type RelayPorts } from "./room-relay";
 import { createRoomRecord, withdrawnOnFailure, type RoomRecord } from "./room-record";
 import { createAnswerChannel } from "./answer";
+import { createConversationStatus } from "./conversation-status";
 
 interface FakeSession { session: string; program: { state: "idle" | "working" | "blocked" } | null }
 
@@ -34,7 +35,10 @@ function fakeCore(
     if (reply !== null) answers.deliver({ turn: turns.get(session)!, text: reply });
     setState(session, "idle");
   };
+  // The conversation status of the room is the tracker of the awaited members (docs/spec/room.md#conversation-status).
+  const status = createConversationStatus([], () => sessions.map((entry) => ({ ...entry })));
   const ports: RelayPorts = {
+    waiting: status.waiting,
     commands: {
       execute: async (name, params) => {
         const session = params.session as string;
@@ -65,7 +69,7 @@ function fakeCore(
       return () => void listeners.delete(listener);
     },
   };
-  return { ports, submitted, submits, finish };
+  return { ports, submitted, submits, finish, status };
 }
 
 const IDLE = (session: string): FakeSession => ({ session, program: { state: "idle" } });
@@ -126,6 +130,31 @@ describe("relayInMode one member at a time", () => {
     await expect(relayInMode(core.ports, "turn", [MEMBERS[0]], "hi", roomRecord("hi"))).rejects.toThrow(
       "member reviewer: core.session.submit text must not contain CR or LF",
     );
+  });
+});
+
+describe("relayInMode waiting (docs/spec/room.md#conversation-status)", () => {
+  it("names each member at the answer step from its submit until its answer arrives", async () => {
+    const core = fakeCore([IDLE("s-1"), IDLE("s-2")], { manual: true });
+    const relay = relayInMode(core.ports, "simul", MEMBERS, "hi", roomRecord("hi"));
+    await core.submits(2);
+    expect(core.status.read().waiting).toEqual([
+      { member: "reviewer", session: "s-1", step: "answer", program: "working" },
+      { member: "writer", session: "s-2", step: "answer", program: "working" },
+    ]);
+    core.finish("s-1");
+    // The turn of s-1 ends in the continuations of the answer; the next macrotask runs after them.
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(core.status.read().waiting).toEqual([{ member: "writer", session: "s-2", step: "answer", program: "working" }]);
+    core.finish("s-2");
+    await relay;
+    expect(core.status.read().waiting).toEqual([]);
+  });
+
+  it("ends the wait of a failed turn", async () => {
+    const core = fakeCore([IDLE("s-1")], { replies: { "s-1": null } });
+    await expect(relayInMode(core.ports, "turn", [MEMBERS[0]], "hi", roomRecord("hi"))).rejects.toThrow("member reviewer");
+    expect(core.status.read().waiting).toEqual([]);
   });
 });
 

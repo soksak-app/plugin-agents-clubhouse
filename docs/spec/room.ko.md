@@ -61,7 +61,9 @@ Relay의 답이 record에 하나도 없을 때 실패한 send는 owner의 줄을
 
 ## Conversation status
 
-선언된 status `soksak-plugin-agents-clubhouse.conversation`은 page가 보여 주는 대화 `{entries: [{speaker, text}]}`를 담는다. 이는 [room record](#room-record)의 항목을 record 순서로 담으며, `speaker`는 `owner` 또는 member의 식별자다. 방은 record가 바뀔 때마다, 실패한 send가 owner의 줄을 거둘 때도 새 값을 게시하므로, 호출자는 그려진 page가 아니라 status에서 대화를 읽는다.
+선언된 status `soksak-plugin-agents-clubhouse.conversation`은 page가 보여 주는 대화 `{entries: [{speaker, text}], waiting: [{member, session, step, program}]}`를 담는다. `entries`는 [room record](#room-record)의 항목을 record 순서로 담으며, `speaker`는 `owner` 또는 member의 식별자다. 방은 record가 바뀔 때마다, 실패한 send가 owner의 줄을 거둘 때도 새 값을 게시하므로, 호출자는 그려진 page가 아니라 status에서 대화를 읽는다.
+
+`waiting`은 방이 turn을 기다리는 각 member를 기다림이 시작된 순서로 밝힌다. `step`은 session의 첫 `idle`을 기다리는 [room protocol](#room-protocol) turn의 시작부터 그 turn이 끝날 때까지 `protocol`이고, 전달된 줄의 submit부터 그 [답](#answer)이 도착하거나 turn이 실패할 때까지 `answer`다. `program`은 `core.sessions` 현재 값에서 그 session의 program state다. `idle`, `working`, `blocked`이며, core가 아무 state도 보고하지 않는 동안은 `null`, `core.sessions`가 그 session을 더 이상 나열하지 않으면 `ended`다. 폴더에서 처음 시작할 때 Claude Code의 folder-trust prompt처럼 첫 `idle` 전에 자기 질문에서 멈춘 program은 그 member를 step `protocol`로 `waiting`에 남긴다. 그 답은 사람의 결정이므로 방은 program의 질문에 답하지 않고, 어느 member를 기다리는지 보여 주며, 사람은 그 member의 tab에서 답한다. 방은 기다림이 시작되거나 끝날 때와 `core.sessions`의 각 값에서 timer 없이 새 값을 게시한다. Page는 대화 아래에 기다리는 member마다 page의 언어로 한 줄을 보여 준다. 영어는 `waiting for <name>: <step>, program <program>`, 한국어는 `<name> 기다리는 중: <step>, program <program>`이며, `<name>`은 roster 이름이다.
 
 ## Answer
 

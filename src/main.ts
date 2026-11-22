@@ -9,7 +9,7 @@
 import { createExpose } from "@soksak/plugin-api";
 import { createViewBridge, type ViewBridge } from "@soksak/plugin-api/view";
 import manifest from "../plugin.json";
-import { t } from "./i18n";
+import { t, tp } from "./i18n";
 import { createRoomCommands, type RoomMode, type RoomState } from "./room/commands";
 import type { ElementTarget, RoomHandlers } from "./room/exposure";
 import { startRoomPage, type RoomContext } from "./room/page";
@@ -419,6 +419,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
     answers,
     surface,
     sessions: () => sessionsValue,
+    waiting: (member, step) => conversationStatus.waiting(member, step),
     watchSessions: (listener) => {
       sessionListeners.add(listener);
       return () => void sessionListeners.delete(listener);
@@ -426,18 +427,37 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   };
   // The conversation shows the room record: it names the owner or a member by its identifier and shows the roster name of the member.
   const memberName = (speaker: string): string => roster.find((entry) => entry.id === speaker)?.name || speaker;
+  // Below the entries the page shows one line per member whose turn the room waits for (docs/spec/room.md#conversation-status).
   const showConversation = (): void => {
+    let value;
+    try {
+      value = conversationStatus.read();
+    } catch (error) {
+      report("room conversation", String((error as Error)?.message ?? error));
+      return;
+    }
     msgs.replaceChildren(
-      ...conversation.map((entry) => elText("div", `${entry.speaker === "owner" ? (lang === "ko" ? "나" : "You") : memberName(entry.speaker)}: ${entry.text}`, "st-msg")),
+      ...value.entries.map((entry) => elText("div", `${entry.speaker === "owner" ? (lang === "ko" ? "나" : "You") : memberName(entry.speaker)}: ${entry.text}`, "st-msg")),
+      ...value.waiting.map((wait) =>
+        elText("div", tp("waitingFor", lang, { name: memberName(wait.member), step: wait.step, program: String(wait.program) }), "st-pending st-waiting"),
+      ),
     );
     msgs.scrollTop = msgs.scrollHeight;
   };
   // Each member receives the record lines that it has not received at the start of its turn (docs/spec/room.md#room-record).
   const speakerName = (speaker: string): string => (speaker === "owner" ? "owner" : memberName(speaker));
-  // The declared conversation status carries the entries that the page shows (docs/spec/room.md#conversation-status).
-  const conversationStatus = createConversationStatus(conversation);
+  // The declared conversation status carries the entries that the page shows and the members that the room waits for; the page draws
+  // each value, and each value of core.sessions publishes the program states again (docs/spec/room.md#conversation-status).
+  const conversationStatus = createConversationStatus(conversation, () => sessionsValue);
+  conversationStatus.subscribe(() => showConversation());
+  sessionListeners.add(() => {
+    try {
+      conversationStatus.changed();
+    } catch (error) {
+      report("room conversation", String((error as Error)?.message ?? error));
+    }
+  });
   const record = createRoomRecord(conversation, saved?.delivered ?? {}, speakerName, () => {
-    showConversation();
     conversationStatus.changed();
     persist();
   });

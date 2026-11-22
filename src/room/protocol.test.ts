@@ -3,6 +3,7 @@
 import { describe, expect, it } from "vitest";
 import { createProtocolInjector, roomProtocolLine } from "./protocol";
 import type { RelayPorts } from "./room-relay";
+import { createConversationStatus } from "./conversation-status";
 
 type State = "idle" | "working" | "blocked";
 
@@ -15,7 +16,10 @@ function fakeCore(initial: Record<string, State | null>) {
     states = { ...states, [session]: state };
     for (const listener of [...listeners]) listener(value());
   };
+  // The conversation status of the room is the tracker of the awaited members (docs/spec/room.md#conversation-status).
+  const status = createConversationStatus([], value);
   const ports: Omit<RelayPorts, "answers"> = {
+    waiting: status.waiting,
     commands: {
       execute: async (name, params) => {
         if (name !== "core.session.submit") throw new Error(`unexpected command ${name}`);
@@ -38,7 +42,7 @@ function fakeCore(initial: Record<string, State | null>) {
     states = rest;
     for (const listener of [...listeners]) listener(value());
   };
-  return { ports, submitted, set, end };
+  return { ports, submitted, set, end, status };
 }
 
 const claude = { id: "reviewer", name: "Claude", session: "s-1" };
@@ -115,6 +119,28 @@ describe("createProtocolInjector", () => {
     const injector = createProtocolInjector(core.ports, (where, text) => void reports.push(`${where}: ${text}`));
     expect(await injector.ensure(claude, [])).toEqual({ ok: false, reason: "member reviewer: session s-1 ended before its protocol turn" });
     expect(reports).toEqual([]);
+  });
+});
+
+describe("createProtocolInjector waiting (docs/spec/room.md#conversation-status)", () => {
+  it("names the member as waiting at the protocol step while its program is blocked before its first idle, and not after its turn", async () => {
+    const core = fakeCore({ "s-1": "blocked" });
+    const injector = createProtocolInjector(core.ports, () => undefined);
+    const turn = injector.ensure(claude, []);
+    expect(core.status.read().waiting).toEqual([{ member: "reviewer", session: "s-1", step: "protocol", program: "blocked" }]);
+    core.set("s-1", "idle");
+    expect(await turn).toEqual({ ok: true });
+    expect(core.status.read().waiting).toEqual([]);
+  });
+
+  it("ends the wait when the session ends before its protocol turn", async () => {
+    const core = fakeCore({ "s-1": null });
+    const injector = createProtocolInjector(core.ports, () => undefined);
+    const turn = injector.ensure(claude, []);
+    expect(core.status.read().waiting).toEqual([{ member: "reviewer", session: "s-1", step: "protocol", program: null }]);
+    core.end("s-1");
+    await turn;
+    expect(core.status.read().waiting).toEqual([]);
   });
 });
 

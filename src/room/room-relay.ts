@@ -8,6 +8,7 @@ import { mentionedMembers } from "./mention";
 import { ANSWER_COMMAND, type AnswerChannel } from "./answer";
 import type { RoomMode } from "./commands";
 import type { RoomRecord } from "./room-record";
+import type { BeginWaiting } from "./conversation-status";
 
 export interface RelayMember {
   id: string;
@@ -34,6 +35,8 @@ export interface RelayPorts extends SessionCommandPort {
   sessions(): unknown;
   // Calls the listener with each new value of core.sessions; the returned function ends the watch.
   watchSessions(listener: (value: unknown) => void): () => void;
+  // Names a member whose turn the room waits for in the conversation status (docs/spec/room.md#conversation-status).
+  waiting: BeginWaiting;
 }
 
 function messageOf(error: unknown): string {
@@ -73,6 +76,8 @@ async function relayToMember(ports: RelayPorts, member: RelayMember, record: Roo
   } catch (error) {
     throw new Error(`member ${member.id}: ${messageOf(error)}`);
   }
+  // The room waits for the answer of the member from the submit of its line until the turn ends.
+  const endWait = ports.waiting(member, "answer");
   const ended = relayMemberMessage(port, `${pending.text} | [@clubhouse] turn ${turn.turn}`, { signal: controller.signal }).then(() => {
     throw new Error(`the member ended its turn without an answer: it ran no ${ANSWER_COMMAND}`);
   });
@@ -81,6 +86,7 @@ async function relayToMember(ports: RelayPorts, member: RelayMember, record: Roo
   } catch (error) {
     throw new Error(`member ${member.id}: ${messageOf(failure ?? error)}`);
   } finally {
+    endWait();
     turn.close();
     // The answer ended the turn: the watch of the program ends, and its abort is no failure.
     ended.catch(() => {});

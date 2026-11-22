@@ -114,6 +114,10 @@ const strings = {
     en: "Conversation",
     ko: "대화",
   },
+  waitingFor: {
+    en: "waiting for {name}: {step}, program {program}",
+    ko: "{name} 기다리는 중: {step}, program {program}",
+  },
   transportUnavailable: {
     en: "No member session is open. Check a member of the roster to summon it.",
     ko: "열린 멤버 세션이 없습니다. 명단에서 멤버를 체크하면 세션을 엽니다.",

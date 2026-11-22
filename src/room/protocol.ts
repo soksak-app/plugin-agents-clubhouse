@@ -79,6 +79,9 @@ export function createProtocolInjector(
   const inject = async (member: ProtocolMember, peers: string[]): Promise<ProtocolOutcome> => {
     const controller = new AbortController();
     let failure: unknown = null;
+    // The room waits for the member from the start of its protocol turn, which waits for the first idle, until the turn ends; a
+    // program that stops at a question of its own before that idle keeps the member in the wait (docs/spec/room.md#conversation-status).
+    const endWait = ports.waiting(member, "protocol");
     try {
       await firstIdle(member.session);
       const port: SessionRelayPort = {
@@ -104,6 +107,8 @@ export function createProtocolInjector(
       const reason = `member ${member.id}: ${cause instanceof Error ? cause.message : String(cause)}`;
       report("room protocol", reason);
       return { ok: false, reason };
+    } finally {
+      endWait();
     }
   };
   return {
