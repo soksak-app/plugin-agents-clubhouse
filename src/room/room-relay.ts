@@ -128,7 +128,7 @@ async function relayToMember(
   if (!(await lineFree(ports, member, stopping))) throw new TurnStopped();
   let turn;
   try {
-    turn = ports.answers.open(member.session, member.id, record.lines.length);
+    turn = ports.answers.open(member.session, member.id, record.length(member.session));
   } catch (error) {
     throw new Error(`member ${member.id}: ${messageOf(error)}`);
   }
@@ -153,7 +153,7 @@ async function relayToMember(
     const submitted = ports.lines
       .submit(member.session, () => {
         const lines = record.pending(member.session, member.id);
-        const count = lines === null ? record.lines.length : lines.count;
+        const count = lines === null ? record.length(member.session) : lines.count;
         return {
           text: `[@clubhouse] ${lines === null ? EMPTY_TURN_TEXT : `${TURN_TEXT} | ${lines.text}`} | ${end}`,
           accepted: () => {
@@ -189,6 +189,10 @@ export interface ConversationBound {
   // Subscribes to the stop of the owner, which ends a turn that waits for a blocked session or for its answer; the returned function
   // ends the subscription.
   stopping?: (listener: () => void) => () => void;
+  // The identifier of the leader among the members; a relay with a leader follows the leader rules (docs/spec/room.md#leader).
+  leader?: string;
+  // The members of the relay at each step, which grow when the leader summons a member during the relay; the given members otherwise.
+  members?: () => NamedRelayMember[];
 }
 
 // The stop of the owner ended a turn that waited for a blocked session or for its answer.
@@ -227,10 +231,7 @@ function queueMentions(queue: Turn[], text: string, speaker: NamedRelayMember, m
 // that the other members have not received, so a turn for each settled answer would never end (docs/spec/room.md#settling).
 function unreceivedBesidesSettled(record: RoomRecord, member: RelayMember, answers: MemberAnswer[]): boolean {
   const settled = new Set(answers.filter((answer) => answer.status === "settled").map((answer) => answer.index));
-  for (let index = record.sent()[member.session] ?? 0; index < record.lines.length; index += 1) {
-    if (record.lines[index].speaker !== member.id && !settled.has(index)) return true;
-  }
-  return false;
+  return record.unsent(member.session, member.id).some((index) => !settled.has(index));
 }
 
 // The members whose last answer of the relay declares `continue`, in member order.
@@ -310,6 +311,76 @@ async function runTurns(
   return answers;
 }
 
+// Runs the relay of a room with a leader (docs/spec/room.md#leader): the members that the owner mentions and then the leader take the
+// first turns; the workers that one answer of the leader mentions start together, and each answer is appended when it arrives
+// (docs/spec/room.md#addressed-views). When no turn waits, each worker of the relay with unreceived lines other than settled answers takes
+// a turn, and then the leader while it has unreceived lines or its last answer continues; the last answer `settled` of the leader with
+// every line received settles the conversation (docs/spec/room.md#settling).
+async function runLeader(
+  ports: RelayPorts,
+  leader: NamedRelayMember,
+  given: NamedRelayMember[],
+  message: string,
+  record: RoomRecord,
+  bound: ConversationBound,
+): Promise<MemberAnswer[]> {
+  const members = (): NamedRelayMember[] => bound.members?.() ?? given;
+  const workers = (): NamedRelayMember[] => members().filter((member) => member.id !== leader.id);
+  const answers: MemberAnswer[] = [];
+  const batches: { members: NamedRelayMember[]; byAnswer: boolean }[] = [
+    ...mentionedMembers(message, workers()).map((member) => ({ members: [member], byAnswer: false })),
+    { members: [leader], byAnswer: false },
+  ];
+  const queued = (member: NamedRelayMember): boolean => batches.some((batch) => batch.members.some((one) => one.id === member.id));
+  let started = 0;
+  for (;;) {
+    if (batches.length === 0) {
+      const took = new Set(answers.map((answer) => answer.id));
+      const behind = workers().filter((member) => took.has(member.id) && unreceivedBesidesSettled(record, member, answers));
+      const last = answers.filter((answer) => answer.id === leader.id).at(-1);
+      if (behind.length > 0) batches.push(...behind.map((member) => ({ members: [member], byAnswer: true })));
+      else if (last?.status === "settled" && record.unsent(leader.session, leader.id).length === 0) {
+        record.append("clubhouse", "the conversation settled");
+        break;
+      } else batches.push({ members: [leader], byAnswer: true });
+    }
+    if (bound.stopped()) {
+      record.append("clubhouse", "the conversation ended: the owner stopped it");
+      break;
+    }
+    const batch = batches[0];
+    if (batch.byAnswer && started + batch.members.length > bound.limit) {
+      record.append("clubhouse", `the conversation ended: it reached the limit of ${bound.limit} member turns`);
+      break;
+    }
+    batches.shift();
+    if (batch.byAnswer) started += batch.members.length;
+    const arrived: MemberAnswer[] = [];
+    const results = await Promise.allSettled(
+      batch.members.map((member) =>
+        relayToMember(ports, member, record, bound.accepted, rolesLine(member, members()), bound.stopping).then((answer) => {
+          appendAnswer(record, answer);
+          answers.push(answer);
+          arrived.push(answer);
+        }),
+      ),
+    );
+    const failed = results.find((result): result is PromiseRejectedResult => result.status === "rejected" && !(result.reason instanceof TurnStopped));
+    if (failed) throw failed.reason;
+    if (results.some((result) => result.status === "rejected")) {
+      record.append("clubhouse", "the conversation ended: the owner stopped it");
+      break;
+    }
+    for (const answer of arrived) {
+      const named = mentionedMembers(answer.text, workers().filter((member) => member.id !== answer.id && !queued(member)));
+      if (named.length === 0) continue;
+      if (answer.id === leader.id) batches.push({ members: named, byAnswer: true });
+      else batches.push(...named.map((member) => ({ members: [member], byAnswer: true })));
+    }
+  }
+  return answers;
+}
+
 const turnsOf = (members: NamedRelayMember[]): Turn[] => members.map((member) => ({ member, byAnswer: false }));
 
 // Relays the last message of the owner in the record by the mode of the room (docs/spec/room.md#modes). The members that the message
@@ -328,6 +399,8 @@ export async function relayInMode(
 ): Promise<MemberAnswer[]> {
   // The members that the message mentions take their turns first, in mention order, and the other members follow in member order
   // (docs/spec/room.md#mentions); a mention no longer narrows the receivers.
+  const leader = members.find((member) => member.id === bound.leader);
+  if (leader !== undefined) return runLeader(ports, leader, members, message, record, bound);
   const mentioned = mentionedMembers(message, members);
   const others = members.filter((member) => !mentioned.includes(member));
   if (mode === "simul") {

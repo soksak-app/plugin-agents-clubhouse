@@ -3,10 +3,13 @@
 // the same roster checks, mode and conversation without input. The reader accepts only this form and names what it found otherwise.
 import type { RoomMode } from "./commands";
 import type { OpenToken } from "./answer";
+import type { TeamEntry } from "./team";
 
 export interface RoomState {
-  // The roster order and the checked state of each entry.
-  roster: { id: string; checked: boolean; role: string }[];
+  // The roster order, the checked state, the role of each entry and the leader, at most one (docs/spec/room.md#leader).
+  roster: { id: string; checked: boolean; role: string; leader: boolean }[];
+  // The members that the leader summoned, in summon order (docs/spec/room.md#team).
+  team: TeamEntry[];
   mode: RoomMode;
   // The conversation as the room shows it: the owner or the member identifier, and the text.
   conversation: { speaker: string; text: string; at: number | null; elapsedMs: number | null }[];
@@ -14,10 +17,11 @@ export interface RoomState {
   sessions: string[];
   // The sessions that received the room protocol with the answer command (docs/spec/room.md#room-protocol).
   protocolSessions: string[];
-  // The number of room record lines that the room delivered to each member session (docs/spec/room.md#room-record).
+  // The addressed list of each member session: the record indexes of the lines addressed to it (docs/spec/room.md#addressed-views).
+  addressed: Record<string, number[]>;
+  // The delivered position of each member session in its addressed list (docs/spec/room.md#room-record).
   delivered: Record<string, number>;
-  // The number of room record lines that the room submitted to each member session, at least its delivered number
-  // (docs/spec/room.md#work-reports).
+  // The sent position of each member session in its addressed list, at least its delivered position (docs/spec/room.md#work-reports).
   sent: Record<string, number>;
   // The open turn tokens, so an answer after a restart is accepted
   // (docs/spec/room.md#restart).
@@ -36,7 +40,7 @@ export function serializedRoomState(state: RoomState): string {
 }
 
 const MODES: readonly string[] = ["facil", "turn", "simul"];
-const FIELDS: readonly string[] = ["roster", "mode", "conversation", "sessions", "protocolSessions", "delivered", "sent", "turns"];
+const FIELDS: readonly string[] = ["roster", "team", "mode", "conversation", "sessions", "protocolSessions", "addressed", "delivered", "sent", "turns"];
 
 const isText = (value: unknown): value is string => typeof value === "string" && value !== "";
 
@@ -46,8 +50,19 @@ export function parseRoomState(value: unknown): RoomState | null {
   const state = value as Record<string, unknown>;
   for (const field of Object.keys(state)) if (!FIELDS.includes(field)) throw new Error(`room tab state: unknown field ${field}`);
   const roster = state.roster;
-  if (!Array.isArray(roster) || !roster.every((entry) => isText(entry?.id) && typeof entry?.checked === "boolean" && typeof entry?.role === "string")) {
-    throw new Error("room tab state: roster must be an array of {id, checked, role}");
+  if (
+    !Array.isArray(roster) ||
+    !roster.every((entry) => isText(entry?.id) && typeof entry?.checked === "boolean" && typeof entry?.role === "string" && typeof entry?.leader === "boolean")
+  ) {
+    throw new Error("room tab state: roster must be an array of {id, checked, role, leader}");
+  }
+  if (roster.filter((entry) => entry.leader).length > 1) throw new Error("room tab state: roster has more than one leader");
+  const team = state.team;
+  if (
+    !Array.isArray(team) ||
+    !team.every((entry) => isText(entry?.id) && isText(entry?.definition) && typeof entry?.role === "string" && typeof entry?.directory === "string" && entry.directory.startsWith("/"))
+  ) {
+    throw new Error(`room tab state: team must be an array of {id, definition, role, directory}, got ${JSON.stringify(team)}`);
   }
   if (!MODES.includes(state.mode as string)) {
     throw new Error(`room tab state: mode must be facil, turn or simul, got ${JSON.stringify(state.mode)}`);
@@ -64,13 +79,24 @@ export function parseRoomState(value: unknown): RoomState | null {
     const list = state[field];
     if (!Array.isArray(list) || !list.every(isText)) throw new Error(`room tab state: ${field} must be an array of session identifiers`);
   }
+  const addressed = state.addressed;
+  if (typeof addressed !== "object" || addressed === null || Array.isArray(addressed)) {
+    throw new Error(`room tab state: addressed must be an object of record index lists, got ${JSON.stringify(addressed)}`);
+  }
+  for (const [session, list] of Object.entries(addressed)) {
+    const increasing = Array.isArray(list) && list.every((index, at) => Number.isInteger(index) && index >= 0 && index < conversation.length && (at === 0 || index > list[at - 1]));
+    if (session === "" || !increasing) {
+      throw new Error(`room tab state: addressed ${session} must hold increasing record indexes below ${conversation.length}, got ${JSON.stringify(list)}`);
+    }
+  }
+  const lengthOf = (session: string): number => (addressed as Record<string, number[]>)[session]?.length ?? conversation.length;
   const delivered = state.delivered;
   if (typeof delivered !== "object" || delivered === null || Array.isArray(delivered)) {
     throw new Error(`room tab state: delivered must be an object of session counts, got ${JSON.stringify(delivered)}`);
   }
   for (const [session, count] of Object.entries(delivered)) {
-    if (session === "" || !Number.isInteger(count) || (count as number) < 0 || (count as number) > conversation.length) {
-      throw new Error(`room tab state: delivered ${session} must be an integer from 0 to ${conversation.length}, got ${JSON.stringify(count)}`);
+    if (session === "" || !Number.isInteger(count) || (count as number) < 0 || (count as number) > lengthOf(session)) {
+      throw new Error(`room tab state: delivered ${session} must be an integer from 0 to ${lengthOf(session)}, got ${JSON.stringify(count)}`);
     }
   }
   const sent = state.sent;
@@ -79,8 +105,8 @@ export function parseRoomState(value: unknown): RoomState | null {
   }
   for (const [session, count] of Object.entries(sent)) {
     const least = (delivered as Record<string, number>)[session] ?? 0;
-    if (session === "" || !Number.isInteger(count) || (count as number) < least || (count as number) > conversation.length) {
-      throw new Error(`room tab state: sent ${session} must be an integer from ${least} to ${conversation.length}, got ${JSON.stringify(count)}`);
+    if (session === "" || !Number.isInteger(count) || (count as number) < least || (count as number) > lengthOf(session)) {
+      throw new Error(`room tab state: sent ${session} must be an integer from ${least} to ${lengthOf(session)}, got ${JSON.stringify(count)}`);
     }
   }
   for (const session of Object.keys(delivered as object)) {
@@ -101,11 +127,13 @@ export function parseRoomState(value: unknown): RoomState | null {
     }
   }
   return {
-    roster: roster.map((entry) => ({ id: entry.id, checked: entry.checked, role: entry.role })),
+    roster: roster.map((entry) => ({ id: entry.id, checked: entry.checked, role: entry.role, leader: entry.leader })),
+    team: team.map((entry) => ({ id: entry.id, definition: entry.definition, role: entry.role, directory: entry.directory })),
     mode: state.mode as RoomMode,
     conversation: conversation.map((entry) => ({ speaker: entry.speaker, text: entry.text, at: entry.at, elapsedMs: entry.elapsedMs })),
     sessions: [...(state.sessions as string[])],
     protocolSessions: [...(state.protocolSessions as string[])],
+    addressed: Object.fromEntries(Object.entries(addressed as Record<string, number[]>).map(([session, list]) => [session, [...list]])),
     delivered: { ...(delivered as Record<string, number>) },
     sent: { ...(sent as Record<string, number>) },
     turns: turns.map((token) => ({ turn: token.turn, session: token.session, member: token.member, count: token.count })),

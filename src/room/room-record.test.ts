@@ -2,7 +2,7 @@
 // that a member session has not received, the delivered number of each session, which never falls, and the withdrawal of an owner line
 // that no session received.
 import { describe, expect, it } from "vitest";
-import { createRoomRecord, settledRelay } from "./room-record";
+import { createRoomRecord, leaderRoute, settledRelay } from "./room-record";
 
 const nameOf = (speaker: string): string => ({ owner: "owner", a: "Alpha", b: "Beta" })[speaker] ?? speaker;
 
@@ -70,5 +70,44 @@ describe("settledRelay", () => {
       { speaker: "owner", text: "hi" },
       { speaker: "clubhouse", text: "the relay failed: member b: failed" },
     ]);
+  });
+});
+
+describe("addressed views (docs/spec/room.md#addressed-views)", () => {
+  const MEMBERS = [{ id: "lead", name: "Lead", session: "s-l" }, { id: "w1", name: "W1", session: "s-1" }, { id: "w2", name: "W2", session: "s-2" }];
+  const route = leaderRoute(() => "s-l", (session) => MEMBERS.find((member) => member.session === session));
+
+  it("gives the leader every line and a worker only the owner lines and the lines that mention it", () => {
+    const record = createRoomRecord([], {}, nameOf, () => {}, {}, () => 0, {}, route);
+    record.append("owner", "build a game");
+    record.append("lead", "@W1 build the server");
+    record.append("w2", "unrelated note");
+    record.append("clubhouse", "@W2 claimed src/a.ts");
+    expect(record.unsent("s-l", "lead")).toEqual([0, 2, 3]);
+    expect(record.unsent("s-1", "w1")).toEqual([0, 1]);
+    expect(record.unsent("s-2", "w2")).toEqual([0, 3]);
+    expect(record.length("s-1")).toBe(2);
+  });
+
+  it("counts sent and delivered as positions in the addressed list", () => {
+    const record = createRoomRecord([], {}, nameOf, () => {}, {}, () => 0, {}, route);
+    record.append("owner", "go");
+    record.append("lead", "@W1 do it");
+    const pending = record.pending("s-1", "w1")!;
+    expect(pending.count).toBe(2);
+    record.markSent("s-1", pending.count);
+    record.append("lead", "a line for nobody else");
+    expect(record.pending("s-1", "w1")).toBeNull();
+    record.append("lead", "@W1 and this");
+    expect(record.pending("s-1", "w1")?.text).toBe("[@lead] @W1 and this");
+    expect(() => record.markSent("s-1", 4)).toThrow("sent s-1 must be an integer from 0 to 3, got 4");
+    expect(record.addressed()["s-1"]).toEqual([0, 1, 3]);
+  });
+
+  it("keeps every line addressed to every session without a leader", () => {
+    const record = createRoomRecord([], {}, nameOf, () => {}, {}, () => 0, {}, leaderRoute(() => null, () => undefined));
+    record.append("owner", "go");
+    record.append("a", "x");
+    expect(record.unsent("s-b", "b")).toEqual([0, 1]);
   });
 });

@@ -26,6 +26,8 @@ Summon 뒤 방은 방 card와 member card로 된 이름 `Room`의 group card를 
 
 - `soksak-plugin-agents-clubhouse.member.set {id, checked}`: roster entry `id`의 체크 상태를 설정하고 체크된 member를 summon한다. Idempotent하다: 현재 상태를 다시 설정하면 아무것도 바뀌지 않고 summon도 없다. 알 수 없는 `id`는 `member <id> is not in the roster`로 거부한다. 결과는 `{id, checked}`다. Roster tab(`soksak-plugin-agents-clubhouse.tab`)을 click하면 뒤집은 상태로 실행된다.
 - `soksak-plugin-agents-clubhouse.member.move {id, index}`: roster entry `id`를 자리 `index`(0부터 roster 길이 빼기 1까지)로 옮긴다. Roster tab을 다른 tab 위로 drag하면 그 tab의 index로 실행된다. 결과는 `{id, index}`다.
+- `soksak-plugin-agents-clubhouse.member.leader {id, leader}`: `leader`가 `true`이면 roster entry `id`를 [leader](#leader)로 정하고 check하며 다른 모든 entry의 leader를 지우고, `false`이면 지운다. Idempotent하다. 결과는 `{id, leader}`다.
+- `soksak-plugin-agents-clubhouse.member.summon {turn, definition, role, directory}`: leader의 turn token으로 [team](#team)의 member를 summon한다. 결과는 `{member, session}`이다.
 - `soksak-plugin-agents-clubhouse.mode.set {mode}`: 대화 mode를 `facil`, `turn`, `simul` 중 하나로 설정한다. 결과는 `{mode}`다. Mode element(`soksak-plugin-agents-clubhouse.mode`)의 각 button이 자기 mode로 실행한다.
 - `soksak-plugin-agents-clubhouse.message.send {text}`: `text`(trim한 뒤 비어 있지 않음)를 mode와 mention에 따라 member에게 전달하고, 그것과 각 답을 대화에 보이며, 전체 [대화](#conversation) 뒤에 turn 순서의 `{answers: [{id, text}]}`로 끝난다. 앞 메시지를 전달하는 동안의 send는 그 대화에 [owner follow-up](#owner-follow-up)으로 더해지고 바로 `{answers: []}`로 끝난다. 열린 member session이 없으면 `no member session is open: check a member of the roster`로 거부한다. Send button(`soksak-plugin-agents-clubhouse.send`)과 input(`soksak-plugin-agents-clubhouse.input`)에서 Shift 없는 Enter가 input의 text로 실행하고, command가 text를 받아들이면 input을 비운다. Command는 element가 시작했든 command 호출이 시작했든 각 거부와 실패한 relay를 window의 error display로 `error: room relay: <reason>`(실패한 turn은 `error: room relay: member <id>: <reason>`)으로 보고하고, 같은 이유로 reject한다.
 - `soksak-plugin-agents-clubhouse.conversation.stop {}`: 현재 메시지의 relay를 끝낸다([대화](#conversation)). 더 이상 turn이 시작되지 않고, 방이 답을 기다리는 turn은 답 없이 끝난다([turn end](#turn-end)). Restart 전부터 남은 각 token의 기다림도 끝낸다([restart](#restart)). Relay가 진행되는 동안 idempotent하다: 두 번째 호출은 아무것도 바꾸지 않는다. Relay도 남은 token도 없으면 `the room is relaying no message`로 거부한다. 결과는 `{stopped: true}`다. 중지 button(`soksak-plugin-agents-clubhouse.stop`)이 실행하며, 이 button은 메시지를 전달하거나 남은 token이 열려 있는 동안에만 enabled이고, 그 밖에는 disabled이며 disabled로 그려진다. View status `soksak-plugin-agents-clubhouse.view`는 `stopEnabled`를 가진다.
@@ -56,7 +58,7 @@ Mention은 `@` 뒤의 member 이름이나 identifier이며 대소문자를 구�
 
 ## Mode
 
-방의 mode(`facil`, `turn`, `simul`)는 메시지를 누가 어떤 순서로 받는지 정한다. Mention된 member가 먼저 turn을 받는다([mention](#mention)).
+방의 mode(`facil`, `turn`, `simul`)는 메시지를 누가 어떤 순서로 받는지 정한다. Mention된 member가 먼저 turn을 받는다([mention](#mention)). [Leader](#leader)가 있으면 owner의 메시지는 모든 mode에서 mention된 member 다음에 leader의 turn을 시작한다.
 
 - `turn`: 모든 member가 roster 순서로 차례로 받는다. 앞 member의 turn이 끝난 뒤 다음 member가 받는다.
 - `facil`: member 하나, 즉 roster 순서에서 session이 `idle`인 첫 member가 받는다. `idle`인 member가 없으면 send는 `no member is idle`로 거부된다. Mention된 member들은 차례로 받는다.
@@ -80,11 +82,33 @@ Room이 메시지를 전달하는 동안 owner가 보낸 메시지는 바로 own
 
 ## Settling
 
-각 답은 status를 밝힌다. 열린 질문, 이견, 남은 작업이 있으면 `continue`, member의 몫이 끝나고 검증되었으며 더 할 말이 없으면 `settled`다. 답 command는 그 밖의 값을 `status must be continue or settled, got <value>`로 거부한다. Relay의 turn이 기다리지 않고 relay의 어떤 member의 마지막 답이 `continue`이면 방은 round를 시작한다. Relay의 모든 member가 roster 순서로 turn을 받고 받지 않은 record 줄을 받으므로, owner의 메시지 하나가 대화를 끝까지 진행한다. 모든 member의 마지막 답이 `settled`이면 방은 `[@clubhouse] the conversation settled`를 덧붙이기 전에 relay의 모든 member를 확인한다. Member들의 `settled` 답 말고 받지 않은 record 줄이 있는 member는 `conversationTurns`에 들어가는 turn을 한 번 더 받고, 방은 settling을 다시 판단하므로 owner 줄, 작업 줄, 방의 줄은 사라지지 않는다. 각 답은 다른 member가 받지 않은 줄이고 그 하나하나에 turn을 주면 끝나지 않으므로, member가 받지 않은 `settled` 답은 다음 turn에 전달된다. 다른 member의 결론보다 먼저 `continue`로 답한 member는 다음 round의 turn과 함께 결론을 받는다. Round는 `conversationTurns`에 들어간다. Member가 continue인 채로 한도가 relay를 끝내면 방은 마지막 답이 `continue`인 각 member를 밝혀 `[@clubhouse] the conversation ended without settling: it reached the limit of <n> member turns; @<name> continue`를 덧붙인다. 기본값 48은 member 세 명의 round 16번이며, 계획 합의, 구현, 검증 보고를 거치는 개발 작업 하나의 크기다.
+[Leader](#leader)가 있으면 leader의 답 status만 settling을 정한다. 기다리는 turn이 없으면 relay에서 turn을 받았고 `settled` 답 말고 받지 않은 addressed 줄이 있는 각 worker가 turn을 받고, 그다음 leader는 받지 않은 줄이 있거나 마지막 답이 `continue`인 동안 turn을 받는다. Leader의 마지막 답이 `settled`이고 모든 줄을 받았으면 대화는 settle된다. Leader가 없으면 각 답은 status를 밝힌다. 열린 질문, 이견, 남은 작업이 있으면 `continue`, member의 몫이 끝나고 검증되었으며 더 할 말이 없으면 `settled`다. 답 command는 그 밖의 값을 `status must be continue or settled, got <value>`로 거부한다. Relay의 turn이 기다리지 않고 relay의 어떤 member의 마지막 답이 `continue`이면 방은 round를 시작한다. Relay의 모든 member가 roster 순서로 turn을 받고 받지 않은 record 줄을 받으므로, owner의 메시지 하나가 대화를 끝까지 진행한다. 모든 member의 마지막 답이 `settled`이면 방은 `[@clubhouse] the conversation settled`를 덧붙이기 전에 relay의 모든 member를 확인한다. Member들의 `settled` 답 말고 받지 않은 record 줄이 있는 member는 `conversationTurns`에 들어가는 turn을 한 번 더 받고, 방은 settling을 다시 판단하므로 owner 줄, 작업 줄, 방의 줄은 사라지지 않는다. 각 답은 다른 member가 받지 않은 줄이고 그 하나하나에 turn을 주면 끝나지 않으므로, member가 받지 않은 `settled` 답은 다음 turn에 전달된다. 다른 member의 결론보다 먼저 `continue`로 답한 member는 다음 round의 turn과 함께 결론을 받는다. Round는 `conversationTurns`에 들어간다. Member가 continue인 채로 한도가 relay를 끝내면 방은 마지막 답이 `continue`인 각 member를 밝혀 `[@clubhouse] the conversation ended without settling: it reached the limit of <n> member turns; @<name> continue`를 덧붙인다. 기본값 48은 member 세 명의 round 16번이며, 계획 합의, 구현, 검증 보고를 거치는 개발 작업 하나의 크기다.
 
 ## Sections
 
 여러 화자에게 답하는 답은 말한 화자의 순서대로 화자마다 section 하나를 둔다. Section은 자기 줄의 `@<name>:`로 시작하며, `<name>`은 member의 이름이나 identifier 또는 `owner`이고 대소문자를 구분하지 않는다. `@all:`은 나머지를 담고, 첫 section 앞의 text는 `all`에 속한다. Record는 답의 text를 바꾸지 않는다. Room view는 section마다 addressee를 머리로 단 block 하나를 그리고, [conversation status](#conversation-status)의 각 항목은 `sections: [{to, text}]`를 가지며 `to`는 `owner`, `all` 또는 member identifier다. Section 줄이 없는 답은 `[]`이다.
+
+## Room role
+
+방은 대화를 전달하고 보여 줄 뿐, member의 작업을 판단하거나 막지 않는다. 방은 각 command의 입력을 경계에서 확인하고, 각 줄을 그 줄을 받을 member에게 전달하며, record, 기다림, team을 보여 주지만, member의 주장을 검증하지 않고, 그 작업의 check를 실행하지 않으며, git 상태를 읽지 않고, 작업 내용 때문에 어떤 답이나 status도 거부하지 않는다. Leader는 신뢰받고 member는 대화로 작업 상태를 알아낸다. Agent의 작업을 판단하는 방은 그들의 오류에 자기 오류를 더하고, 그것을 바로잡을 수 있는 대화를 막기 때문이다.
+
+## Leader
+
+Roster entry 하나가 leader일 수 있다. `member.leader {id, leader}`로 정하고 [tab state](#restart)의 roster entry `leader`로 남는다. Leader를 정하면 그 entry를 check하고 다른 모든 entry의 leader를 지운다. Owner는 leader만 check하거나 정하고, leader가 작업을 계획하고 지휘한다. Leader는 [team](#team)의 member를 summon하고, 모든 record 줄을 받으며([addressed views](#addressed-views)), 자기 `settled` 답으로 대화를 끝낸다([settling](#settling)). Leader가 없으면 방은 전처럼 동작한다. 모든 member가 모든 줄을 받고 방의 mode가 turn 순서를 정한다. Leader의 protocol 줄은 그가 지휘한다는 것, summon command, 그리고 그의 답 하나가 mention한 member들이 함께 시작한다는 것을 말한다.
+
+## Team
+
+Leader는 `member.summon {turn, definition, role, directory}`로 team의 member를 summon한다. Command는 leader의 열린 turn token만 받고, 다른 token은 `member.summon takes the turn token of the leader <leader>, got a turn of <member>`로, leader가 없으면 `member.summon needs a leader: set one with member.leader`로 거부한다. `definition`은 agent definition을 가리키고(아니면 `definition <id> is not an agent definition`), `role`은 [roles](#roles) 규칙의 role text이며, `directory`는 절대 경로다. Leader가 작업과 folder를 맡으므로 summon은 이 입력만 확인한다. Session은 definition의 program과 argument로 `directory`에서 열린다. Terminal은 없는 directory를 거부하고, summon은 그 거부로 reject하며 team entry를 남기지 않는다. Plugin setting `maxMembers`는 1부터 16까지의 정수이고 기본값은 6이며 team의 크기를 제한한다. 이를 넘는 summon은 `the team has reached maxMembers <n>`으로 거부한다.
+
+Team member는 summon id `<definition>-<n>`을 가진다. `<n>`은 그 definition의 어떤 team member도 쓰지 않는 가장 작은 양의 정수다. 이름은 `<definition name>-<n>`이고 mention은 이 이름으로 그 member를 부른다. Team은 definition의 roster 옆의 별도 목록이며 tab state에 `team: [{id, definition, role, directory}]`로 남는다. Roster는 agent definition을, team은 summon된 member를 나열하므로 같은 definition이 두 folder에서 동시에 일할 수 있다. Team member의 relation은 roster member처럼 `<room surface>/<summon id>`로 저장되므로 restart는 각 team member를 자기 session에 다시 붙인다. Team member는 체크된 roster member처럼 room protocol을 받고 각 relay에 참여한다.
+
+각 worker는 project 안의 `.worktrees/<member>`에 branch `<member>`로 worktree를 만들고, 같은 Bash call에서 그곳으로 `cd`하며, brief의 나머지 동안 그곳에서 일한다. Leader는 `.worktrees/`가 project의 `.gitignore`에 없으면 첫 계획에서 더한다. Leader가 merge commit을 밝히고 worker가 자기 작업이 integration branch에 있음을 확인하면, worker는 project root로 돌아가 `git worktree remove .worktrees/<member>`를 실행하고 merge된 branch를 지우며 그 삭제를 답에서 알린다. 위치가 project 안인 이유는 Claude Code가 shell의 `cd`를 session의 folder 안에서만 유지하고 그 밖으로 `cd`하면 shell을 project로 되돌리며, 그 밖의 edit마다 permission을 묻기 때문이다. 격리된 member configuration의 worker가 Bash call 하나에서 `git worktree add -q .worktrees/a -b a && cd .worktrees/a`를 실행하자 이후 Bash call에서도 그 folder에 머물렀다. Protocol 줄이 이 순서를 말하고([room protocol](#room-protocol)), 방은 그 어느 것도 강제하지 않는다.
+
+## Addressed views
+
+각 member session은 addressed list, 곧 그 session에 가는 줄의 record index를 record 순서로 가지며 tab state의 `addressed`로 남는다. Leader가 없으면 모든 줄이 모든 session에 간다. Leader가 있으면 leader는 모든 줄을 받고, 그 밖의 모든 member인 worker는 owner의 줄, [mention 규칙](#mention)으로 자기를 mention한 줄, 자기를 mention한 방의 줄을 받는다. Worker에게는 자기 brief와 자기에게 온 질문이 필요하고, 전체 record는 다른 member의 작업으로 그 context를 채우기 때문이다. 방은 새 줄을 덧붙일 때 그 줄이 가는 각 session의 list에 index를 더하고, list가 없는 session은 처음 쓰일 때 자기에게 가는 모든 줄의 index를 받는다. `sent`와 `delivered`는 session의 addressed list 안의 위치이고, turn 줄은 `sent`부터 끝까지의 addressed 줄을 member 자신의 줄 없이 담는다.
+
+Leader의 답이 여러 worker를 mention하면 그 worker들은 함께 turn을 시작하고, 방은 각 답이 도착할 때 record에 덧붙인다. 그래서 leader의 다음 turn 줄은 그 답을 모두 담고, leader는 일찍 끝낸 worker를 본다. Worker의 답이 시작하는 turn은 차례로 진행된다.
 
 ## Roles
 
@@ -104,9 +128,9 @@ Room record는 방의 대화다. Owner의 각 메시지 줄, 각 member의 답, 
 
 모든 record 줄을 이미 받은 member의 turn도, 예컨대 작업 중에 [owner follow-up](#owner-follow-up)을 받은 뒤에도 실행된다. 그 줄은 record 줄 없이 turn rule과 token 앞에 `[@clubhouse] 네 차례야. 네가 아직 못 본 기록은 없어.`만 담고, 답과 status는 다른 turn처럼 센다.
 
-- Turn completeness: turn의 줄은 session이 받지 않은 record 줄을 record 순서로 담으므로, member는 답하기 전에 그때까지 나온 모든 줄을 읽는다.
+- Turn completeness: turn의 줄은 session의 sent 위치부터의 addressed 줄을 record 순서로 담으므로, member는 답하기 전에 자기에게 온 모든 줄을 읽는다([addressed views](#addressed-views)).
 - No line lost: 대화가 settle되기 전에 받지 않은 record 줄이 있는 각 member는 turn을 한 번 더 받고([settling](#settling)), [conversation status](#conversation-status)의 `delivery`는 언제나 각 member가 받지 않은 줄을 보여 준다.
-- Exactly once and in order: 각 submit은 `d`부터 방이 줄을 만들 때의 record 길이 `n`까지의 줄을 담고, submit의 token은 `n`을 기록한다. `d`는 turn token의 [답](#answer)이 도착할 때만 `n`으로 오른다. 받아들여진 submit은 program이 그 줄을 읽었다는 것을 알려 주지 않기 때문이다(core `docs/spec/persistent-services.md#owned-sessions`). 수는 내려가지 않으므로 한 session의 submit들은 record를 0부터 빈틈도 겹침도 없이 덮는다.
+- Exactly once and in order: 각 submit은 위치 `d`부터 방이 줄을 만들 때의 addressed list 길이 `n`까지의 줄을 담고, submit의 token은 `n`을 기록한다. 위치 `d`는 turn token의 [답](#answer)이 도착할 때만 `n`으로 오른다. 받아들여진 submit은 program이 그 줄을 읽었다는 것을 알려 주지 않기 때문이다(core `docs/spec/persistent-services.md#owned-sessions`). 위치는 내려가지 않으므로 한 session의 submit들은 그 addressed list를 0부터 빈틈도 겹침도 없이 덮는다.
 - One open line per session: session은 열린 turn token을 많아야 하나 가진다. Session의 다음 turn 줄은 그 token이 답을 받거나 owner의 중지가 그것을 닫을 때까지 기다리고, session의 program이 `idle`을 보고하기를 기다리지 않는다([turn end](#turn-end)).
 - Restart recovery: 열린 token은 tab state에 남으므로 restart 뒤에 도착한 답도 `d`를 올리고, member의 다음 turn이 남은 줄을 담는다([restart](#restart)).
 
@@ -175,14 +199,16 @@ Member는 화면이 아니라 선언된 command `soksak-plugin-agents-clubhouse.
 
 ## Restart
 
-Application의 restart, 방 tab의 unload, view의 restart 뒤에도 방은 입력 없이 이전과 같은 상태를 보여 준다. 방은 `surface.unload` `{format: 1, maxBytes: 1048576}`을 선언하고, 바뀔 때마다 view의 tab state(`tab.state.write`)로 tab의 상태를 쓴다. Core는 이를 tab마다 restart 너머로 보관한다(core `docs/spec/plugins.md#memory-saver`). 상태는 `{roster, mode, conversation, sessions, protocolSessions, delivered, turns}`다.
+Application의 restart, 방 tab의 unload, view의 restart 뒤에도 방은 입력 없이 이전과 같은 상태를 보여 준다. 방은 `surface.unload` `{format: 1, maxBytes: 1048576}`을 선언하고, 바뀔 때마다 view의 tab state(`tab.state.write`)로 tab의 상태를 쓴다. Core는 이를 tab마다 restart 너머로 보관한다(core `docs/spec/plugins.md#memory-saver`). 상태는 `{roster, team, mode, conversation, sessions, protocolSessions, addressed, delivered, sent, turns}`다.
 
-- `roster`: roster 순서의 entry `{id, checked}`. 시작할 때 definition이 주는 첫 roster는 이 순서와 check를 지킨다. 여기에 없는 definition은 끝에 체크되지 않은 채로 들어오고, definition이 없는 entry는 빠진다.
+- `roster`: roster 순서의 entry `{id, checked, role, leader}`이며 `leader`가 `true`인 것은 많아야 하나다. 시작할 때 definition이 주는 첫 roster는 이 순서, check, role, leader를 지킨다. 여기에 없는 definition은 끝에 체크되지 않은 채 붙고, definition이 없는 entry는 빠진다.
+- `team`: summon 순서의 [team](#team) member `{id, definition, role, directory}`.
 - `mode`: 대화 mode. 설정 `kibitzDefault`는 상태가 없는 방 tab의 mode만 정한다.
 - `conversation`: 대화가 보여 주는 entry `{speaker, text}`. `speaker`는 `owner` 또는 member의 identifier이고 `text`는 메시지 또는 member의 [답](#answer)이므로, restart 뒤에도 대화는 같은 답을 보여 준다.
 - `sessions`: 이 방이 연 member session.
 - `protocolSessions`: 답 command가 든 [room protocol](#room-protocol)을 받은 session. 여기에 있는 session은 protocol 줄을 다시 받지 않는다.
-- `delivered`: member session을 방이 그 session에 전달한 [room record](#room-record) 줄의 수로 잇는 object. 수는 0부터 `conversation` 길이까지의 정수다.
+- `addressed`: member session을 그 addressed list, 곧 `conversation` 길이보다 작고 증가하는 record index로 잇는 object([addressed views](#addressed-views)).
+- `delivered`와 `sent`: member session을 그 addressed list 안의 delivered 위치와 sent 위치로 잇는 object. 0부터 list 길이까지의 정수이며 `delivered`는 `sent`를 넘지 않는다.
 - `turns`: 열린 turn token `{turn, session, member, count}`. `member`는 그 member의 식별자, `count`는 줄을 만들 때의 record 길이로 0부터 `conversation` 길이까지의 정수다. Restart 뒤에도 방은 그 답을 받는다. 답은 session의 delivered number를 `count`로 올리고, restart로 relay가 끝난 turn의 답은 `member`의 답으로 record에 덧붙인다. Restart 전부터 남은 token의 기다림은 그 답이나 `conversation.stop`으로만 끝난다.
 
 Reader는 이 형식만 받으며, 다른 값은 field와 찾은 것을 밝히는 `room tab state: <field> ...`로, 이전 `taught`처럼 이 형식 밖의 field는 `room tab state: unknown field <field>`로 거부한다. 상태가 없는 tab은 `null`을 읽는다. JSON이 `surface.unload`의 1048576 byte보다 큰 상태는 쓰지 않고 `error: room tab state: the state is <n> bytes, over the limit of 1048576 bytes`로 보고한다. 거부된 쓰기는 `error: room tab state: <reason>`으로 보고된다.

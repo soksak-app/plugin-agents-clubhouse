@@ -8,6 +8,8 @@ export interface RosterEntry {
   checked: boolean;
   // The role of the member in the room, "" without one (docs/spec/room.md#roles).
   role: string;
+  // Whether the member is the leader of the room, at most one entry (docs/spec/room.md#leader).
+  leader: boolean;
 }
 
 export function rosterFrom(definitions: AgentDefinition[], previous: RosterEntry[]): RosterEntry[] {
@@ -16,11 +18,11 @@ export function rosterFrom(definitions: AgentDefinition[], previous: RosterEntry
   const byId = new Map(definitions.map((definition) => [definition.id, definition]));
   const kept = previous
     .filter((entry) => byId.has(entry.id))
-    .map((entry) => ({ id: entry.id, name: byId.get(entry.id)!.name, checked: entry.checked, role: entry.role }));
+    .map((entry) => ({ id: entry.id, name: byId.get(entry.id)!.name, checked: entry.checked, role: entry.role, leader: entry.leader }));
   const known = new Set(kept.map((entry) => entry.id));
   const added = definitions
     .filter((definition) => !known.has(definition.id))
-    .map((definition) => ({ id: definition.id, name: definition.name, checked: false, role: "" }));
+    .map((definition) => ({ id: definition.id, name: definition.name, checked: false, role: "", leader: false }));
   return [...kept, ...added];
 }
 
@@ -34,7 +36,7 @@ export async function reattachedChecks(
   const entries: RosterEntry[] = [];
   for (const definition of definitions) {
     const session = await storedSession(definition.id);
-    entries.push({ id: definition.id, name: "", checked: session !== null && owned.has(session), role: "" });
+    entries.push({ id: definition.id, name: "", checked: session !== null && owned.has(session), role: "", leader: false });
   }
   return entries;
 }

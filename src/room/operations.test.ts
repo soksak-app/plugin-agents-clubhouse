@@ -8,9 +8,9 @@ const P = "soksak-plugin-agents-clubhouse";
 
 function room(overrides: Partial<OperationDeps> = {}) {
   const roster: RosterEntry[] = [
-    { id: "a", name: "A", checked: false, role: "" },
-    { id: "b", name: "B", checked: true, role: "" },
-    { id: "c", name: "C", checked: false, role: "" },
+    { id: "a", name: "A", checked: false, role: "", leader: false },
+    { id: "b", name: "B", checked: true, role: "", leader: false },
+    { id: "c", name: "C", checked: false, role: "", leader: false },
   ];
   let mode: RoomMode = "facil";
   const log: string[] = [];
@@ -151,5 +151,20 @@ describe("conversation.stop (docs/spec/room.md#conversation)", () => {
     expect(seen[1]()).toBe(false);
     finish();
     await second;
+  });
+});
+
+describe("member.leader (docs/spec/room.md#leader)", () => {
+  it("makes one entry the leader, checks it and clears the leader of every other entry, idempotently", async () => {
+    const r = room();
+    r.roster[1].leader = true;
+    expect(await r.commands[`${P}.member.leader`]({ id: "a", leader: true })).toEqual({ id: "a", leader: true });
+    expect(r.roster.map((entry) => [entry.id, entry.checked, entry.leader])).toEqual([["a", true, true], ["b", true, false], ["c", false, false]]);
+    expect(r.log).toEqual(["changed", "summon"]);
+    await r.commands[`${P}.member.leader`]({ id: "a", leader: true });
+    expect(r.log).toEqual(["changed", "summon"]);
+    await r.commands[`${P}.member.leader`]({ id: "a", leader: false });
+    expect(r.roster.every((entry) => !entry.leader)).toBe(true);
+    await expect(r.commands[`${P}.member.leader`]({ id: "a", leader: "yes" })).rejects.toThrow('leader must be a boolean, got "yes"');
   });
 });

@@ -223,3 +223,32 @@ describe("soksak knowledge", () => {
   });
 });
 
+
+// The team protocol (docs/spec/room.md#team): the leader line states the summon and the merge, and the worker line the worktree
+// lifecycle inside the project, because Claude Code keeps a cd of the shell only inside the folders of the session.
+// The team rules have no other carrier than the protocol line of a team member, so a line with them may hold 300 characters more than
+// the bound of a line without them.
+const TEAM_BOUND = 3800;
+
+describe("the team protocol", () => {
+  it("tells the leader that it leads, how to summon and that its settled answer ends the conversation", () => {
+    const line = roomProtocolLine("Lead", ["W1"], "room-1", "", false, { leader: null });
+    expect(line).toContain("You lead: you get every record line, split the work, and your settled answer ends the conversation.");
+    expect(line).toContain(`sok soksak-plugin-agents-clubhouse.member.summon --surface room-1 --params '{"turn": "<token>", "definition": "<definition>", "role": "<role>", "directory": "<project folder>"}'`);
+    expect(line).toContain("Add .worktrees/ to .gitignore if missing. Merge each ready branch and name the merge commit.");
+    expect(line).toContain("brief it by mention; workers mentioned in one answer start together.");
+    expect(line.length).toBeLessThan(TEAM_BOUND);
+  });
+
+  it("tells a worker the worktree lifecycle inside the project", () => {
+    const line = roomProtocolLine("W1", ["Lead"], "room-1", "server", false, { leader: "Lead" });
+    expect(line).toContain("You work for @Lead: you get the owner lines and the lines that mention you.");
+    expect(line).toContain("First run git worktree add -q .worktrees/W1 -b W1 && cd .worktrees/W1 in one Bash call and work there.");
+    expect(line).toContain("Tell @Lead when your branch is ready. After it names the merge commit, check your work and its unit tests in the integration branch, cd to the project root, run git worktree remove .worktrees/W1, delete branch W1, and report it.");
+    expect(line.length).toBeLessThan(TEAM_BOUND);
+  });
+
+  it("states no team rule without a leader", () => {
+    expect(roomProtocolLine("Claude", [], "room-1")).not.toContain("leader");
+  });
+});

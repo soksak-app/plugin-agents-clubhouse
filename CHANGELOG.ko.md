@@ -2,6 +2,7 @@
 
 ## 미출시
 
+- C88: Roster member가 leader일 수 있다(`member.leader`). Leader는 `member.summon`으로 team member를 summon한다(입력만 확인, setting `maxMembers` 1부터 16, 기본 6, summon id `<definition>-<n>`는 tab state `team`에 남음). Leader는 모든 record 줄을, worker는 owner 줄과 자기를 mention한 줄만 받으며, `sent`와 `delivered`는 session별 addressed list `addressed` 안의 위치다. Leader 답 하나가 mention한 worker는 함께 시작하고 각 답은 도착할 때 record에 들어간다. Leader의 마지막 `settled` 답이 대화를 settle한다. Protocol 줄은 leader 규칙과 `.worktrees/<member>`의 worker worktree 순서를 말하고, 방은 작업을 판단하지 않는다(`docs/spec/room.md#team`). 검증: record, relay, team, protocol, tab state, operations의 unit test. Team member 줄의 protocol bound는 3800자다.
 - C87: Record는 `[@clubhouse] 네 차례야.`로 시작하는 member의 turn 줄로만 전달된다. Closing delivery, 수동 report inject, record acknowledgement command `record.ack`를 없앴고, tab state의 열린 token에는 `kind`가 없으며, settled 답 말고 받지 않은 줄이 있는 member는 대화가 settle되기 전에 turn을 한 번 더 받고, turn은 답으로 끝나며, 방은 `blocked` session에 줄을 입력하지 않고, `conversation.stop`은 답을 기다리는 turn을 끝낸다(`docs/spec/room.md#conversation-first`, `docs/spec/room.md#turn-end`).
 - C85: Protocol 줄은 turn을 terminal text 없이 끝내게 하고 상태처럼 보이는 마무리 단어를 금한다(`docs/spec/room.md#room-protocol`).
 - C84: 모든 record 줄을 받은 member의 turn은 record 줄 대신 방의 줄로 실행되므로 그 답이 대화를 settle한다(`docs/spec/room.md#room-record`).

@@ -4,7 +4,7 @@
 // as core would; the member of a session runs the answer command during its turn, before its program reports idle.
 import { describe, expect, it } from "vitest";
 import { EMPTY_TURN_TEXT, TURN_RULE, conversationTurnsOf, relayInMode, type ConversationBound, type RelayPorts } from "./room-relay";
-import { createRoomRecord, settledRelay, type RoomRecord } from "./room-record";
+import { createRoomRecord, leaderRoute, settledRelay, type RoomRecord } from "./room-record";
 import { createSubmitQueue } from "./submit-queue";
 import { createAnswerChannel } from "./answer";
 import { createConversationStatus } from "./conversation-status";
@@ -639,3 +639,74 @@ describe("conversation first", () => {
   });
 });
 
+
+describe("a relay with a leader (docs/spec/room.md#leader)", () => {
+  const TEAM = [{ id: "lead", name: "Lead", session: "s-l" }, { id: "w1", name: "W1", session: "s-1" }, { id: "w2", name: "W2", session: "s-2" }];
+  const leaderRecord = () => {
+    const record = createRoomRecord([], {}, (speaker) => speaker, () => {}, {}, () => 0, {},
+      leaderRoute(() => "s-l", (session) => TEAM.find((member) => member.session === session)));
+    return record;
+  };
+
+  it("starts the leader first, starts the workers that one leader answer mentions together, and appends each answer on arrival", async () => {
+    const core = fakeCore([IDLE("s-l"), IDLE("s-1"), IDLE("s-2")], { manual: true });
+    const record = leaderRecord();
+    core.bound.record = record;
+    record.append("owner", "build a game");
+    const relay = relayInMode(core.ports, "turn", TEAM, "build a game", record, { ...OPEN, leader: "lead" });
+    await core.submits(1);
+    expect(core.submitted[0].session).toBe("s-l");
+    core.answer("s-l", "continue", "@W1 build the server | @W2 build the client");
+    await core.submits(3);
+    expect(core.submitted.slice(1).map((entry) => entry.session).sort()).toEqual(["s-1", "s-2"]);
+    // A worker receives the owner line and the leader line that mentions it, and nothing else.
+    expect(core.submitted[1].text).toContain("[@owner] build a game");
+    core.answer("s-2", "settled", "client done");
+    // The answer joins the record when it arrives, while the turn of W1 still runs.
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(record.lines.at(-1)).toMatchObject({ speaker: "w2", text: "client done" });
+    core.answer("s-1", "settled", "server done");
+    await core.submits(4);
+    expect(core.submitted[3].session).toBe("s-l");
+    expect(core.submitted[3].text).toContain("client done");
+    expect(core.submitted[3].text).toContain("server done");
+    core.answer("s-l", "settled", "merged");
+    await relay;
+    expect(record.lines.at(-1)).toMatchObject({ speaker: "clubhouse", text: "the conversation settled" });
+    // The answers of the workers mention no worker, so no worker received the line of the other.
+    expect(core.submitted.filter((entry) => entry.session === "s-1").map((entry) => entry.text).join(" ")).not.toContain("client done");
+  });
+
+  it("gives the leader another turn while its last answer continues", async () => {
+    const core = fakeCore([IDLE("s-l"), IDLE("s-1"), IDLE("s-2")], { manual: true });
+    const record = leaderRecord();
+    core.bound.record = record;
+    record.append("owner", "plan it");
+    const relay = relayInMode(core.ports, "turn", TEAM, "plan it", record, { ...OPEN, leader: "lead" });
+    await core.submits(1);
+    core.answer("s-l", "continue", "thinking");
+    await core.submits(2);
+    expect(core.submitted[1].session).toBe("s-l");
+    core.answer("s-l", "settled", "done");
+    await relay;
+    expect(core.submitted).toHaveLength(2);
+  });
+
+  it("starts a worker that the relay gains after its start when the leader mentions it", async () => {
+    const core = fakeCore([IDLE("s-l"), IDLE("s-1"), IDLE("s-2")], { manual: true });
+    const record = leaderRecord();
+    core.bound.record = record;
+    record.append("owner", "go");
+    const members = [TEAM[0]];
+    const relay = relayInMode(core.ports, "turn", members, "go", record, { ...OPEN, leader: "lead", members: () => members });
+    await core.submits(1);
+    members.push(TEAM[1]);
+    core.answer("s-l", "continue", "@W1 start");
+    await core.submits(2);
+    expect(core.submitted[1].session).toBe("s-1");
+    core.answer("s-1", "settled", "ok");
+    await core.submits(3);
+    core.answer("s-l", "settled", "end");
+    await relay;
+  });
+});

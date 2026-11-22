@@ -73,8 +73,7 @@ export function createWorkReports(ports: WorkPorts, record: RoomRecord, members:
     for (const member of members()) {
       const session = member.session;
       if (injecting.has(session)) continue;
-      const from = record.sent()[session] ?? 0;
-      if (![...followUps].some((index) => index >= from)) continue;
+      if (!record.unsent(session, member.id).some((index) => followUps.has(index))) continue;
       let state;
       try {
         state = sessionProgram(value, session);

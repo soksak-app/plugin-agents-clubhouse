@@ -74,6 +74,25 @@ export function createRoomOperations(deps: OperationDeps): Record<string, (param
       }
       return { id, role: next };
     },
+    // member.leader makes an entry the leader, checks it and clears every other leader, or clears it (docs/spec/room.md#leader).
+    [`${P}.member.leader`]: async (params) => {
+      const id = idOf(params);
+      const leader = params?.leader;
+      if (typeof leader !== "boolean") throw new Error(`leader must be a boolean, got ${JSON.stringify(leader)}`);
+      const entry = entryOf(deps.roster, id);
+      const summon = leader && !entry.checked;
+      let change = entry.leader !== leader || summon;
+      for (const other of deps.roster) {
+        if (other === entry || !other.leader || !leader) continue;
+        other.leader = false;
+        change = true;
+      }
+      entry.leader = leader;
+      if (leader) entry.checked = true;
+      if (change) deps.changed();
+      if (summon) deps.summon();
+      return { id, leader };
+    },
     [`${P}.member.move`]: async (params) => {
       const id = idOf(params);
       const index = params?.index;

@@ -1,7 +1,10 @@
 // The room record (docs/spec/room.md#room-record): the lines of the owner, the answers of the members and the lines of the room in the
-// order in which the room took them, and for each member session the number of record lines that it has received. Each turn line of a
-// session carries the lines from its sent number to the end of the record, and the delivered number rises only when the answer of the
-// token of the line arrives, so every member reads the whole record once and in order (docs/spec/room.md#conversation-first).
+// order in which the room took them, and for each member session the addressed list of the lines addressed to it and its sent and
+// delivered positions in that list (docs/spec/room.md#addressed-views). Each turn line of a session carries its addressed lines from its
+// sent position to the end, and the delivered position rises only when the answer of the token of the line arrives, so every member reads
+// each line addressed to it once and in order (docs/spec/room.md#conversation-first).
+
+import { mentionedMembers } from "./mention";
 
 export interface RecordLine {
   // `owner` or the identifier of a member.
@@ -14,34 +17,59 @@ export interface RecordLine {
 }
 
 export interface PendingLines {
-  // The record lines that the session has not received, without its own lines, each as `[@<speaker>] <text>` joined with " | ".
+  // The addressed lines that the session has not been sent, without its own lines, each as `[@<speaker>] <text>` joined with " | ".
   text: string;
   // The speakers of those lines in the order of their first line.
   speakers: string[];
-  // The length of the record when the text was built: the delivered number after the answer of the line.
+  // The length of the addressed list of the session when the text was built: the sent and delivered position after the line.
   count: number;
 }
 
 export interface RoomRecord {
   readonly lines: readonly RecordLine[];
-  // The delivered number of each session, as the tab state keeps it.
+  // The delivered position of each session in its addressed list, as the tab state keeps it.
   delivered(): Record<string, number>;
-  // The sent number of each session: the record lines that the room submitted to it; a delivered number never exceeds it
-  // (docs/spec/room.md#work-reports).
+  // The sent position of each session in its addressed list: the addressed lines that the room submitted to it; a delivered position
+  // never exceeds it (docs/spec/room.md#addressed-views).
   sent(): Record<string, number>;
-  // Raises the sent number of the session to count after core accepted a submit of the lines up to count.
+  // The addressed list of each session: the record indexes of the lines addressed to it, in record order.
+  addressed(): Record<string, number[]>;
+  // Raises the sent position of the session to count after core accepted a submit of its addressed lines up to count.
   markSent(session: string, count: number): void;
-  // Appends a line at the time of the clock of the record; `elapsedMs` is the time of the turn of an answer.
+  // Appends a line at the time of the clock of the record and adds its index to the addressed list of each session that it is addressed
+  // to; `elapsedMs` is the time of the turn of an answer.
   append(speaker: string, text: string, elapsedMs?: number | null): void;
   // The clock of the record in epoch milliseconds.
   now(): number;
-  // The lines from the sent number of `session` of the member `self` to the end, without its own lines; null when there is none.
+  // The addressed lines of `session` of the member `self` from its sent position to the end, without its own lines; null when there is
+  // none. A session without an addressed list gets one of every line addressed to it.
   pending(session: string, self: string): PendingLines | null;
-  // Raises the delivered number of the session to its sent number, at least count, at the answer of a token;
-  // a delivered number never falls.
+  // The record indexes of the addressed lines of `session` from its sent position to the end, without the lines of `self`.
+  unsent(session: string, self: string): number[];
+  // The length of the addressed list of `session`: the position up to which a turn line built now delivers.
+  length(session: string): number;
+  // Raises the delivered position of the session to its sent position, at least count, at the answer of a token;
+  // a delivered position never falls.
   markDelivered(session: string, count: number): void;
-  // Removes the line at `index` when it is the last line of the record and no session has received it. Returns whether it removed the line.
+  // Removes the line at `index` when it is the last line of the record and no session has been sent it. Returns whether it removed the line.
   withdrawLast(index: number): boolean;
+}
+
+// Whether a record line is addressed to a session; without a leader every line is (docs/spec/room.md#addressed-views).
+export type AddressedTo = (line: RecordLine, session: string) => boolean;
+
+// The route of a room with a leader (docs/spec/room.md#addressed-views): the leader receives every line, and a worker the lines of the
+// owner and the lines that mention it. Without a leader, and for a session of no known member, every line is addressed.
+export function leaderRoute(
+  leaderSession: () => string | null,
+  memberOf: (session: string) => { id: string; name: string } | undefined,
+): AddressedTo {
+  return (line, session) => {
+    const leader = leaderSession();
+    if (leader === null || session === leader || line.speaker === "owner") return true;
+    const member = memberOf(session);
+    return member === undefined || mentionedMembers(line.text, [member]).length > 0;
+  };
 }
 
 const oneLine = (text: string): string => text.replace(/\r\n|\r|\n/g, " ");
@@ -52,24 +80,40 @@ export function createRoomRecord(
   delivered: Record<string, number>,
   nameOf: (speaker: string) => string,
   changed: () => void,
-  // The sent numbers of the tab state; a record without them starts at the delivered numbers.
+  // The sent positions of the tab state; a record without them starts at the delivered positions.
   sent: Record<string, number> = delivered,
   now: () => number = () => Date.now(),
+  // The addressed lists of the tab state; a session without one gets the lines addressed to it at its first use.
+  addressed: Record<string, number[]> = {},
+  addressedTo: AddressedTo = () => true,
 ): RoomRecord {
   const counts = new Map(Object.entries(delivered));
   const sentCounts = new Map(Object.entries(sent));
+  const lists = new Map(Object.entries(addressed).map(([session, list]) => [session, [...list]]));
+  const listOf = (session: string): number[] => {
+    let list = lists.get(session);
+    if (list === undefined) {
+      list = lines.flatMap((line, index) => (addressedTo(line, session) ? [index] : []));
+      lists.set(session, list);
+    }
+    return list;
+  };
   for (const [session, count] of counts) {
-    if ((sentCounts.get(session) ?? 0) < count) throw new Error(`sent ${session} must be at least its delivered number ${count}`);
+    if ((sentCounts.get(session) ?? 0) < count) throw new Error(`sent ${session} must be at least its delivered position ${count}`);
   }
   const check = (name: string, session: string, count: number): void => {
-    if (!Number.isInteger(count) || count < 0 || count > lines.length) {
-      throw new Error(`${name} ${session} must be an integer from 0 to ${lines.length}, got ${JSON.stringify(count)}`);
+    const length = listOf(session).length;
+    if (!Number.isInteger(count) || count < 0 || count > length) {
+      throw new Error(`${name} ${session} must be an integer from 0 to ${length}, got ${JSON.stringify(count)}`);
     }
   };
+  const unsent = (session: string, self: string): number[] =>
+    listOf(session).slice(sentCounts.get(session) ?? 0).filter((index) => lines[index].speaker !== self);
   return {
     lines,
     delivered: () => Object.fromEntries(counts),
     sent: () => Object.fromEntries(sentCounts),
+    addressed: () => Object.fromEntries([...lists].map(([session, list]) => [session, [...list]])),
     markSent(session, count) {
       check("sent", session, count);
       if (count <= (sentCounts.get(session) ?? 0) && sentCounts.has(session)) return;
@@ -78,19 +122,22 @@ export function createRoomRecord(
     },
     now,
     append(speaker, text, elapsedMs = null) {
-      lines.push({ speaker, text, at: now(), elapsedMs });
+      const line = { speaker, text, at: now(), elapsedMs };
+      lines.push(line);
+      for (const [session, list] of lists) if (addressedTo(line, session)) list.push(lines.length - 1);
       changed();
     },
     pending(session, self) {
-      const from = sentCounts.get(session) ?? 0;
-      const own = lines.slice(from).filter((line) => line.speaker !== self);
+      const own = unsent(session, self).map((index) => lines[index]);
       if (own.length === 0) return null;
       return {
         text: own.map((line) => `[@${nameOf(line.speaker)}] ${oneLine(line.text)}`).join(" | "),
         speakers: [...new Set(own.map((line) => line.speaker))],
-        count: lines.length,
+        count: listOf(session).length,
       };
     },
+    unsent,
+    length: (session) => listOf(session).length,
     markDelivered(session, given) {
       check("delivered", session, given);
       const count = Math.max(given, sentCounts.get(session) ?? 0);
@@ -103,7 +150,10 @@ export function createRoomRecord(
     },
     withdrawLast(index) {
       if (index !== lines.length - 1) return false;
-      for (const [session, count] of sentCounts) if (count > index) throw new Error(`record line ${index} was delivered to session ${session}`);
+      for (const [session, list] of lists) {
+        if (list.at(-1) === index && (sentCounts.get(session) ?? 0) >= list.length) throw new Error(`record line ${index} was delivered to session ${session}`);
+      }
+      for (const list of lists.values()) if (list.at(-1) === index) list.pop();
       lines.pop();
       changed();
       return true;

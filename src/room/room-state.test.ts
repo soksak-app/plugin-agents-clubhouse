@@ -4,7 +4,8 @@ import { describe, expect, it } from "vitest";
 import { parseRoomState, serializedRoomState, type RoomState } from "./room-state";
 
 const state: RoomState = {
-  roster: [{ id: "harness-harness", checked: true, role: "" }, { id: "moai-manager-lead", checked: false, role: "" }],
+  roster: [{ id: "harness-harness", checked: true, role: "", leader: true }, { id: "moai-manager-lead", checked: false, role: "", leader: false }],
+  team: [{ id: "claude-1", definition: "claude", role: "server", directory: "/work/game" }],
   mode: "turn",
   conversation: [
     { speaker: "owner", text: "한 문장씩만", at: null, elapsedMs: null },
@@ -12,12 +13,29 @@ const state: RoomState = {
   ],
   sessions: ["owned-1"],
   protocolSessions: ["owned-1"],
+  addressed: { "owned-1": [0, 1] },
   delivered: { "owned-1": 2 },
   sent: { "owned-1": 2 },
   turns: [{ turn: "t-1", session: "owned-1", member: "harness-harness", count: 2 }],
 };
 
 describe("parseRoomState", () => {
+  it("reads the leader, the team and the addressed lists (docs/spec/room.md#team)", () => {
+    expect(parseRoomState(JSON.parse(serializedRoomState(state)))).toEqual(state);
+  });
+
+  it("refuses two leaders, a roster entry without leader, a team entry with a relative directory and an addressed list out of order", () => {
+    const both = state.roster.map((entry) => ({ ...entry, leader: true }));
+    expect(() => parseRoomState({ ...state, roster: both })).toThrow("room tab state: roster has more than one leader");
+    expect(() => parseRoomState({ ...state, roster: [{ id: "a", checked: true, role: "" }] })).toThrow("roster must be an array of {id, checked, role, leader}");
+    expect(() => parseRoomState({ ...state, team: [{ ...state.team[0], directory: "work" }] })).toThrow("room tab state: team must be an array of {id, definition, role, directory}");
+    expect(() => parseRoomState({ ...state, addressed: { "owned-1": [1, 0] } })).toThrow("room tab state: addressed owned-1 must hold increasing record indexes below 2");
+  });
+
+  it("refuses a sent position beyond the addressed list of its session", () => {
+    expect(() => parseRoomState({ ...state, addressed: { "owned-1": [1] } })).toThrow("room tab state: delivered owned-1 must be an integer from 0 to 1, got 2");
+  });
+
   it("refuses a state of the earlier form without the open tokens", () => {
     const { turns: _current, ...rest } = state;
     expect(() => parseRoomState(rest)).toThrow("room tab state: turns must be an array of open tokens, got undefined");
@@ -49,7 +67,7 @@ describe("parseRoomState", () => {
 
   it("refuses a value of another form with the field and the value it found", () => {
     expect(() => parseRoomState({ ...state, mode: "solo" })).toThrow('room tab state: mode must be facil, turn or simul, got "solo"');
-    expect(() => parseRoomState({ ...state, roster: [{ id: 1 }] })).toThrow("room tab state: roster must be an array of {id, checked, role}");
+    expect(() => parseRoomState({ ...state, roster: [{ id: 1 }] })).toThrow("room tab state: roster must be an array of {id, checked, role, leader}");
     expect(() => parseRoomState({ ...state, conversation: "x" })).toThrow("room tab state: conversation must be an array of {speaker, text, at, elapsedMs}");
     expect(() => parseRoomState({ ...state, protocolSessions: [3] })).toThrow(
       "room tab state: protocolSessions must be an array of session identifiers",
