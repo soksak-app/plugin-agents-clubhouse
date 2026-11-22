@@ -30,9 +30,9 @@ describe("release files", () => {
 });
 
 describe("ACP removal", () => {
-  // The only dependency is agents, whose status the room reads (core F1074); no ACP plugin is named.
-  it("declares the agents plugin as its only dependency and no ACP package", () => {
-    expect(manifest.dependencies ?? {}).toEqual({ agents: "^0.0.0" });
+  // The only dependency is the package of the agents plugin, whose data the room reads (core F1074); no ACP plugin is named.
+  it("declares the package of the agents plugin as its only dependency and no ACP package", () => {
+    expect(manifest.dependencies ?? {}).toEqual({ "@soksak/plugin-agents": "^0.0.1" });
     expect(Object.keys(pkg.devDependencies)).not.toContain("@agentclientprotocol/sdk");
   });
 

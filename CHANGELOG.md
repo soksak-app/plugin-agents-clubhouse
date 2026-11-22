@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- C25: `plugin.json` depends on the package `@soksak/plugin-agents` `^0.0.1` instead of the identifier `agents`.
 - C24: After a mention exchange, each other idle member receives its record as one submitted line, and the room shows none of its output (`docs/spec/room.md#shared-record`).
 - C23: README, the description of `plugin.json` and the setting `kibitzDefault` state the modes and the mentions of `docs/spec/room.md`.
 - C21: The relay applies the mode of the room: `turn` relays in roster order, `facil` to the first idle member or the mentioned members, and `simul` to every member at the same time (`docs/spec/room.md`).

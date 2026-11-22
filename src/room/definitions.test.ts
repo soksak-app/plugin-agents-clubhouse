@@ -21,8 +21,8 @@ function storeOf(values: Record<string, unknown>) {
 }
 
 describe("plugin.json lists the agents plugin in dependencies", () => {
-  it("declares agents, whose project data the room reads", () => {
-    expect(manifest.dependencies).toEqual({ agents: "^0.0.0" });
+  it("declares the package of agents, whose project data the room reads", () => {
+    expect(manifest.dependencies).toEqual({ "@soksak/plugin-agents": "^0.0.1" });
   });
 });
 
