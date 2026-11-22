@@ -8,6 +8,14 @@ The room relays each message of the composer to the checked members whose owned 
 
 The roster lists one entry per agent definition of the agents plugin. An entry keeps its checked state and its place while its definition exists; a removed definition leaves the roster, and a new definition joins it at the end unchecked, because inviting a member is the choice of the person. A change of the checked members summons the checked members that have no open session.
 
+## Header
+
+The header of the room is one row of the plugin name, the roster tabs, the mode buttons, the tower button and the transport status, and it wraps onto further lines when the card is narrower than its parts. The roster tabs take at least 120 points and scroll horizontally inside their part, so a narrow card shows its members. Each button keeps its text on one line. The transport status shrinks to the room that is left, ends with an ellipsis when it is cut, and shows its whole text as its tooltip.
+
+## Arrangement
+
+After a summon the room plans a group card named `Room` of the room card and the member cards with `core.layout.plan` and builds it with `core.layout.apply` when the plan is feasible; otherwise each member opens as a tab of the current card. The arrangement passes no `close`, so core keeps every other tab of the plane as an inactive tab at the end of the first card of the tree, which is the room card, and the room tab stays the active tab of that card. The room never closes a tab that it did not open, because a tab of the person can hold work that is not saved, and closing it is the choice of the person.
+
 ## Commands
 
 Every operation of the room runs a declared command, and the elements of the room are connected to these commands through the binder of the page (`expose.bind`), so a click and a command call run the same path. Each command refuses an invalid parameter with an error that names the parameter and the value.
@@ -16,6 +24,7 @@ Every operation of the room runs a declared command, and the elements of the roo
 - `soksak-plugin-agents-clubhouse.member.move {id, index}`: moves the roster entry `id` to the place `index` (0 to the roster length minus 1). A drag of a roster tab over another tab runs it with the index of that tab. The result is `{id, index}`.
 - `soksak-plugin-agents-clubhouse.mode.set {mode}`: sets the conversation mode to `facil`, `turn` or `simul`. The result is `{mode}`. Each button of the mode element (`soksak-plugin-agents-clubhouse.mode`) runs it with its mode.
 - `soksak-plugin-agents-clubhouse.message.send {text}`: relays `text` (trimmed, not empty) to the members by the mode and the mentions, shows it and each answer in the conversation, and resolves after every turn with `{answers: [{id, text}]}` in the order of the relay. It is refused with `the room is relaying a message` while an earlier message is relayed, and with `no member session is open: check a member of the roster` without an open member session. The send button (`soksak-plugin-agents-clubhouse.send`) and Enter without Shift in the input (`soksak-plugin-agents-clubhouse.input`) run it with the text of the input, and the input is cleared when the command accepts the text.
+- `soksak-plugin-agents-clubhouse.tower.set {open}`: opens the control tower modal when `open` is `true` and closes it when `open` is `false`. It is idempotent: setting the current state changes nothing. The result is `{open}`. The tower button (`soksak-plugin-agents-clubhouse.tower`) runs it with the state opposite to the current one, and shows the open state with `aria-pressed`.
 
 ## Speaker labels
 

@@ -43,6 +43,12 @@ export function createRoomCommands(deps: CommandDeps): Record<string, (params: a
   const { tower, trace } = deps;
   return {
     "soksak-plugin-agents-clubhouse.state": async () => deps.state(),
+    "soksak-plugin-agents-clubhouse.tower.set": async (p: any) => {
+      const open = p?.open;
+      if (typeof open !== "boolean") throw new Error(`open must be a boolean, got ${JSON.stringify(open)}`);
+      tower.setOpen(open);
+      return { open };
+    },
     "soksak-plugin-agents-clubhouse.tower.plan": async (p: any): Promise<any> => {
           const text = String(p?.text ?? "").trim();
           if (!text) return { ok: false, code: "INVALID_INPUT", message: "text 필수" };

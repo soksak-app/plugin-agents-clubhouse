@@ -168,6 +168,20 @@
         }
       },
       {
+        "name": "soksak-plugin-agents-clubhouse.tower.set",
+        "description": "Open the control tower modal when open is true and close it when open is false. Setting the current state changes nothing.",
+        "params": {
+          "type": "object",
+          "properties": { "open": { "type": "boolean" } },
+          "required": ["open"]
+        },
+        "result": {
+          "type": "object",
+          "properties": { "open": { "type": "boolean" } },
+          "required": ["open"]
+        }
+      },
+      {
         "name": "soksak-plugin-agents-clubhouse.tower.plan",
         "description": "Turn a natural-language request into a validated command, DOM and status plan, returned as a dry run unless commit is true.",
         "params": {
@@ -288,7 +302,7 @@
       },
       {
         "name": "soksak-plugin-agents-clubhouse.tower",
-        "description": "Control tower button: toggles the control tower modal (natural-language input, dry run, command templates, search, graph)"
+        "description": "Control tower button: runs tower.set with the state opposite to the current one, opening or closing the control tower modal (natural-language input, dry run, command templates, search, graph)"
       }
     ]
   }

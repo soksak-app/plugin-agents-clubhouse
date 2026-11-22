@@ -1,5 +1,5 @@
-// The control tower of the room. The room element soksak-plugin-agents-clubhouse.tower is the button that toggles the modal;
-// the button shows its open state with the class "on" and aria-pressed (the room page draws the button).
+// The control tower of the room. The room element soksak-plugin-agents-clubhouse.tower is the button that the page binds to the
+// declared command tower.set (docs/spec/room.md#commands); the button shows the open state with the class "on" and aria-pressed.
 //
 // The modal reaches the core and the room through the room port (src/room/port.ts), so no host object is named here.
 
@@ -13,6 +13,9 @@ import type { ScanReport } from "./scanner";
 
 export interface TowerHandle {
   dispose: () => void;
+  isOpen: () => boolean;
+  // Opens or closes the modal; the current state changes nothing.
+  setOpen: (open: boolean) => void;
   // 헤드리스 slow-path 구동(노출 command·E2E) — 모달의 executor.planAndRun 직통.
   planAndRun: (nl: string, opts?: PlanRunOptions) => Promise<PlanRunResult>;
   // 편집된 plan 재검증 + dry-run(M9) — 모달의 executor.revalidateAndRun 직통(편집 검증 우회 0, rollback 보호).
@@ -33,7 +36,7 @@ export interface TowerHandle {
   forgetMacro: (name: string) => Promise<boolean>;
 }
 
-// Installs the modal of the control tower and wires the tower button. room = the room port, button = the tower element,
+// Installs the modal of the control tower and shows its open state on the tower button. room = the room port, button = the tower element,
 // label = the button and modal title, lang = the language accessor, trace and macros = the project data sinks of the tower.
 // Without a planner the modal reports NO_PLANNER for a natural-language request; a planner is supplied once a member transport exists.
 export function setupTower(room: RoomPort, button: HTMLElement, label: string, lang: () => string, trace?: TraceSink, macros?: MacroSink, planner?: Planner): TowerHandle {
@@ -43,11 +46,13 @@ export function setupTower(room: RoomPort, button: HTMLElement, label: string, l
     button.classList.toggle("on", modal.isOpen());
     button.setAttribute("aria-pressed", String(modal.isOpen()));
   };
-  const onClick = () => modal.toggle();
-  button.addEventListener("click", onClick);
   render();
 
   return {
+    isOpen: () => modal.isOpen(),
+    setOpen: (open: boolean) => {
+      if (open !== modal.isOpen()) (open ? modal.open() : modal.close());
+    },
     planAndRun: (nl: string, opts?: PlanRunOptions) => modal.planAndRun(nl, opts),
     revalidateAndRun: (steps: PlanStep[], opts?: PlanRunOptions) => modal.revalidateAndRun(steps, opts),
     distributeAndRun: (nl: string, opts: DistRunOptions) => modal.distributeAndRun(nl, opts),
@@ -60,7 +65,6 @@ export function setupTower(room: RoomPort, button: HTMLElement, label: string, l
     listMacros: () => modal.listMacros(),
     forgetMacro: (name) => modal.forgetMacro(name),
     dispose: () => {
-      button.removeEventListener("click", onClick);
       modal.dispose();
     },
   };

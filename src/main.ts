@@ -456,6 +456,8 @@ function buildRoom({ settings, collections }: RoomContext): RoomHandlers {
   const macros = createMacroStore(collections, { sessionId: sessionIdOf() });
   const tower = setupTower(room, towerButton, t("towerTitle", lang), () => lang, trace, macros);
   addEventListener("pagehide", () => tower.dispose());
+  // A click on the tower button runs tower.set with the state opposite to the current one (docs/spec/room.md#commands).
+  bound(expose.bind(towerButton, `${EXPOSE}.tower.set`, () => ({ open: !tower.isOpen() }), { failed: failed("tower.set") }), "tower.set");
 
   const tabTargets = (): object[] => [...tabsEl.querySelectorAll<HTMLElement>(".st-tab")];
   const elements: Record<string, ElementTarget> = {
