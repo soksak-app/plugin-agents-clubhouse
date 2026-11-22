@@ -579,15 +579,16 @@ export function createExecutor(deps: ExecutorDeps): TowerExecutor {
     const [cat, tree, st] = await Promise.all([
       exec("state.commands"),
       exec("ui.tree"),
-      exec("status.query").catch(() => ({ statuses: [] })),
+      exec("status.query"),
     ]);
+    if (!Array.isArray((st as any)?.statuses)) throw new Error("status.query reply has no statuses array");
     return {
       commands: (Array.isArray((cat as any)?.commands) ? (cat as any).commands : []).map((c: any) => ({
         name: c.name,
         description: c.description,
       })),
       addresses: (Array.isArray((tree as any)?.nodes) ? (tree as any).nodes : []).map((n: any) => n.address),
-      statuses: Array.isArray((st as any)?.statuses) ? (st as any).statuses : [],
+      statuses: (st as any).statuses,
     };
   }
 

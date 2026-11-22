@@ -385,3 +385,20 @@ describe("매크로 컬렉션 이름 — 플러그인 ns(코어 테이블 아님
     expect(planSignature("x", a)).toBe(planSignature("x", b));
   });
 });
+
+describe("C8 — a failed define reaches the caller and the next call defines again", () => {
+  it("a failed define rejects the read, and the next read defines again", async () => {
+    let defines = 0;
+    const data: DataApi = {
+      ...fakeData(newStore()),
+      define: async () => {
+        defines += 1;
+        if (defines === 1) throw new Error("define refused");
+      },
+    };
+    const store = createMacroStore(data, { sessionId: "s1" });
+    await expect(store.list()).rejects.toThrow("define refused");
+    await expect(store.list()).resolves.toEqual([]);
+    expect(defines).toBe(2);
+  });
+});

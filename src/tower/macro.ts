@@ -165,8 +165,10 @@ export function createMacroStore(data: DataApi, opts: MacroOptions): MacroSink {
     if (!defined) {
       defined = (async () => {
         await data.define(MACROS, MACROS_SCHEMA);
-      })().catch(() => {
-        // define 실패(이미 정의 등)는 무해 — put 이 진실 게이트.
+      })().catch((error: unknown) => {
+        // A failed define is not kept: the next call defines again, and the error reaches the caller.
+        defined = null;
+        throw error;
       });
     }
     return defined;

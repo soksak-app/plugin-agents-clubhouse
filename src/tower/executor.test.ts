@@ -182,3 +182,19 @@ import { CONFIRM_EXPOSED_NODES } from "./executor";
 function ex_modalConfirmNodes(): readonly string[] {
   return CONFIRM_EXPOSED_NODES;
 }
+
+describe("C8 — a refused status.query fails the plan instead of planning without statuses", () => {
+  it("runPlan rejects with the status.query refusal", async () => {
+    const app = fakeApp();
+    const room = {
+      commands: {
+        execute: vi.fn(async (name: string, params: any) => {
+          if (name === "status.query") throw new Error("status.query refused by the room");
+          return app.room.commands.execute(name, params);
+        }),
+      },
+    };
+    const ex = createExecutor(deps({ room }).d);
+    await expect(ex.runPlan([])).rejects.toThrow("status.query refused by the room");
+  });
+});

@@ -278,3 +278,19 @@ describe("trace collection 이름 — 플러그인 ns 격리(코어 커플링 0)
     expect(STEPS).toBe("tower_steps");
   });
 });
+
+describe("C8 — a failed define reaches the caller and the next call defines again", () => {
+  it("a failed define rejects begin, and the next begin defines again", async () => {
+    let defines = 0;
+    const data: DataApi = {
+      ...fakeData(newStore()),
+      define: async () => {
+        defines += 1;
+        if (defines === 1) throw new Error("define refused");
+      },
+    };
+    const trace = createTrace(data, { sessionId: "s1" });
+    await expect(trace.begin({ nl: "x", mode: "facil" })).rejects.toThrow("define refused");
+    await expect(trace.begin({ nl: "x", mode: "facil" })).resolves.toBeDefined();
+  });
+});
