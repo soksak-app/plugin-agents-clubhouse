@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- C81: The isolation entry of claude adds `--settings '{"env":{"CLAUDE_CODE_SHELL":"/bin/bash"}}'`, so the Bash tool of a member sources no `~/.zshrc` of the person and takes none of its aliases (`docs/spec/room.md#isolation`).
 - C80: The protocol states that each room command runs alone in the foreground, never chained with `;`, `&&` or `|`, and that a room command that times out or goes to the background is reported with `report` (`docs/spec/room.md#room-protocol`).
 - C78: A test validates plugin.json with `validateManifest` of the `@soksak/plugin-api` 0.0.48 release, and the view status schema drops `minimum`, which the exposure schema subset refuses (`docs/spec/room.md#manifest`).
 - C77: The stop button is enabled only while a relay or a record wait runs, a disabled composer button is drawn disabled, and the view status carries `stopEnabled` (`docs/spec/room.md#commands`).

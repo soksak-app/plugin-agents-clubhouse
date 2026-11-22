@@ -72,7 +72,7 @@ describe("toMemberDefinition", () => {
       id: "reviewer",
       name: "Reviewer",
       plugin: "terminal",
-      params: { program: "claude", args: ["--verbose", "--setting-sources", "project,local"], directory: "/work/project", role: "reviewer" },
+      params: { program: "claude", args: ["--verbose", "--setting-sources", "project,local", "--settings", '{"env":{"CLAUDE_CODE_SHELL":"/bin/bash"}}'], directory: "/work/project", role: "reviewer" },
       cwd: "/work/project",
     });
   });

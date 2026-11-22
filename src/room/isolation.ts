@@ -4,7 +4,9 @@
 // starts unchanged, and the transport status names the member as not isolated.
 export const ISOLATION_ARGS: Readonly<Record<string, readonly string[]>> = {
   // `--setting-sources project,local` loads no user settings, no user CLAUDE.md and no user-scope MCP servers; `sok` on PATH stays.
-  claude: ["--setting-sources", "project,local"],
+  // `CLAUDE_CODE_SHELL=/bin/bash` through `--settings` makes the Bash tool run bash, so it sources no `~/.zshrc` of the person and
+  // takes none of its aliases (docs/spec/room.md#isolation).
+  claude: ["--setting-sources", "project,local", "--settings", '{"env":{"CLAUDE_CODE_SHELL":"/bin/bash"}}'],
 };
 
 // The arguments that start the member program, and whether the table isolates it; the table entry is named by the base name of program.

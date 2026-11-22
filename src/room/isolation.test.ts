@@ -6,9 +6,9 @@ import { roomProtocolLine } from "./protocol";
 
 describe("memberLaunch", () => {
   it("adds the isolation arguments of claude after its own arguments", () => {
-    expect(ISOLATION_ARGS.claude).toEqual(["--setting-sources", "project,local"]);
-    expect(memberLaunch("claude", ["--verbose"])).toEqual({ args: ["--verbose", "--setting-sources", "project,local"], isolated: true });
-    expect(memberLaunch("/usr/local/bin/claude", [])).toEqual({ args: ["--setting-sources", "project,local"], isolated: true });
+    expect(ISOLATION_ARGS.claude).toEqual(["--setting-sources", "project,local", "--settings", '{"env":{"CLAUDE_CODE_SHELL":"/bin/bash"}}']);
+    expect(memberLaunch("claude", ["--verbose"])).toEqual({ args: ["--verbose", ...ISOLATION_ARGS.claude], isolated: true });
+    expect(memberLaunch("/usr/local/bin/claude", [])).toEqual({ args: [...ISOLATION_ARGS.claude], isolated: true });
   });
 
   it("starts a CLI without an entry unchanged and reports it as not isolated", () => {
