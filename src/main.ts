@@ -20,8 +20,7 @@ import { createArrangementStatus } from "./room/arrangement";
 import { readAgentDefinitions, toMemberDefinition, type AgentDataGet, type AgentDefinition } from "./room/definitions";
 import { createMemberSessionStore } from "./room/session-store";
 import { serialRunner, summonAndArrange, type TriggerDeps } from "./room/trigger";
-import { relayToMembers, type RelayPorts } from "./room/room-relay";
-import { mentionedMembers } from "./room/mention";
+import { relayInMode, type RelayPorts } from "./room/room-relay";
 import { rosterFrom, type RosterEntry } from "./room/roster";
 import { createMacroStore } from "./tower/macro";
 import { setupTower } from "./tower/header";
@@ -353,8 +352,8 @@ function buildRoom({ settings, collections }: RoomContext): RoomHandlers {
       .catch((error: unknown) => report("room summon", String((error as Error)?.message ?? error)));
   };
 
-  // A message goes to each checked member whose session is open, one member after the other (C5). The answers are the screens of the
-  // members after their turns, shown as text in the conversation.
+  // A message goes to the checked members whose session is open, by the mode of the room and the mentions of the message
+  // (docs/spec/room.md). The answers are the screens of the members after their turns, shown as text in the conversation.
   const relayPorts: RelayPorts = {
     commands: room.commands,
     sessions: () => sessionsValue,
@@ -370,12 +369,9 @@ function buildRoom({ settings, collections }: RoomContext): RoomHandlers {
   send.addEventListener("click", () => {
     const text = input.value.trim();
     if (text === "" || busy) return;
-    const open = roster
+    const targets = roster
       .filter((entry) => entry.checked && memberSessions.has(entry.id))
       .map((entry) => ({ id: entry.id, name: entry.name, session: memberSessions.get(entry.id)! }));
-    // A message that mentions members goes only to them, in the order of their first mention (docs/spec/room.md#mentions).
-    const mentioned = mentionedMembers(text, open);
-    const targets = mentioned.length > 0 ? mentioned : open;
     if (targets.length === 0) {
       report("room relay", "no member session is open: check a member of the roster");
       return;
@@ -384,7 +380,7 @@ function buildRoom({ settings, collections }: RoomContext): RoomHandlers {
     send.disabled = true;
     input.value = "";
     appendMessage(lang === "ko" ? "나" : "You", text);
-    relayToMembers(relayPorts, targets, text)
+    relayInMode(relayPorts, mode, targets, text)
       .then((answers) => {
         for (const answer of answers) {
           const name = roster.find((entry) => entry.id === answer.id)?.name ?? answer.id;

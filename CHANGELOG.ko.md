@@ -2,6 +2,7 @@
 
 ## 미출시
 
+- C21: Relay가 방의 mode를 적용한다. `turn`은 roster 순서로, `facil`은 첫 idle member나 mention된 member에게, `simul`은 모든 member에게 동시에 전달한다(`docs/spec/room.md`).
 - C22: 개발 dependency `vitest`(4.1.12)와 `esbuild`(0.28.2)가 알려진 취약점이 있는 release를 대신한다. Lock은 `vite` 8.3.8을 담고 `tinypool`은 없다.
 - C20: Member를 mention한(`@이름`) 방 메시지는 mention된 member에게만 처음 mention된 순서로 간다(`docs/spec/room.md`).
 - C19: `plugin.json`, `package.json`, README의 설명이 현재의 방을 말한다. agents 정의의 member, owned terminal session, roster 순서의 relay다. ACP 의존, 고정 member, 제거된 command는 더 이상 설명하지 않는다.
