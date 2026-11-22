@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- C22: The development dependencies `vitest` (4.1.12) and `esbuild` (0.28.2) replace releases with known vulnerabilities; the lock holds `vite` 8.3.8 and no `tinypool`.
 - C20: A room message that mentions members (`@name`) goes only to the mentioned members, in the order of their first mention (`docs/spec/room.md`).
 - C19: The descriptions of `plugin.json`, `package.json` and README state the current room: members from the agents definitions, owned terminal sessions, and the relay in roster order. The ACP dependency, the fixed members and the removed commands are no longer described.
 - C18: The repository uses pnpm, the checks of the pinned `@soksak/kit` release and the workflows `ci.yml` and `release.yml`; `make pack` builds and packs the release. The `doctor` script and its dependency, the former release scripts, `main.js` and the ACP test helpers are removed, and `repository` names `https://github.com/soksak-app/plugin-agents-clubhouse`.

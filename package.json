@@ -23,8 +23,8 @@
   "devDependencies": {
     "@soksak/kit": "https://github.com/soksak-app/kit/releases/download/v0.0.14/soksak-kit-0.0.14.tgz",
     "@types/node": "^24.10.1",
-    "esbuild": "^0.24.2",
+    "esbuild": "^0.28.2",
     "typescript": "~5.9.3",
-    "vitest": "^2.1.8"
+    "vitest": "^4.1.12"
   }
 }
