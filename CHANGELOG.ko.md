@@ -9,3 +9,4 @@
 - C9: tower와 room은 잡은 모든 오류를 `room.report`(`error: <where>: <text>`)로 보고하거나 다시 던진다. trace store는 실패한 쓰기를 보고하고 계속 진행한다. 확인 토큰은 `crypto.getRandomValues`가 필요하며 `Math.random` 폴백이 없다. 직렬화할 수 없는 step params는 scan을 거부한다. modal과 테마 listener는 실패를 보고한다.
 - C10: 파괴적 묶음은 rollback snapshot을 캡처할 수 없으면 첫 step 전에 거부되고(`SNAPSHOT_FAILED`), 실패는 보고된다. 파괴적 step이 없는 묶음은 여전히 실행된다.
 - C11: 실패한 palette 실행, plan, plan 편집은 code와 사유를 generic 문구 대신 `room.report`(`error: <where>: <code>: <reason>`)로 보고한다.
+- C3: 소환은 고른 member마다 owned session(`core.session.open`)을 열고, member와 session의 관계를 project data에 저장한다. `plugin.json`은 필요한 persistent sidecar와 함께 `sessions`를 선언한다. 정의 출처와 트리거는 아직 연결하지 않았고, core 커맨드는 아직 구현되지 않았다(C3은 열려 있다).
