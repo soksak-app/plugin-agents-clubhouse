@@ -1,7 +1,7 @@
 {
   "id": "soksak-plugin-agents-clubhouse",
   "name": "에이전트 클럽하우스",
-  "description": "프로젝트의 여러 coding agent가 한 대화에 참여하는 방. agents plugin의 agent 정의에서 member를 고르면 각 member가 owned terminal session으로 시작하고, 방은 각 member에게 먼저 화자 label([@owner], [@이름])과 turn 규칙을 알리고, mode(순차, 진행, 동시)와 @이름 mention에 따라 메시지를 전달하며 각 turn의 화면을 답으로 보여 준다. Mention 대화 뒤에는 나머지 member가 그 기록을 받는다.",
+  "description": "여러 coding agent가 한 대화에 참여하는 방. agents plugin의 정의에서 고른 member가 owned terminal session으로 시작하고, 방은 화자 label과 turn 규칙을 알린 뒤 mode와 @이름 mention에 따라 메시지를 전달한다.",
   "mark": "방",
   "icon": "<path d=\"M2 3h12v8H7l-3 2v-2H2z\"/>",
   "surface": {
