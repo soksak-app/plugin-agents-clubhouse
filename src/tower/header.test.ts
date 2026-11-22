@@ -25,7 +25,7 @@ function tower() {
     tower: handle,
     trace: undefined,
     mode: () => "facil",
-    state: () => ({ mode: "facil", roster: [], transport: { state: "unavailable" } }),
+    state: () => ({ mode: "facil", roster: [], transport: { state: "unavailable", notIsolated: [] } }),
   });
   return { button, handle, set: commands[`${P}.tower.set`] };
 }

@@ -18,6 +18,7 @@ import { createTrace } from "./tower/trace";
 import { createRoomReport } from "./room/report";
 import { createArrangementStatus } from "./room/arrangement";
 import { HEADER_CSS, createRoomHeader } from "./room/header";
+import { memberLaunch } from "./room/isolation";
 import { readAgentDefinitions, toMemberDefinition, type AgentDataGet, type AgentDefinition } from "./room/definitions";
 import { createMemberSessionStore } from "./room/session-store";
 import { serialRunner, summonAndArrange, type TriggerDeps } from "./room/trigger";
@@ -222,13 +223,19 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   const openSessionIds = new Set<string>();
   const runTrigger = serialRunner();
   // The transport is ready while a checked member has an open session; the composer takes a message only then (C5).
-  const transport: { state: "unavailable" | "ready"; reason: string } = { state: "unavailable", reason: t("transportUnavailable", lang) };
-  const transportListeners = new Set<(value: { state: "unavailable" | "ready"; reason: string }) => void>();
+  type Transport = { state: "unavailable" | "ready"; reason: string; notIsolated: string[] };
+  const transport: Transport = { state: "unavailable", reason: t("transportUnavailable", lang), notIsolated: [] };
+  const transportListeners = new Set<(value: Transport) => void>();
+  // Whether the isolation table isolates the CLI of the member (docs/spec/room.md#isolation).
+  const isolatedMember = (id: string): boolean => {
+    const definition = definitions.find((entry) => entry.id === id);
+    return definition !== undefined && memberLaunch(definition.program, definition.args).isolated;
+  };
   const arrangement = createArrangementStatus();
   const state = (): RoomState => ({
     mode,
     roster: roster.map((r) => ({ id: r.id, checked: r.checked })),
-    transport: { ...transport },
+    transport: { ...transport, notIsolated: [...transport.notIsolated] },
   });
 
   const style = document.createElement("style");
@@ -257,7 +264,10 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   // Sets the transport state and the composer. A status subscriber receives each new value.
   const setTransport = (ready: boolean): void => {
     transport.state = ready ? "ready" : "unavailable";
-    transport.reason = t(ready ? "transportReady" : "transportUnavailable", lang);
+    transport.notIsolated = [...memberSessions.keys()].filter((id) => !isolatedMember(id));
+    transport.reason =
+      t(ready ? "transportReady" : "transportUnavailable", lang) +
+      (transport.notIsolated.length > 0 ? ` ${tp("notIsolated", lang, { members: transport.notIsolated.join(", ") })}` : "");
     header.setStatus(transport.reason);
     input.disabled = !ready;
     input.title = transport.reason;
@@ -544,12 +554,12 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
       persist();
     },
   });
-  type OpenMember = { id: string; name: string; session: string; role: string };
+  type OpenMember = { id: string; name: string; session: string; role: string; mcp: boolean };
   const openMembers = (): OpenMember[] =>
     roster
       // The stored relation is read again after each change of core.sessions; until then a session that has ended is left out.
       .filter((entry) => entry.checked && memberSessions.has(entry.id) && openSessionIds.has(memberSessions.get(entry.id)!))
-      .map((entry) => ({ id: entry.id, name: entry.name, session: memberSessions.get(entry.id)!, role: entry.role }));
+      .map((entry) => ({ id: entry.id, name: entry.name, session: memberSessions.get(entry.id)!, role: entry.role, mcp: !isolatedMember(entry.id) }));
   // After each relay every checked member session with the protocol receives the record lines that it has not received
   // (docs/spec/room.md#closing-delivery).
   delivery = createClosingDelivery(

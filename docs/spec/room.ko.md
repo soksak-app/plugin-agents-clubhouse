@@ -39,6 +39,10 @@ Member가 첫 전달 메시지를 받기 전에 방은 session마다 한 번 roo
 
 방은 member의 terminal text를 읽을 수 없다. Claude Code는 alternate screen에 그리고, 방은 화면에서 답을 읽지 않는다([답](#answer)). Member가 자기 terminal에 쓴 text는 아무에게도 전달되지 않으므로, protocol이 내용 손실을 막는 수단이고 방의 live check가 그것을 측정한다. 긴 protocol은 재진술을 부르므로 protocol 줄은 짧은 명령문이며 다음 규칙을 말한다. 모든 말은 답이나 report, claim으로 방을 통해 한다([work reports](#work-reports)). Tool이 필요로 하는 것 외에는 terminal에 아무것도 쓰지 않는다. Owner에게 할 말은 답의 section `@owner:`에 넣는다([section](#sections)). 할 일을 미리 말하지 않고, 답을 보냈다고 확인하지 않는다. 화자가 한 말에 답한다. 각 turn 줄은 token 앞에 `[@clubhouse] answer through the room only: reply to the speakers, put a message to the owner in @owner:, write nothing in your terminal`을 담는다.
 
+## Isolation
+
+Member Claude Code session은 인자가 막지 않으면 사람의 user-level instruction `~/.claude/CLAUDE.md`를 읽는다. `--setting-sources project,local`이면 user setting, user instruction, user-scope MCP server를 읽지 않고, PATH의 `sok`은 계속 방의 command를 실행한다. 방은 각 member program을 clubhouse의 table `ISOLATION_ARGS`의 isolation 인자로 시작한다. Table 항목은 program의 base name으로 찾고, 인자는 definition의 인자 뒤에 붙는다: `claude: ["--setting-sources", "project,local"]`. 그러면 member는 project instruction, room protocol, 자기 role만 읽는다. 항목이 없는 CLI는 그대로 시작하고, room state의 transport status는 그 member를 `notIsolated`에 나열하며 reason은 `Not isolated from personal settings: <members>.`를 말한다. Protocol 줄은 각 command의 shell 형식을 먼저 주고, 격리된 member에게는 user-scope MCP server가 없으므로 MCP 형식은 table이 격리하지 않는 member에게만 뒤따른다.
+
 ## Mention
 
 Mention은 `@` 뒤의 member 이름이나 identifier이며 대소문자를 구분하지 않고 비교한다. 메시지의 시작이나 공백 뒤에서 시작하고, 공백, `-`, `_`, `.`이 아닌 문장 부호, 또는 메시지의 끝에서 끝난다. Mention 끝의 `.`은 mention에 속하지 않는다. 어떤 member도 가리키지 않는 mention은 text다. Mention은 turn의 순서를 정하고 받는 member를 줄이지 않는다. Mention된 member가 처음 mention된 순서로 차례로 첫 turn을 받고, mode의 다른 member가 roster 순서로 뒤따르므로, 뒤의 각 member는 mention된 member의 답을 읽는다. Roster가 A, B, C일 때 메시지 `@B 정리해 줘. 나머지는 보태 줘.`는 turn을 B, A, C 순서로 주고, A의 turn 줄은 B의 답을 담는다. 답의 section `@<name>:`([section](#sections))도 mention이다.

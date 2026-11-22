@@ -134,6 +134,10 @@ const strings = {
     en: "Connected: messages go to the checked members with an open session.",
     ko: "연결됨: 메시지는 열린 세션이 있는 체크된 멤버에게 갑니다.",
   },
+  notIsolated: {
+    en: "Not isolated from personal settings: {members}.",
+    ko: "개인 설정에서 격리되지 않음: {members}.",
+  },
   towerTitle: {
     en: "AI Command",
     ko: "AI 명령",

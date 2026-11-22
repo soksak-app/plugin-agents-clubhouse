@@ -160,9 +160,10 @@
               "type": "object",
               "properties": {
                 "state": { "type": "string", "enum": ["unavailable", "ready"] },
-                "reason": { "type": "string" }
+                "reason": { "type": "string" },
+                "notIsolated": { "type": "array", "items": { "type": "string" } }
               },
-              "required": ["state"]
+              "required": ["state", "notIsolated"]
             }
           },
           "required": ["mode", "roster", "transport"]

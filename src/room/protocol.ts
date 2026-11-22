@@ -14,6 +14,8 @@ export interface ProtocolMember {
   session: string;
   // The role of the member in the roster, "" or absent without one (docs/spec/room.md#roles).
   role?: string;
+  // false for a member that the isolation table isolates: it has no user-scope MCP servers, so it gets the shell forms only.
+  mcp?: boolean;
 }
 
 // The line states the commands with the surface of the room, because a command call without a surface goes to the active tab of the
@@ -111,7 +113,7 @@ export function createProtocolInjector(
           }
         }),
       };
-      await relayMemberMessage(port, roomProtocolLine(member.name, peers, ports.surface, member.role ?? ""), { signal: controller.signal });
+      await relayMemberMessage(port, roomProtocolLine(member.name, peers, ports.surface, member.role ?? "", member.mcp ?? true), { signal: controller.signal });
       memory.onTaught(member.session);
       return { ok: true };
     } catch (error) {

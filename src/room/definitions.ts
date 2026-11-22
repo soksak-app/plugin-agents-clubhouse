@@ -3,6 +3,7 @@
 // env}. Program and args are not stored: they are the cli and args of the account of the definition, resolved here with the rule of the
 // agents plugin. The room names no plugin in its code; plugin comes from each definition. A stored value of another form is refused with
 // an explicit error that names the agents project data and the key.
+import { memberLaunch } from "./isolation";
 import type { MemberDefinition } from "./summon";
 
 export interface AgentDefinition {
@@ -72,7 +73,7 @@ export function toMemberDefinition(definition: AgentDefinition): MemberDefinitio
     id: definition.id,
     name: definition.name,
     plugin: definition.plugin,
-    params: { program: definition.program, args: [...definition.args], directory: definition.cwd, role: definition.role },
+    params: { program: definition.program, args: memberLaunch(definition.program, definition.args).args, directory: definition.cwd, role: definition.role },
     cwd: definition.cwd,
   };
 }
