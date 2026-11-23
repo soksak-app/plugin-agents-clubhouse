@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- C118: The version is 0.0.24, which releases C117.
 - C117: The room reads a definition with the optional member `maker` of the agents plugin.
 - C116: The version is 0.0.23, which releases C114 and C115.
 - C114: A member that continues with no unreceived line gets no empty turn; the room records that the conversation waits for the owner.
