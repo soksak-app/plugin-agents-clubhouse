@@ -37,7 +37,7 @@ export interface TeamControlDeps {
 export interface TeamControl {
   release(params: unknown): Promise<{ member: string }>;
   merged(params: unknown): Promise<{ member: string; commit: string }>;
-  retask(params: unknown): Promise<{ member: string; definition: string }>;
+  retask(params: unknown): Promise<{ member: string; definition: string; role: string }>;
   // Starts the release of the whole team and returns the number of team members that it ends.
   releaseAll(): number;
   // Resolves when the last release of the whole team has ended.
@@ -66,7 +66,7 @@ export function createTeamControl(deps: TeamControlDeps): TeamControl {
     // member.retask ends the session, gives the entry the new definition and agent, and the summon resumes the session id with it
     // (docs/spec/room.md#team). Every refusal comes before the session ends.
     async retask(params) {
-      const { entry, definition } = retaskedEntry(params, deps.team, deps.definitions(), leaderTurns(), deps.busy);
+      const { entry, definition, role } = retaskedEntry(params, deps.team, deps.definitions(), leaderTurns(), deps.busy);
       const agent = await deps.agentOf(definition);
       if (agent === null) throw new Error(`definition ${definition} has no agent file for --agent`);
       const before = teamName(entry, deps.definitions());
@@ -76,13 +76,14 @@ export function createTeamControl(deps: TeamControlDeps): TeamControl {
         await deps.gone(session);
       }
       entry.definition = definition;
+      entry.role = role;
       entry.agent = agent;
       entry.resume = true;
       deps.append(`@${before} is now ${definition}, named @${teamName(entry, deps.definitions())}`);
       deps.retasked(entry.id, session);
       deps.changed();
       deps.summon();
-      return { member: entry.id, definition };
+      return { member: entry.id, definition, role };
     },
     async merged(params) {
       const { entry, commit } = mergedCommit(params, deps.team, leaderTurns());

@@ -307,16 +307,16 @@
       },
       {
         "name": "soksak-plugin-agents-clubhouse.member.retask",
-        "description": "Give the team member another agent definition with the turn token of the leader: the room ends its session, resumes the Claude Code session with the agent of the definition and sets the tab role, keeping the conversation.",
+        "description": "Give the team member another agent definition and role text with the turn token of the leader: the room ends its session, resumes the Claude Code session with the agent of the definition and sets the tab role, keeping the conversation.",
         "params": {
           "type": "object",
-          "properties": { "turn": { "type": "string" }, "member": { "type": "string" }, "definition": { "type": "string" } },
-          "required": ["turn", "member", "definition"]
+          "properties": { "turn": { "type": "string" }, "member": { "type": "string" }, "definition": { "type": "string" }, "role": { "type": "string" } },
+          "required": ["turn", "member", "definition", "role"]
         },
         "result": {
           "type": "object",
-          "properties": { "member": { "type": "string" }, "definition": { "type": "string" } },
-          "required": ["member", "definition"]
+          "properties": { "member": { "type": "string" }, "definition": { "type": "string" }, "role": { "type": "string" } },
+          "required": ["member", "definition", "role"]
         }
       },
       {

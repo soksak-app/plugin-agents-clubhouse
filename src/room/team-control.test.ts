@@ -78,14 +78,14 @@ describe("the team commands of the page", () => {
 describe("member.retask", () => {
   it("ends the session, sets the definition and the agent, resumes the session id, records the change and rearranges", async () => {
     const p = page();
-    const retask = p.control.retask({ turn: "t-1", member: "claude-1", definition: "tester" });
+    const retask = p.control.retask({ turn: "t-1", member: "claude-1", definition: "tester", role: "e2e checks" });
     // C97-4: core.session.end answers before core.sessions drops the session, so the summon waits for core.sessions to drop it.
     await new Promise<void>((resolve) => setImmediate(resolve));
     expect(p.log).not.toContain("summon");
     p.gones.forEach((done) => done());
-    expect(await retask).toEqual({ member: "claude-1", definition: "tester" });
+    expect(await retask).toEqual({ member: "claude-1", definition: "tester", role: "e2e checks" });
     expect(p.ended).toEqual(["s-1"]);
-    expect(p.team[0]).toMatchObject({ id: "claude-1", definition: "tester", agentSession: "u-1", resume: true, agent: "e2e-tester" });
+    expect(p.team[0]).toMatchObject({ id: "claude-1", definition: "tester", role: "e2e checks", agentSession: "u-1", resume: true, agent: "e2e-tester" });
     expect(p.record.lines.at(-1)).toMatchObject({ speaker: "clubhouse", text: "@Claude-1 is now tester, named @Tester-1" });
     expect(p.log).toEqual(["gone s-1", "retasked claude-1 s-1", "changed", "summon"]);
     expect(p.control.view(p.core()).find((entry) => entry.member === "claude-1")).toMatchObject({ name: "Tester-1", roleState: "pending" });
@@ -93,14 +93,16 @@ describe("member.retask", () => {
 
   it("refuses a caller without the leader token, an unknown member or definition, a member in a turn, and a definition without an agent file", async () => {
     const p = page();
-    await expect(p.control.retask({ turn: "t-9", member: "claude-1", definition: "tester" })).rejects.toThrow("member.retask takes the turn token of the leader lead, got t-9");
-    await expect(p.control.retask({ turn: "t-1", member: "gone", definition: "tester" })).rejects.toThrow("member gone is not in the team");
-    await expect(p.control.retask({ turn: "t-1", member: "claude-1", definition: "nope" })).rejects.toThrow("definition nope is not an agent definition");
-    await expect(p.control.retask({ turn: "t-1", member: "claude-2", definition: "tester" })).rejects.toThrow("member claude-2 is in a turn; retask it after its answer");
-    await expect(p.control.retask({ turn: "t-1", member: "claude-1", definition: "bare" })).rejects.toThrow("definition bare has no agent file for --agent");
+    await expect(p.control.retask({ turn: "t-9", member: "claude-1", definition: "tester", role: "e2e checks" })).rejects.toThrow("member.retask takes the turn token of the leader lead, got t-9");
+    await expect(p.control.retask({ turn: "t-1", member: "gone", definition: "tester", role: "e2e checks" })).rejects.toThrow("member gone is not in the team");
+    await expect(p.control.retask({ turn: "t-1", member: "claude-1", definition: "nope", role: "x" })).rejects.toThrow("definition nope is not an agent definition");
+    await expect(p.control.retask({ turn: "t-1", member: "claude-2", definition: "tester", role: "e2e checks" })).rejects.toThrow("member claude-2 is in a turn; retask it after its answer");
+    await expect(p.control.retask({ turn: "t-1", member: "claude-1", definition: "bare", role: "x" })).rejects.toThrow("definition bare has no agent file for --agent");
+    await expect(p.control.retask({ turn: "t-1", member: "claude-1", definition: "tester", role: "a\nb" })).rejects.toThrow("role must be a text of 0 to 200 characters without control characters");
+    await expect(p.control.retask({ turn: "t-1", member: "claude-1", definition: "tester" })).rejects.toThrow("role must be a text of 0 to 200 characters without control characters, got undefined");
     p.team[0].agentSession = null;
-    await expect(p.control.retask({ turn: "t-1", member: "claude-1", definition: "tester" })).rejects.toThrow("member claude-1 has no Claude Code session to resume");
+    await expect(p.control.retask({ turn: "t-1", member: "claude-1", definition: "tester", role: "e2e checks" })).rejects.toThrow("member claude-1 has no Claude Code session to resume");
     expect(p.ended).toEqual([]);
-    expect(p.team[0].definition).toBe("claude");
+    expect(p.team[0]).toMatchObject({ definition: "claude", role: "server" });
   });
 });

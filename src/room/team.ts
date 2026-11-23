@@ -101,23 +101,24 @@ export function releasedEntry(params: any, team: readonly TeamEntry[], leader: L
 }
 
 // The team member and the definition of a retask (docs/spec/room.md#team), checked in this order: the turn token of the leader, the
-// member, the definition, an open turn of the member and its Claude Code session id.
+// member, the definition, the role text, an open turn of the member and its Claude Code session id.
 export function retaskedEntry(
   params: any,
   team: readonly TeamEntry[],
   definitions: readonly { id: string }[],
   leader: Leader,
   busy: (member: string) => boolean,
-): { entry: TeamEntry; definition: string } {
+): { entry: TeamEntry; definition: string; role: string } {
   leaderTurn("member.retask", params, leader);
   const entry = teamMember(params, team);
   const definition = params?.definition;
   if (typeof definition !== "string" || !definitions.some((one) => one.id === definition)) {
     throw new Error(`definition ${typeof definition === "string" ? definition : JSON.stringify(definition)} is not an agent definition`);
   }
+  const role = roleOf(params?.role);
   if (busy(entry.id)) throw new Error(`member ${entry.id} is in a turn; retask it after its answer`);
   if (entry.agentSession === null) throw new Error(`member ${entry.id} has no Claude Code session to resume`);
-  return { entry, definition };
+  return { entry, definition, role };
 }
 
 // The team member and the commit that member.merged records.
