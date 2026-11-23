@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- C105: The version is 0.0.20, which releases C104.
 - C104: The room creates the worktree of each team member at the summon, outside the project at `<home>/soksak/worktrees/<repository name>-<hash>/<member id>`, starts the member in it, and removes it with its merged branch at the release; the declared programs `team-worktree` and `project-trust` trust the folders of Claude Code members, so no member stops at the folder trust question.
 - C103: The version is 0.0.19, which releases C101 and C102.
 - C102: Typing `@` in the composer lists `all` and the members of the room that start with the typed text; a choice inserts `@<name> ` through the new command `mention.insert {name}`.
