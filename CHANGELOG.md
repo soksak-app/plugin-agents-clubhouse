@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- C113: The version is 0.0.22, which releases C108, C110, C111 and C112.
 - C112: The options of a question with a cursor list are buttons; the new command `question.answer {member, choice}` reads the screen again and types the arrow keys and Enter that select the choice.
 - C111: The setting `acceptAll` (`ask` or `accept`) starts each member with `--dangerously-skip-permissions` for Claude Code or `--yolo` for Codex, unless the account arguments already hold a flag of the same meaning.
 - C110: A member whose program takes no `--agent`, such as Codex, receives the agent line that names its agent file and folder; a retask of it keeps its session and submits the new agent line, and a retask to another program is refused.
