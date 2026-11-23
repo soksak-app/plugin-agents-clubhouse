@@ -126,6 +126,14 @@ const strings = {
     en: "waiting for {name}: {step}, program {program}",
     ko: "{name} 기다리는 중: {step}, program {program}",
   },
+  questionAsks: {
+    en: "The program of {name} asks a question and waits for its answer:",
+    ko: "{name}의 프로그램이 질문하고 답을 기다립니다:",
+  },
+  questionAnswer: {
+    en: "Answer in the {name} tab",
+    ko: "{name} 탭에서 답하기",
+  },
   transportUnavailable: {
     en: "No member session is open. Check a member of the roster to summon it.",
     ko: "열린 멤버 세션이 없습니다. 명단에서 멤버를 체크하면 세션을 엽니다.",

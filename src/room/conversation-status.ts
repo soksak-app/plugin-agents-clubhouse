@@ -50,12 +50,21 @@ export interface DeliveryEntry {
   unreceived: number;
 }
 
+// The question that the room read from the screen of a blocked member (docs/spec/room.md#questions).
+export interface QuestionEntry {
+  member: string;
+  session: string;
+  rows: string[];
+}
+
 export interface ConversationValue {
   entries: StatusEntry[];
   waiting: WaitingMember[];
   delivery: DeliveryEntry[];
   // The team view of a room with a leader (docs/spec/room.md#team), [] without a team.
   team: TeamViewEntry[];
+  // The questions of the blocked members, [] while no member is blocked.
+  questions: QuestionEntry[];
 }
 
 // The label of a wait in the view: an answer wait whose session is idle shows `idle without answer`, a display only
@@ -86,6 +95,7 @@ export function createConversationStatus(
   delivery: () => DeliveryEntry[],
   sections: (entry: ConversationEntry) => AnswerSection[] = () => [],
   team: () => TeamViewEntry[] = () => [],
+  questions: () => QuestionEntry[] = () => [],
 ): ConversationStatus {
   const listeners = new Set<(value: ConversationValue) => void>();
   const waits = new Set<{ member: string; session: string; step: WaitingStep }>();
@@ -97,6 +107,7 @@ export function createConversationStatus(
       waiting: [...waits].map((wait) => ({ ...wait, program: programOf(value as { session?: unknown }[], wait.session) })),
       delivery: delivery().map((entry) => ({ ...entry })),
       team: team().map((entry) => ({ ...entry })),
+      questions: questions().map((entry) => ({ ...entry, rows: [...entry.rows] })),
     };
   };
   const changed = (): void => {

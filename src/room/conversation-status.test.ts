@@ -16,8 +16,9 @@ describe("conversation status", () => {
         entries: { type: "array", items: { required: ["speaker", "text", "at", "elapsedMs", "sections"] } },
         waiting: { type: "array", items: { required: ["member", "session", "step", "program"], properties: { step: { enum: ["protocol", "turn", "answer"] } } } },
         delivery: { type: "array", items: { required: ["member", "name", "role", "session", "sent", "delivered", "length", "unreceived"] } },
+        questions: { type: "array", items: { required: ["member", "session", "rows"] } },
       },
-      required: ["entries", "waiting", "delivery", "team"],
+      required: ["entries", "waiting", "delivery", "team", "questions"],
     });
   });
 
@@ -27,17 +28,17 @@ describe("conversation status", () => {
     const record = createRoomRecord(lines, {}, (speaker) => speaker, () => status.changed(), {}, () => 1000);
     const values: unknown[] = [];
     const stop = status.subscribe((value) => values.push(value));
-    expect(status.read()).toEqual({ entries: [], waiting: [], delivery: [], team: [] });
+    expect(status.read()).toEqual({ entries: [], waiting: [], delivery: [], team: [], questions: [] });
     record.append("owner", "hello");
     record.append("reviewer", "hi");
-    expect(status.read()).toEqual({ entries: [{ speaker: "owner", text: "hello", at: 1000, elapsedMs: null, sections: [] }, { speaker: "reviewer", text: "hi", at: 1000, elapsedMs: null, sections: [] }], waiting: [], delivery: [], team: [] });
+    expect(status.read()).toEqual({ entries: [{ speaker: "owner", text: "hello", at: 1000, elapsedMs: null, sections: [] }, { speaker: "reviewer", text: "hi", at: 1000, elapsedMs: null, sections: [] }], waiting: [], delivery: [], team: [], questions: [] });
     record.append("owner", "again");
     record.withdrawLast(2);
     expect(values).toEqual([
-      { entries: [{ speaker: "owner", text: "hello", at: 1000, elapsedMs: null, sections: [] }], waiting: [], delivery: [], team: [] },
-      { entries: [{ speaker: "owner", text: "hello", at: 1000, elapsedMs: null, sections: [] }, { speaker: "reviewer", text: "hi", at: 1000, elapsedMs: null, sections: [] }], waiting: [], delivery: [], team: [] },
-      { entries: [{ speaker: "owner", text: "hello", at: 1000, elapsedMs: null, sections: [] }, { speaker: "reviewer", text: "hi", at: 1000, elapsedMs: null, sections: [] }, { speaker: "owner", text: "again", at: 1000, elapsedMs: null, sections: [] }], waiting: [], delivery: [], team: [] },
-      { entries: [{ speaker: "owner", text: "hello", at: 1000, elapsedMs: null, sections: [] }, { speaker: "reviewer", text: "hi", at: 1000, elapsedMs: null, sections: [] }], waiting: [], delivery: [], team: [] },
+      { entries: [{ speaker: "owner", text: "hello", at: 1000, elapsedMs: null, sections: [] }], waiting: [], delivery: [], team: [], questions: [] },
+      { entries: [{ speaker: "owner", text: "hello", at: 1000, elapsedMs: null, sections: [] }, { speaker: "reviewer", text: "hi", at: 1000, elapsedMs: null, sections: [] }], waiting: [], delivery: [], team: [], questions: [] },
+      { entries: [{ speaker: "owner", text: "hello", at: 1000, elapsedMs: null, sections: [] }, { speaker: "reviewer", text: "hi", at: 1000, elapsedMs: null, sections: [] }, { speaker: "owner", text: "again", at: 1000, elapsedMs: null, sections: [] }], waiting: [], delivery: [], team: [], questions: [] },
+      { entries: [{ speaker: "owner", text: "hello", at: 1000, elapsedMs: null, sections: [] }, { speaker: "reviewer", text: "hi", at: 1000, elapsedMs: null, sections: [] }], waiting: [], delivery: [], team: [], questions: [] },
     ]);
     stop();
     record.append("owner", "after");
@@ -109,5 +110,13 @@ describe("waitLabel (docs/spec/room.md#conversation-status)", () => {
     expect(waitLabel({ member: "a", session: "s", step: "answer", program: "idle" })).toBe("idle without answer");
     expect(waitLabel({ member: "a", session: "s", step: "answer", program: "working" })).toBe("answer");
     expect(waitLabel({ member: "a", session: "s", step: "protocol", program: "idle" })).toBe("protocol");
+  });
+});
+
+describe("questions of the conversation status (docs/spec/room.md#questions)", () => {
+  it("lists the question that the room read from the screen of each blocked member", () => {
+    const questions = [{ member: "lead", session: "s-1", rows: [" Accessing workspace:", " ❯ No, exit"] }];
+    const status = createConversationStatus([], () => [], () => [], () => [], () => [], () => questions);
+    expect(status.read().questions).toEqual(questions);
   });
 });

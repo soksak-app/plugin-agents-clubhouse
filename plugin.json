@@ -79,7 +79,7 @@
       },
       {
         "name": "soksak-plugin-agents-clubhouse.conversation",
-        "description": "The conversation that the room shows: the entries of the room record in record order, speaker being owner, the identifier of a member, or clubhouse for a line of the room, and each member whose turn the room waits for, with its step (protocol until the protocol turn ends, turn while a turn line waits for a blocked session, answer until the answer arrives) and the program state of its session in core.sessions (null while core reports none, ended when core.sessions no longer lists it), and the session of each member with its sent and delivered numbers and the record lines that it has not received; each entry carries the sections of its answer, one per addressee, or [] without them, the record length and the number of record lines that its next turn line carries.",
+        "description": "The conversation that the room shows: the entries of the room record in record order, speaker being owner, the identifier of a member, or clubhouse for a line of the room, and each member whose turn the room waits for, with its step (protocol until the protocol turn ends, turn while a turn line waits for a blocked session, answer until the answer arrives) and the program state of its session in core.sessions (null while core reports none, ended when core.sessions no longer lists it), and the session of each member with its sent and delivered numbers and the record lines that it has not received; each entry carries the sections of its answer, one per addressee, or [] without them, the record length and the number of record lines that its next turn line carries. questions lists, for each waiting member whose program is blocked, the rows of the screen of its session that the room read when the program reported blocked, so the page shows the question and its answer button.",
         "schema": {
           "type": "object",
           "properties": {
@@ -150,9 +150,21 @@
                 },
                 "required": ["member", "name", "role", "directory", "branch", "merged", "session", "state"]
               }
+            },
+            "questions": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "member": { "type": "string" },
+                  "session": { "type": "string" },
+                  "rows": { "type": "array", "items": { "type": "string" } }
+                },
+                "required": ["member", "session", "rows"]
+              }
             }
           },
-          "required": ["entries", "waiting", "delivery", "team"]
+          "required": ["entries", "waiting", "delivery", "team", "questions"]
         }
       },
       {
@@ -317,6 +329,20 @@
           "type": "object",
           "properties": { "member": { "type": "string" }, "definition": { "type": "string" }, "role": { "type": "string" } },
           "required": ["member", "definition", "role"]
+        }
+      },
+      {
+        "name": "soksak-plugin-agents-clubhouse.member.show",
+        "description": "Make the tab that shows the session of the member active, so that the person answers there the question that its program asks. A member whose session no tab shows is refused.",
+        "params": {
+          "type": "object",
+          "properties": { "member": { "type": "string" } },
+          "required": ["member"]
+        },
+        "result": {
+          "type": "object",
+          "properties": { "member": { "type": "string" }, "tab": { "type": "string" } },
+          "required": ["member", "tab"]
         }
       },
       {
@@ -613,6 +639,10 @@
       {
         "name": "soksak-plugin-agents-clubhouse.tower",
         "description": "Control tower button: runs tower.set with the state opposite to the current one, opening or closing the control tower modal (natural-language input, dry run, command templates, search, graph)"
+      },
+      {
+        "name": "soksak-plugin-agents-clubhouse.question",
+        "description": "Answer button of the question of a blocked member under the conversation: runs member.show for that member, which makes the tab of its session active"
       }
     ]
   }

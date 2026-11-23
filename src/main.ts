@@ -39,6 +39,7 @@ import { createConversationStatus, waitLabel } from "./room/conversation-status"
 import { createProtocolInjector } from "./room/protocol";
 import { parseRoomState, serializedRoomState, type RoomState as RoomTabState } from "./room/room-state";
 import { ownedSessionIds, shownByOf } from "./room/session-channel";
+import { readQuestion, showMember } from "./room/question";
 import { reattachedChecks, rosterFrom, type RosterEntry } from "./room/roster";
 import { measuredCardSize } from "./room/card-size";
 import { createRoomOperations } from "./room/operations";
@@ -109,6 +110,10 @@ const CSS = `
 .st-think-body{align-self:flex-start;max-width:88%;margin:2px 0 0;font-size:11px;line-height:1.45;color:var(--fg3,#888);background:rgba(127,127,127,.06);border-left:2px solid rgba(127,127,127,.35);border-radius:4px;padding:6px 9px;white-space:pre-wrap;word-break:break-word}
 .st-tool{align-self:flex-start;max-width:88%;border:1px solid rgba(127,127,127,.25);border-radius:8px;padding:6px 9px;font-size:12px;background:rgba(127,127,127,.06)}
 .st-pending{align-self:flex-start;font-size:11px;color:var(--fg3,#888);display:flex;align-items:center;gap:6px}
+.st-question{align-self:stretch;border:1px solid var(--warn,#d9a441);border-radius:8px;padding:8px 10px;display:flex;flex-direction:column;gap:6px}
+.st-question-title{font-size:12px;color:var(--warn,#d9a441)}
+.st-question-screen{margin:0;font:11px/1.4 ui-monospace,monospace;white-space:pre-wrap;color:var(--fg2,#ccc);max-height:220px;overflow:auto}
+.st-question-answer{align-self:flex-start}
 .st-dot{width:6px;height:6px;border-radius:50%;background:currentColor;animation:st-pulse 1.1s ease-in-out infinite}
 .st-fail{align-self:flex-start;max-width:88%;font-size:11.5px;color:var(--danger-soft,#d77);border:1px solid var(--danger-soft,#d77);border-radius:8px;padding:6px 9px;white-space:pre-wrap;word-break:break-word;opacity:.85}
 .st-box-time{display:block;text-align:right;font-size:9px;opacity:.5;margin-top:3px;font-variant-numeric:tabular-nums}
@@ -645,6 +650,18 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
       line.dataset.text = tp("waitingFor", lang, { name: memberName(wait.member), step: waitLabel(wait), program: String(wait.program) });
       return line;
     });
+    // A blocked member shows the question that its program asks and the button that makes the tab of its session active, where the
+    // person answers it (docs/spec/room.md#questions).
+    const questionRows = value.questions.map((question) => {
+      const box = el("div", "st-question");
+      box.append(elText("div", tp("questionAsks", lang, { name: memberName(question.member) }), "st-question-title"));
+      box.append(elText("pre", question.rows.join("\n"), "st-question-screen"));
+      const answer = elText("button", tp("questionAnswer", lang, { name: memberName(question.member) }), "st-question-answer");
+      answer.dataset.expose = `${EXPOSE}.question`;
+      bound(expose.bind(answer, `${EXPOSE}.member.show`, { member: question.member }, { failed: failed("member.show") }), "member.show");
+      box.append(answer);
+      return box;
+    });
     const keys = new Set(waitRows.map((line) => line.dataset.key!));
     for (const key of [...waitStarts.keys()]) if (!keys.has(key)) waitStarts.delete(key);
     // A draw keeps the scroll position; the follow mode decides whether the view moves to the new entries.
@@ -653,7 +670,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
     const teamRows = value.team.map((entry) =>
       elText("div", teamRowText(entry), "st-note st-team"),
     );
-    msgs.replaceChildren(...rows, ...waitRows, ...teamRows);
+    msgs.replaceChildren(...rows, ...waitRows, ...questionRows, ...teamRows);
     msgs.scrollTop = top;
     tickWaits();
     seen.disconnect();
@@ -768,6 +785,9 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
         .finally(() => retasks.delete(member));
     }
   };
+  // The questions of the blocked members by session, and the sessions whose screen the room reads (docs/spec/room.md#questions).
+  const questions = new Map<string, { member: string; rows: string[] }>();
+  const questionReads = new Set<string>();
   const teamControl = createTeamControl({
     team,
     definitions: () => definitions,
@@ -795,8 +815,29 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   const conversationStatus = createConversationStatus(conversation, () => sessionsValue, () => deliveryEntries(), (entry) =>
     entry.speaker === "owner" || entry.speaker === "clubhouse" ? [] : answerSections(entry.text, roster),
     () => teamControl.view(sessionsValue),
+    () => [...questions.entries()].map(([session, entry]) => ({ member: entry.member, session, rows: entry.rows })),
   );
   conversationStatus.subscribe(() => showConversation());
+  // The question of each blocked member (docs/spec/room.md#questions): the room reads the screen of its session once when its program
+  // reports blocked, at the value of core.sessions that carries the state, and drops the question when the state changes.
+  conversationStatus.subscribe((value) => {
+    const blocked = new Map(value.waiting.filter((wait) => wait.program === "blocked").map((wait) => [wait.session, wait.member]));
+    let dropped = false;
+    for (const session of [...questions.keys()]) if (!blocked.has(session)) dropped = questions.delete(session) || dropped;
+    for (const [session, member] of blocked) {
+      if (questions.has(session) || questionReads.has(session)) continue;
+      questionReads.add(session);
+      readQuestion(room, session)
+        .then((rows) => {
+          if (!conversationStatus.read().waiting.some((wait) => wait.session === session && wait.program === "blocked")) return;
+          questions.set(session, { member, rows });
+          conversationStatus.changed();
+        })
+        .catch((error: unknown) => report("room question", `member ${member}: ${String((error as Error)?.message ?? error)}`))
+        .finally(() => questionReads.delete(session));
+    }
+    if (dropped) conversationStatus.changed();
+  });
   // With a leader the leader receives every line and a worker its owner lines and the lines that mention it
   // (docs/spec/room.md#addressed-views).
   const leaderEntry = () => roster.find((entry) => entry.leader && entry.checked);
@@ -988,6 +1029,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
     [`${EXPOSE}.role`]: () => [...tabsEl.querySelectorAll<HTMLElement>(".st-role")],
     [`${EXPOSE}.mode`]: kib,
     [`${EXPOSE}.tower`]: towerButton,
+    [`${EXPOSE}.question`]: () => [...msgs.querySelectorAll<HTMLElement>(".st-question-answer")],
   };
   return {
     commands: {
@@ -999,6 +1041,18 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
       [`${EXPOSE}.member.release`]: async (params: unknown) => teamControl.release(params),
       [`${EXPOSE}.member.merged`]: async (params: unknown) => teamControl.merged(params),
       [`${EXPOSE}.member.retask`]: async (params: unknown) => teamControl.retask(params),
+      [`${EXPOSE}.member.show`]: async (params: unknown) => {
+        const member = (params as { member?: unknown } | null)?.member;
+        if (typeof member !== "string" || member === "") throw new Error("member.show member must be a non-empty text");
+        const value = conversationStatus.read();
+        const session =
+          value.waiting.find((wait) => wait.member === member)?.session ??
+          value.team.find((entry) => entry.member === member)?.session ??
+          memberSessions.get(member) ??
+          null;
+        if (typeof session !== "string") throw new Error(`member ${member} has no open session`);
+        return showMember(room, sessionsValue, member, session);
+      },
       [REPORT_COMMAND]: async (params: unknown) => work!.reportCommand(params),
       [CLAIM_COMMAND]: async (params: unknown) => work!.claim(params),
       [RELEASE_COMMAND]: async (params: unknown) => work!.release(params),
