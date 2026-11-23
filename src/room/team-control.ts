@@ -27,6 +27,9 @@ export interface TeamControlDeps {
   busy: (member: string) => boolean;
   // Runs after a retask ended the session of the member, with that session or null, so the page moves its delivery to the resumed session.
   retasked: (member: string, session: string | null) => void;
+  // Resolves when core.sessions no longer lists the session: core.session.end answers before core.sessions drops it, and a summon
+  // before that sees the ended session open and opens nothing.
+  gone: (session: string) => Promise<void>;
   // The state of core.tab.role of the tab of the member, null without a role change.
   roleState: (member: string) => "pending" | "ready" | null;
 }
@@ -68,7 +71,10 @@ export function createTeamControl(deps: TeamControlDeps): TeamControl {
       if (agent === null) throw new Error(`definition ${definition} has no agent file for --agent`);
       const before = teamName(entry, deps.definitions());
       const session = deps.sessionOf(entry.id);
-      if (session !== null) await deps.end(session);
+      if (session !== null) {
+        await deps.end(session);
+        await deps.gone(session);
+      }
       entry.definition = definition;
       entry.agent = agent;
       entry.resume = true;

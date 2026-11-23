@@ -17,6 +17,7 @@ function page() {
   let core = [{ session: "s-1", program: { state: "idle" } }, { session: "s-2", program: { state: "working" } }, { session: "s-l", program: { state: "working" } }];
   const ended: string[] = [];
   const log: string[] = [];
+  const gones: (() => void)[] = [];
   const record = createRoomRecord([], {}, (speaker) => speaker, () => {});
   let next = 0;
   const answers = createAnswerChannel({ newTurn: () => `t-${++next}`, delivered: () => {}, restoredAnswer: () => {}, changed: () => {} });
@@ -38,9 +39,10 @@ function page() {
     agentOf: async (definition) => ({ claude: "developer", tester: "e2e-tester" } as Record<string, string>)[definition] ?? null,
     busy: (member) => member === "claude-2",
     retasked: (member, session) => void log.push(`retasked ${member} ${session}`),
+    gone: (session) => new Promise<void>((resolve) => void gones.push(() => { log.push(`gone ${session}`); resolve(); })),
     roleState: (member) => (member === "claude-1" ? "pending" : null),
   });
-  return { team, ended, log, record, control, core: () => core };
+  return { team, ended, log, record, control, core: () => core, gones };
 }
 
 describe("the team commands of the page", () => {
@@ -76,11 +78,16 @@ describe("the team commands of the page", () => {
 describe("member.retask", () => {
   it("ends the session, sets the definition and the agent, resumes the session id, records the change and rearranges", async () => {
     const p = page();
-    expect(await p.control.retask({ turn: "t-1", member: "claude-1", definition: "tester" })).toEqual({ member: "claude-1", definition: "tester" });
+    const retask = p.control.retask({ turn: "t-1", member: "claude-1", definition: "tester" });
+    // C97-4: core.session.end answers before core.sessions drops the session, so the summon waits for core.sessions to drop it.
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(p.log).not.toContain("summon");
+    p.gones.forEach((done) => done());
+    expect(await retask).toEqual({ member: "claude-1", definition: "tester" });
     expect(p.ended).toEqual(["s-1"]);
     expect(p.team[0]).toMatchObject({ id: "claude-1", definition: "tester", agentSession: "u-1", resume: true, agent: "e2e-tester" });
     expect(p.record.lines.at(-1)).toMatchObject({ speaker: "clubhouse", text: "@Claude-1 is now tester, named @Tester-1" });
-    expect(p.log).toEqual(["retasked claude-1 s-1", "changed", "summon"]);
+    expect(p.log).toEqual(["gone s-1", "retasked claude-1 s-1", "changed", "summon"]);
     expect(p.control.view(p.core()).find((entry) => entry.member === "claude-1")).toMatchObject({ name: "Tester-1", roleState: "pending" });
   });
 

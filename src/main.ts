@@ -479,6 +479,10 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   bridge!.runtime.data.on(() => refreshDefinitions());
   refreshDefinitions();
 
+  // The ended sessions that a retask waits for core.sessions to drop, each with the resolve of its wait (docs/spec/room.md#team).
+  const goneWaits = new Map<string, () => void>();
+  const gone = (session: string): Promise<void> =>
+    openSessionIds.has(session) ? new Promise<void>((resolve) => goneWaits.set(session, resolve)) : Promise.resolve();
   // The value of core.sessions, which the relay reads, and the listeners that the relay watches it with.
   let sessionsValue: unknown = [];
   const sessionListeners = new Set<(value: unknown) => void>();
@@ -499,6 +503,10 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
       report("core.sessions", String((error as Error)?.message ?? error));
     }
     sessionsArrived();
+    for (const [session, done] of [...goneWaits]) if (!openSessionIds.has(session)) {
+      goneWaits.delete(session);
+      done();
+    }
     sessionsValue = value;
     for (const listener of [...sessionListeners]) listener(value);
     refreshReported();
@@ -781,6 +789,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
     },
     report,
     agentOf: (definition) => agentOf(definition),
+    gone,
     busy: (member) =>
       answers.tokens().some((token) => token.member === member) || conversationStatus.read().waiting.some((wait: { member: string }) => wait.member === member),
     retasked: (member, session) => {

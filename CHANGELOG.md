@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- C97-4: A retask runs the summon after core.sessions no longer lists the ended session, so the summon opens the member with `--resume <agentSession> --agent <name>`; before, the summon saw the session open, opened nothing, and the arrangement failed with `session <id> is not open`.
 - C97-3: A summon reads the agent file of a clean run of `agent-file`: only `truncated.stdout` or `truncated.stderr` set to `true` refuses it, and the declaration of the reply types `truncated` as `{stdout, stderr}`.
 - C97-2: `member.retask {turn, member, definition}` gives a team member another definition with the turn token of the leader: the room ends its session, resumes the Claude Code session id with the agent of the definition, moves the delivery to the new session, sets the role of its tab with `core.tab.role`, records `@<old name> is now <definition>, named @<new name>`, and the team view shows the role state. The leader protocol line names the command.
 - C97-1: A Claude Code team member starts with `--session-id <id>` and `--agent <name>`, the frontmatter `name` of the agent file of its role that the declared program `agent-file` reads and the `yaml` library parses; a later launch resumes the id. The team entry of the tab state gains `agentSession`, `resume` and `agent`, and an entry without them is refused.
