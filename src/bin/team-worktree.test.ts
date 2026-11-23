@@ -3,7 +3,7 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { run, worktreePath } from "./team-worktree";
 
@@ -56,7 +56,16 @@ describe("team-worktree remove", () => {
     await run(["add", repo, "dev-1"], home, {}, "/");
     expect(await run(["remove", repo, "dev-1"], home, {}, "/")).toMatchObject({ removed: true });
     expect(existsSync(worktreePath(home, repo, "dev-1"))).toBe(false);
+    expect(existsSync(dirname(worktreePath(home, repo, "dev-1")))).toBe(false);
     expect(git("branch", "--list", "dev-1")).toBe("");
+  });
+
+  it("keeps the folder of the repository while another member has a worktree in it", async () => {
+    const { home, repo } = setup();
+    await run(["add", repo, "dev-1"], home, {}, "/");
+    await run(["add", repo, "dev-2"], home, {}, "/");
+    await run(["remove", repo, "dev-1"], home, {}, "/");
+    expect(existsSync(worktreePath(home, repo, "dev-2"))).toBe(true);
   });
 
   it("refuses a worktree with uncommitted changes and keeps it", async () => {

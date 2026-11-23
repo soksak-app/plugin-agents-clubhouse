@@ -12,7 +12,7 @@
 // file while it runs.
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, renameSync, rmdirSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import lockfile from "proper-lockfile";
@@ -100,6 +100,8 @@ export async function run(args: string[], home: string, env: NodeJS.ProcessEnv, 
   if (command === "remove") {
     git(root, ["worktree", "remove", path]);
     git(root, ["branch", "-d", name]);
+    // The folder of the repository goes with its last worktree, so a removal leaves no empty folder behind.
+    if (readdirSync(dirname(path)).length === 0) rmdirSync(dirname(path));
     return { root, worktree: path, branch: name, removed: true };
   }
   throw new Error(`command must be add, remove or trust, got ${JSON.stringify(command)}`);

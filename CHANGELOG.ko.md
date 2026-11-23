@@ -2,6 +2,7 @@
 
 ## 미출시
 
+- C106: Repository의 마지막 worktree를 지우면 `<home>/soksak/worktrees` 아래의 그 folder도 지운다.
 - C105: 버전은 0.0.20이며 C104를 출시한다.
 - C104: 방이 summon 때 각 team member의 worktree를 project 밖 `<home>/soksak/worktrees/<repository name>-<hash>/<member id>`에 만들고 member를 그 안에서 시작하며, release 때 merge된 branch와 함께 지운다. 선언된 program `team-worktree`와 `project-trust`가 Claude Code member의 folder를 trust하므로 어떤 member도 folder trust 질문에서 멈추지 않는다.
 - C103: 버전은 0.0.19이며 C101과 C102를 출시한다.
