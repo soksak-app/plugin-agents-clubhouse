@@ -74,11 +74,28 @@ export async function readAgentDefinitions(get: AgentDataGet, report: (text: str
   });
 }
 
+// The flag of each program that accepts every request without asking, with the flags of the same meaning: the room starts a program
+// without a shell, so an alias or a shell function of the person that adds such a flag does not apply, and Codex refuses a repeated
+// --yolo (docs/spec/room.md#accept-all).
+const ACCEPT_ALL: Record<string, { add: string; same: string[] }> = {
+  claude: { add: "--dangerously-skip-permissions", same: ["--dangerously-skip-permissions"] },
+  codex: { add: "--yolo", same: ["--yolo", "--dangerously-bypass-approvals-and-sandbox"] },
+};
+
+// The arguments that the setting acceptAll adds for the program: none when the arguments hold a flag of the same meaning.
+export function acceptAllArgs(program: string, args: readonly string[]): string[] {
+  const name = program.split("/").at(-1) ?? program;
+  const flag = ACCEPT_ALL[name];
+  if (flag === undefined) throw new Error(`settings.acceptAll: program ${name} has no known flag that accepts every request`);
+  return flag.same.some((one) => args.includes(one)) ? [] : [flag.add];
+}
+
 // The member of the room for a definition: the session opens with the terminal's start values of the definition (program, arguments,
 // the directory of the definition and its role), and the plugin that runs the session is the one of the definition. A Claude Code member
 // whose definition has an agent file starts with `--agent <agent>`, so it runs with the instructions and tools of that agent (C101).
-export function toMemberDefinition(definition: AgentDefinition, agent: string | null = null): MemberDefinition {
-  const args = memberLaunch(definition.program, definition.args).args;
+export function toMemberDefinition(definition: AgentDefinition, agent: string | null = null, acceptAll = false): MemberDefinition {
+  const launched = memberLaunch(definition.program, definition.args).args;
+  const args = acceptAll ? [...launched, ...acceptAllArgs(definition.program, launched)] : launched;
   return {
     id: definition.id,
     name: definition.name,

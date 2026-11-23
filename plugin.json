@@ -33,6 +33,13 @@
       "minimum": 0,
       "maximum": 64
     },
+    "acceptAll": {
+      "label": "모두 수락",
+      "description": "accept면 각 member가 모든 요청을 묻지 않고 수락하는 flag로 시작한다(Claude Code --dangerously-skip-permissions, Codex --yolo). 방은 shell 없이 시작하므로 alias는 적용되지 않는다.",
+      "type": "enum",
+      "default": "ask",
+      "values": ["ask", "accept"]
+    },
     "maxMembers": {
       "label": "team 최대 인원",
       "description": "leader가 member.summon으로 부를 수 있는 team member의 최대 수. 기본값 6은 leader 한 명이 brief하고 merge할 수 있는 병렬 worker 수다.",

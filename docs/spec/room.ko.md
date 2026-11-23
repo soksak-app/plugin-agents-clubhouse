@@ -130,6 +130,10 @@ Program이 Claude Code인 team member는 방이 summon 때 만드는 UUID인 `--
 
 Claude Code 2.1.330으로 측정했다. `--resume <id> --agent <name>`은 agent의 tool을 바꾸고 대화를 유지하지만 시작한 agent의 지시를 유지하므로, agent가 새 role을 따르게 하는 것은 role의 change message다. 둘을 함께 쓰면 agent는 새 role을 따르고 그 tool을 쓰며 대화를 기억했다. Agent frontmatter가 선언한 MCP server는 새 `--agent` session에서도 load되지 않았다. 이 contract는 그것에 대해 아무것도 말하지 않으며, 측정되지 않았다.
 
+## Accept all
+
+설정 `acceptAll`은 `ask` 또는 `accept`이고 기본값은 `ask`다. `accept`이면 방은 roster와 team의 각 member를 그 program이 모든 요청을 묻지 않고 수락하는 flag로 시작한다. Claude Code는 `--dangerously-skip-permissions`, Codex는 `--yolo`다. 방은 shell 없이 program을 시작하므로 사람이 그런 flag를 더하는 alias나 shell 함수는 member에 적용되지 않는다. 이 설정이 그 선택을 선언하는 자리다. Account의 인자에 같은 뜻의 flag(Codex는 `--yolo` 또는 `--dangerously-bypass-approvals-and-sandbox`)가 있으면 더하지 않는다. Codex는 `--yolo`가 반복되면 거부하기 때문이다. 알려진 flag가 없는 program은 `settings.acceptAll: program <name> has no known flag that accepts every request`로 시작에 실패하므로, `accept`는 여전히 묻는 member를 시작하지 않는다.
+
 ## Agent line
 
 Claude Code는 `--agent <name>`으로 definition의 agent file을 읽고, 지원하는 다른 program에는 그런 argument가 없다. Program이 `--agent`를 받지 않고 definition에 agent file이 있는 member는 protocol 줄 뒤에 agent 줄 `[@clubhouse] agent: you are <agent>, called @<member name>. Read the agent file <file> and its folder <folder>, and follow them as your instructions from now on; this line takes no answer.`을 받는다. `<agent>`는 file의 frontmatter name이고 `<folder>`는 그 folder다. `member.retask`는 member의 program을 유지하고, 다른 program의 definition은 `member <id> runs <program>; member.retask takes a definition of the same program, got <definition> of <program>`으로 거부한다. Session이 program을 유지하기 때문이다. Claude Code member의 retask는 session을 끝내고 새 `--agent`로 session id를 resume하며, 다른 member의 retask는 session을 유지하고 새 definition의 agent 줄을 보낸다. Agent file이 없는 definition은 `definition <id> has no agent file`로 거부한다.

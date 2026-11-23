@@ -88,6 +88,25 @@ describe("toMemberDefinition", () => {
   });
 });
 
+// C111 (docs/spec/room.md#accept-all): the setting acceptAll starts each member with the flag of its program that accepts every request.
+describe("acceptAll", () => {
+  const base = { id: "w", name: "W", account: "a", plugin: "terminal", role: "", cwd: "/p" };
+  it("adds --dangerously-skip-permissions to Claude Code and --yolo to Codex", () => {
+    expect(toMemberDefinition({ ...base, program: "claude", args: [] }, null, true).params.args).toContain("--dangerously-skip-permissions");
+    expect(toMemberDefinition({ ...base, program: "/opt/homebrew/bin/codex", args: [] }, null, true).params.args).toEqual(["--yolo"]);
+  });
+
+  it("adds no flag that the account arguments already hold, because Codex refuses a repeated --yolo", () => {
+    expect(toMemberDefinition({ ...base, program: "codex", args: ["--yolo"] }, null, true).params.args).toEqual(["--yolo"]);
+    expect(toMemberDefinition({ ...base, program: "codex", args: ["--dangerously-bypass-approvals-and-sandbox"] }, null, true).params.args).toEqual(["--dangerously-bypass-approvals-and-sandbox"]);
+  });
+
+  it("adds nothing while the setting is off, and refuses a program without a known flag while it is on", () => {
+    expect(toMemberDefinition({ ...base, program: "codex", args: [] }).params.args).toEqual([]);
+    expect(() => toMemberDefinition({ ...base, program: "aider", args: [] }, null, true)).toThrow("settings.acceptAll: program aider has no known flag that accepts every request");
+  });
+});
+
 describe("reserved names (C95, docs/spec/room.md#mentions)", () => {
   it("refuses a definition named or identified all, owner or clubhouse, reports it and keeps the others", async () => {
     const definitions = {

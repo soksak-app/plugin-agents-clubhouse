@@ -221,6 +221,11 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   const conversationTurns = conversationTurnsOf(settings.conversationTurns);
   // The largest number of members that the leader summons (docs/spec/room.md#team).
   const maxMembers = maxMembersOf(settings.maxMembers);
+  // Whether each member starts with the flag of its program that accepts every request (docs/spec/room.md#accept-all).
+  if (settings.acceptAll !== "ask" && settings.acceptAll !== "accept") {
+    throw new Error(`settings.acceptAll must be ask or accept, got ${JSON.stringify(settings.acceptAll)}`);
+  }
+  const acceptAll = settings.acceptAll === "accept";
   // The state of this room tab, which core keeps per tab across a restart (docs/spec/room.md#restart).
   const saved = parseRoomState(await bridge!.calls.request("tab.state.read", null));
   let mode: RoomMode = saved?.mode ?? modeSetting;
@@ -566,7 +571,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
     team.flatMap((entry) => {
       const definition = definitions.find((one) => one.id === entry.definition);
       if (definition === undefined) return [];
-      const member = toMemberDefinition({ ...definition, id: entry.id, name: teamName(entry, definitions), role: entry.role, cwd: entry.worktree ?? entry.directory });
+      const member = toMemberDefinition({ ...definition, id: entry.id, name: teamName(entry, definitions), role: entry.role, cwd: entry.worktree ?? entry.directory }, null, acceptAll);
       // A Claude Code member starts with its session id and agent, and a later launch resumes the id (docs/spec/room.md#team).
       return [{ ...member, params: { ...member.params, args: [...(member.params.args as string[]), ...agentArgs(entry)] } }];
     });
@@ -590,7 +595,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
       // A checked Claude Code member of the roster starts with the agent of its definition, as a team member does (C101).
       const rosterDefinitions = await Promise.all(
         definitions.map(async (definition) =>
-          toMemberDefinition(definition, checked.includes(definition.id) && isClaude(definition.id) ? await agentOf(definition.id) : null),
+          toMemberDefinition(definition, checked.includes(definition.id) && isClaude(definition.id) ? await agentOf(definition.id) : null, acceptAll),
         ),
       );
       await summonAndArrange(trigger, [...rosterDefinitions, ...teamDefinitions()], checked);
