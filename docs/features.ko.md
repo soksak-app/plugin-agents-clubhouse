@@ -100,4 +100,7 @@
 - [o] C95 — P0: `@all`은 체크된 모든 member에게 간다. 입력: owner 메시지, leader 답, worker 답의 `@all`이나 section 제목 `@all:`. 동작: `@all`은 일반 text라 아무에게도 가지 않고 아무도 시작하지 않는다. 기대: `@all`은 체크된 모든 member에게 가고, owner 메시지와 leader 답만 그것으로 turn을 시작한다. Code와 인용 안의 mention은 mention이 아니고, 한글이 뒤따르는 mention은 그 mention이다. 이름 `all`, `owner`, `clubhouse`는 거부된다(docs/spec/room.md#mentions).
 - [o] C95-1 — P1: 입력창 placeholder가 `@all`을 알린다. 입력: room 입력창. 동작: placeholder는 `@` mention만 알린다. 기대: 모든 member를 부르는 `@all`도 알린다(docs/spec/room.md#mentions).
 - [o] C96 — P0: room page가 temporal dead zone 오류 없이 시작한다. 입력: room tab이 열린다. 동작: 대화 view와 core.sessions listener가 delivery entry를 선언 전에 읽어 시작이 `room conversation: Cannot access 'deliveryEntries' before initialization`을 보인다. 기대: listener나 시작이 읽는 모든 값은 그보다 먼저 선언된다. Page 시작 test는 build된 page를 plugin API의 view test host에 load하고 오류가 없고 roster가 채워지는지 확인한다.
+- [~] C97 — P0: Leader가 team member를 그 자리에서 retask하고 그 대화를 유지한다(docs/spec/room.md#team). 남은 일: C97-1과 C97-2.
+- [o] C97-1 — P0: Claude Code team member는 `--session-id <id>`와 자기 role의 agent file frontmatter `name`에서 온 `--agent <name>`으로 시작하고, 이후 launch는 그 id를 resume한다. Team entry는 `agentSession`, `resume`, `agent`를 가지고, 선언된 program `agent-file`이 file을 읽는다. 확인하지 않음: window에서의 summon.
+- [ ] C97-2 — P0: `member.retask {turn, member, definition}`는 member session을 끝내고 새 definition의 agent로 resume하며, `core.tab.role`로 tab role을 정하고, 전달을 옮기고, 변경을 기록하며, team view는 role 상태를 보인다. C97-1을 기다린다.
 - [o] C65 — P0: C64, C66부터 C96까지와 함께 0.0.16을 출시한다. `package.json`이 0.0.16을 선언하고, main의 release run이 v0.0.16을 게시한다.

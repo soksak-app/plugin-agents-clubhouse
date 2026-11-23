@@ -60,9 +60,9 @@ export function parseRoomState(value: unknown): RoomState | null {
   const team = state.team;
   if (
     !Array.isArray(team) ||
-    !team.every((entry) => isText(entry?.id) && isText(entry?.definition) && typeof entry?.role === "string" && typeof entry?.directory === "string" && entry.directory.startsWith("/") && (entry?.merged === null || isText(entry?.merged)))
+    !team.every((entry) => isText(entry?.id) && isText(entry?.definition) && typeof entry?.role === "string" && typeof entry?.directory === "string" && entry.directory.startsWith("/") && (entry?.merged === null || isText(entry?.merged)) && (entry?.agentSession === null || isText(entry?.agentSession)) && typeof entry?.resume === "boolean" && (entry?.agent === null || isText(entry?.agent)))
   ) {
-    throw new Error(`room tab state: team must be an array of {id, definition, role, directory, merged}, got ${JSON.stringify(team)}`);
+    throw new Error(`room tab state: team must be an array of {id, definition, role, directory, merged, agentSession, resume, agent}, got ${JSON.stringify(team)}`);
   }
   if (!MODES.includes(state.mode as string)) {
     throw new Error(`room tab state: mode must be facil, turn or simul, got ${JSON.stringify(state.mode)}`);
@@ -128,7 +128,7 @@ export function parseRoomState(value: unknown): RoomState | null {
   }
   return {
     roster: roster.map((entry) => ({ id: entry.id, checked: entry.checked, role: entry.role, leader: entry.leader })),
-    team: team.map((entry) => ({ id: entry.id, definition: entry.definition, role: entry.role, directory: entry.directory, merged: entry.merged })),
+    team: team.map((entry) => ({ id: entry.id, definition: entry.definition, role: entry.role, directory: entry.directory, merged: entry.merged, agentSession: entry.agentSession, resume: entry.resume, agent: entry.agent })),
     mode: state.mode as RoomMode,
     conversation: conversation.map((entry) => ({ speaker: entry.speaker, text: entry.text, at: entry.at, elapsedMs: entry.elapsedMs })),
     sessions: [...(state.sessions as string[])],

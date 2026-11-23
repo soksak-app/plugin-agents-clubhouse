@@ -9,6 +9,12 @@ export interface TeamEntry {
   directory: string;
   // The merge commit that the leader recorded with member.merged, null before it; the room reads no git state.
   merged: string | null;
+  // The Claude Code session id that the member starts with and that a retask resumes, null for another program.
+  agentSession: string | null;
+  // Whether the next launch resumes agentSession: true after the first launch.
+  resume: boolean;
+  // The agent name of --agent, the frontmatter name of the agent file of the role of the definition, or null.
+  agent: string | null;
 }
 
 export interface SummonCheck {
@@ -53,13 +59,21 @@ export function summonedEntry(params: any, check: SummonCheck): TeamEntry {
   const used = new Set(check.team.filter((entry) => entry.definition === definition).map((entry) => entry.id));
   let n = 1;
   while (used.has(`${definition}-${n}`)) n += 1;
-  return { id: `${definition}-${n}`, definition, role, directory, merged: null };
+  return { id: `${definition}-${n}`, definition, role, directory, merged: null, agentSession: null, resume: false, agent: null };
+}
+
+// The Claude Code arguments of a launch of the team member (docs/spec/room.md#team): the first launch names the session id, a later
+// launch resumes it, because Claude Code refuses a second --session-id with the same id; the agent follows.
+export function agentArgs(entry: TeamEntry): string[] {
+  if (entry.agentSession === null) return [];
+  return [entry.resume ? "--resume" : "--session-id", entry.agentSession, ...(entry.agent === null ? [] : ["--agent", entry.agent])];
 }
 
 // The name of a team member: the name of its definition and its number, by which a mention names it.
 export function teamName(entry: TeamEntry, definitions: readonly { id: string; name: string }[]): string {
   const name = definitions.find((definition) => definition.id === entry.definition)?.name ?? entry.definition;
-  return `${name}${entry.id.slice(entry.definition.length)}`;
+  // The number of the summon id stays when a retask changes the definition.
+  return `${name}${entry.id.slice(entry.id.lastIndexOf("-"))}`;
 }
 
 type Leader = SummonCheck["leader"];

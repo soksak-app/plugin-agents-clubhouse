@@ -1,7 +1,7 @@
 // The team of the leader (docs/spec/room.md#team): member.summon checks only its input, names each summoned member by its definition
 // and the smallest free number, and refuses a summon beyond the setting maxMembers.
 import { describe, expect, it } from "vitest";
-import { maxMembersOf, mergedCommit, releasedEntry, releaseTeam, summonedEntry, teamName, teamView, type TeamEntry } from "./team";
+import { agentArgs, maxMembersOf, mergedCommit, releasedEntry, releaseTeam, summonedEntry, teamName, teamView, type TeamEntry } from "./team";
 
 const DEFINITIONS = [{ id: "claude", name: "Claude" }, { id: "codex", name: "Codex" }];
 const LEADER = { id: "lead", turns: ["t-1"] };
@@ -9,11 +9,11 @@ const params = (over: Record<string, unknown> = {}) => ({ turn: "t-1", definitio
 
 describe("summonedEntry", () => {
   it("takes the smallest free number of the definition", () => {
-    const team: TeamEntry[] = [{ id: "claude-2", definition: "claude", role: "", directory: "/a", merged: null }];
+    const team: TeamEntry[] = [{ id: "claude-2", definition: "claude", role: "", directory: "/a", merged: null, agentSession: null, resume: false, agent: null }];
     expect(summonedEntry(params(), { team, definitions: DEFINITIONS, leader: LEADER, maxMembers: 6 })).toEqual({
-      id: "claude-1", definition: "claude", role: "server", directory: "/work/game", merged: null,
+      id: "claude-1", definition: "claude", role: "server", directory: "/work/game", merged: null, agentSession: null, resume: false, agent: null,
     });
-    expect(teamName({ id: "claude-1", definition: "claude", role: "", directory: "/a", merged: null }, DEFINITIONS)).toBe("Claude-1");
+    expect(teamName({ id: "claude-1", definition: "claude", role: "", directory: "/a", merged: null, agentSession: null, resume: false, agent: null }, DEFINITIONS)).toBe("Claude-1");
   });
 
   it("refuses a turn that is not an open turn of the leader, and a room without a leader", () => {
@@ -30,7 +30,7 @@ describe("summonedEntry", () => {
   });
 
   it("refuses a summon beyond maxMembers", () => {
-    const team: TeamEntry[] = [{ id: "claude-1", definition: "claude", role: "", directory: "/a", merged: null }];
+    const team: TeamEntry[] = [{ id: "claude-1", definition: "claude", role: "", directory: "/a", merged: null, agentSession: null, resume: false, agent: null }];
     expect(() => summonedEntry(params(), { team, definitions: DEFINITIONS, leader: LEADER, maxMembers: 1 })).toThrow("the team has reached maxMembers 1");
   });
 });
@@ -42,7 +42,7 @@ describe("maxMembersOf", () => {
   });
 });
 
-const ENTRY: TeamEntry = { id: "claude-1", definition: "claude", role: "server", directory: "/work/game", merged: null };
+const ENTRY: TeamEntry = { id: "claude-1", definition: "claude", role: "server", directory: "/work/game", merged: null, agentSession: null, resume: false, agent: null };
 
 describe("member.release and member.merged (docs/spec/room.md#team)", () => {
   const leader = { id: "lead", turns: ["t-1"] };
@@ -75,5 +75,21 @@ describe("teamView", () => {
       { member: "claude-1", name: "Claude-1", role: "server", directory: "/work/game", branch: "Claude-1", merged: null, session: "s-1", state: "idle" },
       { member: "claude-2", name: "Claude-2", role: "server", directory: "/work/game", branch: "Claude-2", merged: "abc", session: "s-9", state: "ended" },
     ]);
+  });
+});
+
+// C97-1 (docs/spec/room.md#team): a Claude Code team member starts with its session id and agent, and a later launch resumes the id.
+describe("agentArgs", () => {
+  const entry = (over: Partial<TeamEntry>): TeamEntry =>
+    ({ id: "claude-1", definition: "claude", role: "", directory: "/a", merged: null, agentSession: null, resume: false, agent: null, ...over });
+  it("starts with --session-id and --agent, and resumes after the first launch", () => {
+    const id = "28e7fee6-d618-4598-b9a6-775f3053340e";
+    expect(agentArgs(entry({ agentSession: id, agent: "manager-develop" }))).toEqual(["--session-id", id, "--agent", "manager-develop"]);
+    expect(agentArgs(entry({ agentSession: id, resume: true, agent: "e2e-tester" }))).toEqual(["--resume", id, "--agent", "e2e-tester"]);
+    expect(agentArgs(entry({ agentSession: id }))).toEqual(["--session-id", id]);
+    expect(agentArgs(entry({}))).toEqual([]);
+  });
+  it("keeps the number of the name when the definition changes", () => {
+    expect(teamName(entry({ id: "claude-3", definition: "codex" }), DEFINITIONS)).toBe("Codex-3");
   });
 });

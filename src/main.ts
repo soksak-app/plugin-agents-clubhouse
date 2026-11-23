@@ -31,7 +31,8 @@ import { createSubmitQueue } from "./room/submit-queue";
 import { CLAIM_COMMAND, RELEASE_COMMAND, REPORT_COMMAND, createWorkReports, type WorkReports } from "./room/work-reports";
 import { answerSections } from "./room/sections";
 import { createRoomRecord, leaderRoute, settledRelay } from "./room/room-record";
-import { maxMembersOf, summonedEntry, teamName, type TeamEntry } from "./room/team";
+import { agentArgs, maxMembersOf, summonedEntry, teamName, type TeamEntry } from "./room/team";
+import { agentNameOf } from "./room/agent-file";
 import { createTeamControl } from "./room/team-control";
 import { summonableDefinitions } from "./room/summonable";
 import { createConversationStatus, waitLabel } from "./room/conversation-status";
@@ -524,7 +525,10 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   const teamDefinitions = () =>
     team.flatMap((entry) => {
       const definition = definitions.find((one) => one.id === entry.definition);
-      return definition === undefined ? [] : [toMemberDefinition({ ...definition, id: entry.id, name: teamName(entry, definitions), role: entry.role, cwd: entry.directory })];
+      if (definition === undefined) return [];
+      const member = toMemberDefinition({ ...definition, id: entry.id, name: teamName(entry, definitions), role: entry.role, cwd: entry.directory });
+      // A Claude Code member starts with its session id and agent, and a later launch resumes the id (docs/spec/room.md#team).
+      return [{ ...member, params: { ...member.params, args: [...(member.params.args as string[]), ...agentArgs(entry)] } }];
     });
   const summonRun = (): Promise<void> => {
     const checked = [...roster.filter((entry) => entry.checked).map((entry) => entry.id), ...team.map((entry) => entry.id)];
@@ -537,6 +541,8 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
       .then(refreshMembers)
       .then(() => {
         for (const session of memberSessions.values()) roomSessions.add(session);
+        // After its first launch a Claude Code member resumes its session id at every later launch.
+        for (const entry of team) if (entry.agentSession !== null && memberSessions.has(entry.id)) entry.resume = true;
         persist();
       })
       .then(teachMembers);
@@ -796,6 +802,20 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
     const leader = leaderEntry();
     return leader === undefined ? null : { id: leader.id, turns: answers.tokens().filter((token) => token.member === leader.id).map((token) => token.turn) };
   };
+  // Whether the program of a definition is Claude Code, which takes --session-id, --resume and --agent.
+  const isClaude = (id: string): boolean => (definitions.find((one) => one.id === id)?.program.split("/").at(-1) ?? "") === "claude";
+  // The agent name of a definition: the frontmatter name of the agent file of its role in core.roles, read with the declared program
+  // agent-file, or null when core.roles lists no file for it (docs/spec/room.md#team).
+  const agentFileOf = (id: string): string | null => summonableDefinitions(definitions, {}, rolesValue).find((one) => one.id === id)?.file ?? null;
+  const agentOf = async (id: string): Promise<string | null> => {
+    const file = agentFileOf(id);
+    if (file === null) return null;
+    const reply = await bridge!.runtime.program.run("agent-file", [file]);
+    if (reply.code !== 0 || reply.truncated) {
+      throw new Error(`agent file ${file}: agent-file exited with ${reply.code}${reply.truncated ? " and a truncated output" : ""}: ${reply.stderr.trim()}`);
+    }
+    return agentNameOf(reply.stdout, file);
+  };
   const endSession = async (session: string): Promise<void> => {
     await room.commands.execute("core.session.end", { session });
   };
@@ -804,8 +824,12 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   const summonMember = async (params: unknown): Promise<{ member: string; session: string }> => {
     const entry = summonedEntry(params, { team, definitions, leader: leaderTurns(), maxMembers });
     team.push(entry);
-    persist();
     try {
+      if (isClaude(entry.definition)) {
+        entry.agentSession = crypto.randomUUID();
+        entry.agent = await agentOf(entry.definition);
+      }
+      persist();
       await summonRun();
     } catch (error) {
       team.splice(team.indexOf(entry), 1);

@@ -60,6 +60,9 @@
       "default": []
     }
   },
+  "programs": {
+    "agent-file": { "program": "cat", "args": [{ "pattern": "/.+\\.md" }] }
+  },
   "exposes": {
     "status": [
       {

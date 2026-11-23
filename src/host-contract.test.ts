@@ -98,7 +98,8 @@ describe("호스트 크롬 표준 준수 (사이드바 플러그인 계약)", ()
 // 가리키며, 노출하는 커맨드와 element 의 이름이 플러그인 id 로 시작하고, 커맨드 params 가 object 스키마다.
 
 // 현재 형식에서 제거된 최상위 멤버(core validateManifest 가 거부하는 이름).
-const REMOVED_MEMBERS = ["permissions", "entry", "configuration", "contributes", "programs", "views"];
+// `programs` is a current member (core docs/spec/plugins.md#pluginjson, checkPrograms of the plugin-api release), so it is not listed.
+const REMOVED_MEMBERS = ["permissions", "entry", "configuration", "contributes", "views"];
 
 describe("현재 plugin.json 형식 (core plugins.md#pluginjson)", () => {
   it("제거된 멤버를 선언하지 않는다", () => {

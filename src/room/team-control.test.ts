@@ -10,8 +10,8 @@ const DEFINITIONS = [{ id: "claude", name: "Claude" }];
 
 function page() {
   const team: TeamEntry[] = [
-    { id: "claude-1", definition: "claude", role: "server", directory: "/work/game", merged: null },
-    { id: "claude-2", definition: "claude", role: "client", directory: "/work/game", merged: null },
+    { id: "claude-1", definition: "claude", role: "server", directory: "/work/game", merged: null, agentSession: null, resume: false, agent: null },
+    { id: "claude-2", definition: "claude", role: "client", directory: "/work/game", merged: null, agentSession: null, resume: false, agent: null },
   ];
   const sessions = new Map([["claude-1", "s-1"], ["claude-2", "s-2"], ["lead", "s-l"]]);
   let core = [{ session: "s-1", program: { state: "idle" } }, { session: "s-2", program: { state: "working" } }, { session: "s-l", program: { state: "working" } }];

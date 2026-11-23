@@ -5,7 +5,7 @@ import { parseRoomState, serializedRoomState, type RoomState } from "./room-stat
 
 const state: RoomState = {
   roster: [{ id: "harness-harness", checked: true, role: "", leader: true }, { id: "moai-manager-lead", checked: false, role: "", leader: false }],
-  team: [{ id: "claude-1", definition: "claude", role: "server", directory: "/work/game", merged: null }],
+  team: [{ id: "claude-1", definition: "claude", role: "server", directory: "/work/game", merged: null, agentSession: "28e7fee6-d618-4598-b9a6-775f3053340e", resume: true, agent: "manager-develop" }],
   mode: "turn",
   conversation: [
     { speaker: "owner", text: "한 문장씩만", at: null, elapsedMs: null },
@@ -28,7 +28,10 @@ describe("parseRoomState", () => {
     const both = state.roster.map((entry) => ({ ...entry, leader: true }));
     expect(() => parseRoomState({ ...state, roster: both })).toThrow("room tab state: roster has more than one leader");
     expect(() => parseRoomState({ ...state, roster: [{ id: "a", checked: true, role: "" }] })).toThrow("roster must be an array of {id, checked, role, leader}");
-    expect(() => parseRoomState({ ...state, team: [{ ...state.team[0], directory: "work" }] })).toThrow("room tab state: team must be an array of {id, definition, role, directory, merged}");
+    expect(() => parseRoomState({ ...state, team: [{ ...state.team[0], directory: "work" }] })).toThrow("room tab state: team must be an array of {id, definition, role, directory, merged, agentSession, resume, agent}");
+    // C97-1: a team entry of the earlier form, without the agent members, is refused.
+    const { agentSession: _s, resume: _r, agent: _a, ...earlier } = state.team[0];
+    expect(() => parseRoomState({ ...state, team: [earlier] })).toThrow("room tab state: team must be an array of {id, definition, role, directory, merged, agentSession, resume, agent}");
     expect(() => parseRoomState({ ...state, addressed: { "owned-1": [1, 0] } })).toThrow("room tab state: addressed owned-1 must hold increasing record indexes below 2");
   });
 
