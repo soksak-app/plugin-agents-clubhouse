@@ -2,6 +2,7 @@
 
 ## 미출시
 
+- C103: 버전은 0.0.19이며 C101과 C102를 출시한다.
 - C102: composer에서 `@`를 치면 `all`과 입력한 text로 시작하는 방의 member를 나열하고, 선택하면 새 command `mention.insert {name}`로 `@<name> `을 넣는다.
 - C101: leader처럼 roster에서 체크된 Claude Code member는 definition의 `--agent <name>`으로 시작해서, 자기 agent file의 지시와 도구로 실행된다.
 - C100: 버전은 0.0.18이며 C99를 출시한다.
