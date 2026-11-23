@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- C108: The room bundles `yaml` 2.9.1, outside the range of the advisory on the stack overflow of deeply nested collections.
 - C107: The version is 0.0.21, which releases C106.
 - C106: The removal of the last worktree of a repository also removes its folder under `<home>/soksak/worktrees`.
 - C105: The version is 0.0.20, which releases C104.

@@ -2,6 +2,7 @@
 
 ## 미출시
 
+- C108: 방이 깊이 중첩된 collection의 stack overflow advisory 범위 밖의 `yaml` 2.9.1을 묶는다.
 - C107: 버전은 0.0.21이며 C106을 출시한다.
 - C106: Repository의 마지막 worktree를 지우면 `<home>/soksak/worktrees` 아래의 그 folder도 지운다.
 - C105: 버전은 0.0.20이며 C104를 출시한다.
