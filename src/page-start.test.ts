@@ -47,6 +47,8 @@ describe("the start of the room page (C96)", () => {
     await view.settled();
     expect({ errors: view.observed.errors, failures: view.observed.failures, tab: view.observed.tab.error }).toEqual({ errors: [], failures: [], tab: null });
     expect(view.window.document.body.textContent).toContain("harness");
+    // C119 (docs/spec/room.md#header): a room without a checked member reports the plugin name as its tab title.
+    expect(view.observed.tab.title).toBe(manifest.name);
     // C115 (docs/spec/room.md#roster): a definition that the agents plugin adds later reaches the room through the data changes of
     // the agents plugin, which runtime.data.on follows only with {plugin}.
     view.change!.dependencyData("agents", "definitions", {

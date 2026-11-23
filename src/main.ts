@@ -42,6 +42,7 @@ import { ownedSessionIds, shownByOf } from "./room/session-channel";
 import { answerQuestion, questionChoices, readQuestion, showMember } from "./room/question";
 import { insertMention, mentionCandidates, mentionQuery } from "./room/mention-hint";
 import { reattachedChecks, rosterFrom, type RosterEntry } from "./room/roster";
+import { roomTitle } from "./room/title";
 import { measuredCardSize } from "./room/card-size";
 import { createRoomOperations } from "./room/operations";
 import { ANSWER_COMMAND, createAnswerChannel } from "./room/answer";
@@ -240,7 +241,16 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   const taughtSessions = new Set<string>(saved?.protocolSessions ?? []);
   // The last write of the tab state, which a turn line waits for (docs/spec/room.md#restart).
   let lastWrite: Promise<void> = Promise.resolve();
+  // The tab title of the room follows its checked members (C119); a refused title is reported through the room error path.
+  let shownTitle: string | null = null;
+  const showTitle = (): void => {
+    const title = roomTitle(roster.filter((entry) => entry.checked).map((entry) => entry.name), manifest.name);
+    if (title === shownTitle) return;
+    shownTitle = title;
+    void bridge!.calls.request("tab.title", title).catch((error: unknown) => report("tab title", String((error as Error)?.message ?? error)));
+  };
   const persist = (): void => {
+    showTitle();
     const value: RoomTabState = {
       roster: roster.map((entry) => ({ id: entry.id, checked: entry.checked, role: entry.role, leader: entry.leader })),
       team: team.map((entry) => ({ ...entry })),
@@ -477,6 +487,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
           seed = await reattachedChecks(definitions, async (id) => (await sessions.get(id))?.sessionId ?? null, openSessionIds);
         }
         roster.splice(0, roster.length, ...rosterFrom(definitions, roster.length === 0 ? seed : roster));
+        showTitle();
         renderTabs();
         // The conversation names each member by its roster name.
         showConversation();

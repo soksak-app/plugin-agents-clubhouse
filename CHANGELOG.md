@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- C119: The tab of a room shows the names of its checked members, or the plugin name without one.
 - C118: The version is 0.0.24, which releases C117.
 - C117: The room reads a definition with the optional member `maker` of the agents plugin.
 - C116: The version is 0.0.23, which releases C114 and C115.
