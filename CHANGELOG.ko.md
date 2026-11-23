@@ -2,6 +2,7 @@
 
 ## 미출시
 
+- C97-5: Retask는 `core.tab.role {tab, role}` reply의 상태를 보이고 `core.tab.role`을 watch하지 않는다. Core는 다른 plugin의 surface에 대해 그것을 거부한다.
 - C97-4: Retask는 core.sessions가 끝난 session을 더 나열하지 않은 뒤 summon을 실행하므로, summon이 member를 `--resume <agentSession> --agent <name>`으로 연다. 전에는 summon이 session을 열린 것으로 보고 아무것도 열지 않았고, arrangement가 `session <id> is not open`으로 실패했다.
 - C97-3: Summon은 `agent-file`의 정상 run에서 agent file을 읽는다. `truncated.stdout`이나 `truncated.stderr`가 `true`일 때만 거부하고, reply 선언은 `truncated`를 `{stdout, stderr}`로 쓴다.
 - C97-2: `member.retask {turn, member, definition}`는 leader의 turn token으로 team member에게 다른 definition을 준다. 방은 그 session을 끝내고, definition의 agent로 Claude Code session id를 resume하며, 전달을 새 session으로 옮기고, `core.tab.role`로 그 tab의 role을 정하며, `@<old name> is now <definition>, named @<new name>`을 기록하고, team view는 role 상태를 보인다. Leader protocol 줄이 그 command를 알린다.

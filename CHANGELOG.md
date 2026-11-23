@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- C97-5: A retask shows the state of the reply of `core.tab.role {tab, role}` and watches no `core.tab.role`, which core refuses for a surface of another plugin.
 - C97-4: A retask runs the summon after core.sessions no longer lists the ended session, so the summon opens the member with `--resume <agentSession> --agent <name>`; before, the summon saw the session open, opened nothing, and the arrangement failed with `session <id> is not open`.
 - C97-3: A summon reads the agent file of a clean run of `agent-file`: only `truncated.stdout` or `truncated.stderr` set to `true` refuses it, and the declaration of the reply types `truncated` as `{stdout, stderr}`.
 - C97-2: `member.retask {turn, member, definition}` gives a team member another definition with the turn token of the leader: the room ends its session, resumes the Claude Code session id with the agent of the definition, moves the delivery to the new session, sets the role of its tab with `core.tab.role`, records `@<old name> is now <definition>, named @<new name>`, and the team view shows the role state. The leader protocol line names the command.

@@ -185,3 +185,11 @@ export function teamRowText(entry: TeamViewEntry): string {
     .filter((part) => part !== "")
     .join(" · ");
 }
+
+// The role state of the reply of core.tab.role {tab, role} (core docs/spec/agent-roles.md#tab-role-state). The room shows this state and
+// watches no core.tab.role, because core refuses a status watch of a surface that is not of the plugin of the view.
+export function roleReplyState(reply: unknown): "pending" | "ready" {
+  const state = (reply as { state?: unknown } | null)?.state;
+  if (state !== "pending" && state !== "ready") throw new Error(`core.tab.role reply state must be pending or ready, got ${JSON.stringify(state)}`);
+  return state;
+}

@@ -31,7 +31,7 @@ import { createSubmitQueue } from "./room/submit-queue";
 import { CLAIM_COMMAND, RELEASE_COMMAND, REPORT_COMMAND, createWorkReports, type WorkReports } from "./room/work-reports";
 import { answerSections } from "./room/sections";
 import { createRoomRecord, leaderRoute, settledRelay } from "./room/room-record";
-import { agentArgs, teamRowText, maxMembersOf, summonedEntry, teamName, type TeamEntry } from "./room/team";
+import { agentArgs, roleReplyState, teamRowText, maxMembersOf, summonedEntry, teamName, type TeamEntry } from "./room/team";
 import { agentFileText, agentNameOf } from "./room/agent-file";
 import { createTeamControl } from "./room/team-control";
 import { summonableDefinitions } from "./room/summonable";
@@ -730,10 +730,9 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
       };
     });
   // The retasks whose resumed session has not yet been shown by a tab with the role of the new definition (docs/spec/room.md#team), and
-  // the state of core.tab.role of the tab of each retasked member, which the team view shows and the room judges nothing from.
+  // the state of the core.tab.role reply for the tab of each retasked member, which the team view shows and the room judges nothing from.
   const retasks = new Map<string, { ended: string | null; tab: string | null }>();
   const roleStates = new Map<string, "pending" | "ready">();
-  const roleWatches = new Map<string, () => void>();
   // Moves the delivery of the ended session to the resumed one, counts its protocol as received, and sets the role of the tab that shows
   // it; it runs at each value of core.sessions, the event of a new session and of its tab, and does each step once.
   const settleRetasks = (): void => {
@@ -761,15 +760,10 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
       }
       room.commands
         .execute("core.tab.role", { tab, role })
-        .then(() =>
-          bridge!.runtime.status.watch("core.tab.role", (value: unknown) => {
-            const state = (value as { state?: unknown } | null)?.state;
-            if (state === "pending" || state === "ready") roleStates.set(member, state);
-            else roleStates.delete(member);
-            conversationStatus.changed();
-          }, { surface: tab }),
-        )
-        .then((stop) => roleWatches.set(member, stop))
+        .then((reply: unknown) => {
+          roleStates.set(member, roleReplyState(reply));
+          conversationStatus.changed();
+        })
         .catch((error: unknown) => report("room retask", `core.tab.role ${tab}: ${String((error as Error)?.message ?? error)}`))
         .finally(() => retasks.delete(member));
     }
@@ -795,8 +789,6 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
     retasked: (member, session) => {
       retasks.set(member, { ended: session, tab: null });
       roleStates.delete(member);
-      roleWatches.get(member)?.();
-      roleWatches.delete(member);
     },
     roleState: (member) => roleStates.get(member) ?? null,
   });

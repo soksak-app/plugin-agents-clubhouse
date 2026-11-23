@@ -1,7 +1,7 @@
 // The team of the leader (docs/spec/room.md#team): member.summon checks only its input, names each summoned member by its definition
 // and the smallest free number, and refuses a summon beyond the setting maxMembers.
 import { describe, expect, it } from "vitest";
-import { agentArgs, teamRowText, maxMembersOf, mergedCommit, releasedEntry, releaseTeam, summonedEntry, teamName, teamView, type TeamEntry } from "./team";
+import { agentArgs, roleReplyState, teamRowText, maxMembersOf, mergedCommit, releasedEntry, releaseTeam, summonedEntry, teamName, teamView, type TeamEntry } from "./team";
 
 const DEFINITIONS = [{ id: "claude", name: "Claude" }, { id: "codex", name: "Codex" }];
 const LEADER = { id: "lead", turns: ["t-1"] };
@@ -99,5 +99,17 @@ describe("teamRowText (C97-2)", () => {
     const row = { member: "c-1", name: "Tester-1", role: "e2e", directory: "/w", branch: "Tester-1", merged: null, session: "s-1", state: "idle" as const };
     expect(teamRowText({ ...row, roleState: "pending" })).toBe("Tester-1 · e2e · /w · Tester-1 · not merged · idle · role pending");
     expect(teamRowText({ ...row, roleState: null })).toBe("Tester-1 · e2e · /w · Tester-1 · not merged · idle");
+  });
+});
+
+// C97-5: the room reads the role state from the reply of core.tab.role {tab, role} (core docs/spec/agent-roles.md#tab-role-state),
+// because core refuses a status watch of a surface that is not of the plugin of the view.
+describe("roleReplyState", () => {
+  it("reads the state of the reply, and refuses a reply of another form", () => {
+    const reply = { role: "moai-e2e-tester", generation: 2, state: "pending", seq: 5, fingerprint: "0123456789abcdef", path: "/c/agents/tab-1/role.md" };
+    expect(roleReplyState(reply)).toBe("pending");
+    expect(roleReplyState({ ...reply, state: "ready" })).toBe("ready");
+    expect(() => roleReplyState({ ...reply, state: null })).toThrow('core.tab.role reply state must be pending or ready, got null');
+    expect(() => roleReplyState(null)).toThrow("core.tab.role reply state must be pending or ready, got undefined");
   });
 });
