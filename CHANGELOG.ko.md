@@ -2,6 +2,7 @@
 
 ## 미출시
 
+- C98: 버전은 0.0.17이며 C97부터 C97-6까지를 출시한다. Claude Code team member의 summon은 선언된 program `agent-file`을 실행하며, Go host(mygo와 Wails)는 core F1112가 들어간 core release에서만 그것을 실행한다.
 - C97-6: `member.retask {turn, member, definition, role}`는 `member.summon`처럼 role text를 받고, 다음 turn의 roles 줄이 그것을 밝힌다. Record는 speaker로 member id를 유지하고, 그 label은 현재 이름을 보인다.
 - C97-5: Retask는 `core.tab.role {tab, role}` reply의 상태를 보이고 `core.tab.role`을 watch하지 않는다. Core는 다른 plugin의 surface에 대해 그것을 거부한다.
 - C97-4: Retask는 core.sessions가 끝난 session을 더 나열하지 않은 뒤 summon을 실행하므로, summon이 member를 `--resume <agentSession> --agent <name>`으로 연다. 전에는 summon이 session을 열린 것으로 보고 아무것도 열지 않았고, arrangement가 `session <id> is not open`으로 실패했다.

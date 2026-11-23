@@ -107,4 +107,5 @@
 - [o] C97-4 — P0: Retask가 resume된 session을 연다. 입력: team member의 `member.retask`. 동작: 방은 `core.session.end`가 답한 직후, core.sessions가 아직 끝난 session을 나열할 때 summon을 실행해 summon은 아무것도 열지 않았고 arrangement가 `session <id> is not open`으로 실패했다. 기대: summon은 core.sessions가 끝난 session을 더 나열하지 않은 뒤 실행되고 member를 `--resume <agentSession> --agent <name>`으로 연다.
 - [o] C97-5 — P0: 방은 다른 plugin의 status watch 없이 retask의 tab role을 정한다. 입력: retask된 member의 tab, terminal surface. 동작: 방이 그 surface에서 `core.tab.role`을 watch하려 하지만, core는 view의 plugin의 것이 아닌 surface를 거부한다. 기대: 방은 `core.tab.role {tab, role}` reply의 상태를 보인다.
 - [o] C97-6 — P0: Retask는 member에게 새 role text를 준다. 입력: leader가 role `hello-writer`로 summon한 member의 `member.retask`. 동작: 그 turn의 roles 줄이 계속 `you are hello-writer`라고 한다. 기대: `member.retask {turn, member, definition, role}`는 `member.summon`처럼 role text를 받고, 다음 turn의 roles 줄이 그것을 밝힌다(docs/spec/room.md#team).
+- [o] C98 — P0: C97부터 C97-6까지와 함께 0.0.17을 출시한다. `package.json`이 0.0.17을 선언하고, main의 release run이 v0.0.17을 게시한다.
 - [o] C65 — P0: C64, C66부터 C96까지와 함께 0.0.16을 출시한다. `package.json`이 0.0.16을 선언하고, main의 release run이 v0.0.16을 게시한다.

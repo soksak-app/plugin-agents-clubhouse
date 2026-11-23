@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- C98: The version is 0.0.17, which releases C97 to C97-6. The summon of a Claude Code team member runs the declared program `agent-file`, which the Go hosts (mygo and Wails) run only in a core release with core F1112.
 - C97-6: `member.retask {turn, member, definition, role}` takes a role text, as `member.summon` does, and the roles line of the next turn names it; the record keeps the member id as the speaker, and its labels show the current name.
 - C97-5: A retask shows the state of the reply of `core.tab.role {tab, role}` and watches no `core.tab.role`, which core refuses for a surface of another plugin.
 - C97-4: A retask runs the summon after core.sessions no longer lists the ended session, so the summon opens the member with `--resume <agentSession> --agent <name>`; before, the summon saw the session open, opened nothing, and the arrangement failed with `session <id> is not open`.
