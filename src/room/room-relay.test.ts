@@ -578,6 +578,19 @@ describe("conversation first", () => {
     expect(record.lines.at(-1)).toMatchObject({ speaker: "clubhouse", text: "the conversation settled" });
   });
 
+  // C114 (docs/spec/room.md#settling): a round in which no member has an unreceived line waits for the owner.
+  it("waits for the owner instead of a round of empty turns when a member continues and nobody has an unreceived line", async () => {
+    const core = fakeCore([IDLE("s-1"), IDLE("s-2")], { manual: true });
+    const record = roomRecord("check it");
+    core.bound.record = record;
+    const relay = relayInMode(core.ports, "turn", [MEMBERS[0]], "check it", record, OPEN);
+    await core.submits(1);
+    core.answer("s-1", "continue", "@owner: which branch?");
+    await relay;
+    expect(core.submitted).toHaveLength(1);
+    expect(record.lines.at(-1)).toMatchObject({ speaker: "clubhouse", text: "the conversation waits for the owner: @Claude continue" });
+  });
+
   it("types no line into a blocked session until core.sessions shows it not blocked", async () => {
     const core = fakeCore([IDLE("s-1"), { session: "s-2", program: { state: "blocked" } }], { manual: true });
     const record = roomRecord("build it");
@@ -680,19 +693,34 @@ describe("a relay with a leader (docs/spec/room.md#leader)", () => {
     expect(core.submitted.filter((entry) => entry.session === "s-1").map((entry) => entry.text).join(" ")).not.toContain("client done");
   });
 
-  it("gives the leader another turn while its last answer continues", async () => {
+  // C114 (docs/spec/room.md#settling): a turn needs a line that the member has not received.
+  it("gives the leader another turn when it continues with unreceived lines", async () => {
     const core = fakeCore([IDLE("s-l"), IDLE("s-1"), IDLE("s-2")], { manual: true });
     const record = leaderRecord();
     core.bound.record = record;
     record.append("owner", "plan it");
     const relay = relayInMode(core.ports, "turn", TEAM, "plan it", record, { ...OPEN, leader: "lead" });
     await core.submits(1);
+    record.append("owner", "also add tests");
     core.answer("s-l", "continue", "thinking");
     await core.submits(2);
     expect(core.submitted[1].session).toBe("s-l");
     core.answer("s-l", "settled", "done");
     await relay;
     expect(core.submitted).toHaveLength(2);
+  });
+
+  it("waits for the owner instead of an empty turn when the leader continues with nothing unreceived", async () => {
+    const core = fakeCore([IDLE("s-l"), IDLE("s-1"), IDLE("s-2")], { manual: true });
+    const record = leaderRecord();
+    core.bound.record = record;
+    record.append("owner", "summon codex-dev");
+    const relay = relayInMode(core.ports, "turn", TEAM, "summon codex-dev", record, { ...OPEN, leader: "lead" });
+    await core.submits(1);
+    core.answer("s-l", "continue", "@owner: codex-dev is not a definition; name another one");
+    await relay;
+    expect(core.submitted).toHaveLength(1);
+    expect(record.lines.at(-1)).toMatchObject({ speaker: "clubhouse", text: "the conversation waits for the owner: @Lead continue" });
   });
 
   it("starts a worker that the relay gains after its start when the leader mentions it", async () => {

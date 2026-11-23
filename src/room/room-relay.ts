@@ -287,6 +287,11 @@ async function runTurns(
         if (earlier.length + answers.length > 0) record.append("clubhouse", "the conversation settled");
         break;
       }
+      // A round in which no member has an unreceived line gives nobody anything to answer, so the conversation waits for the owner.
+      if (unanswered.length === 0 && members.every((member) => record.unsent(member.session, member.id).length === 0)) {
+        record.append("clubhouse", `the conversation waits for the owner: ${open.map((member) => `@${member.name}`).join(", ")} continue`);
+        break;
+      }
       queue.push(...(open.length > 0 ? members : unanswered).map((member) => ({ member, byAnswer: true })));
     }
     if (bound.stopped()) {
@@ -353,10 +358,15 @@ async function runLeader(
       const behind = workers().filter((member) => took.has(member.id) && unreceivedBesidesSettled(record, member, answers));
       const last = answers.filter((answer) => answer.id === leader.id).at(-1);
       if (behind.length > 0) batches.push(...behind.map((member) => ({ members: [member], byAnswer: true })));
-      else if (last?.status === "settled" && record.unsent(leader.session, leader.id).length === 0) {
+      else if (record.unsent(leader.session, leader.id).length > 0) batches.push({ members: [leader], byAnswer: true });
+      else if (last?.status === "settled") {
         record.append("clubhouse", "the conversation settled");
         break;
-      } else batches.push({ members: [leader], byAnswer: true });
+      } else {
+        // A turn without an unreceived line gives the leader nothing to answer, so a leader that continues waits for the owner.
+        record.append("clubhouse", `the conversation waits for the owner: @${leader.name} continue`);
+        break;
+      }
     }
     if (bound.stopped()) {
       record.append("clubhouse", "the conversation ended: the owner stopped it");
