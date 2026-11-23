@@ -32,7 +32,7 @@ import { CLAIM_COMMAND, RELEASE_COMMAND, REPORT_COMMAND, createWorkReports, type
 import { answerSections } from "./room/sections";
 import { createRoomRecord, leaderRoute, settledRelay } from "./room/room-record";
 import { agentArgs, teamRowText, maxMembersOf, summonedEntry, teamName, type TeamEntry } from "./room/team";
-import { agentNameOf } from "./room/agent-file";
+import { agentFileText, agentNameOf } from "./room/agent-file";
 import { createTeamControl } from "./room/team-control";
 import { summonableDefinitions } from "./room/summonable";
 import { createConversationStatus, waitLabel } from "./room/conversation-status";
@@ -868,10 +868,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
     const file = agentFileOf(id);
     if (file === null) return null;
     const reply = await bridge!.runtime.program.run("agent-file", [file]);
-    if (reply.code !== 0 || reply.truncated) {
-      throw new Error(`agent file ${file}: agent-file exited with ${reply.code}${reply.truncated ? " and a truncated output" : ""}: ${reply.stderr.trim()}`);
-    }
-    return agentNameOf(reply.stdout, file);
+    return agentNameOf(agentFileText(reply, file), file);
   };
   const endSession = async (session: string): Promise<void> => {
     await room.commands.execute("core.session.end", { session });

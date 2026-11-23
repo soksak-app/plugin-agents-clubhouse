@@ -15,3 +15,14 @@ export function agentNameOf(text: string, file: string): string {
   if (typeof name !== "string" || name.trim() === "") throw new Error(`agent file ${file} has no name in its frontmatter`);
   return name.trim();
 }
+
+// The reply of runtime.program.run (core docs/spec/native-surfaces.md#program-runs): `truncated` names each stream that discarded bytes.
+export interface ProgramReply { code: number; stdout: string; stderr: string; truncated: { stdout: boolean; stderr: boolean } }
+
+// The text of the agent file from the reply of the program agent-file: a run that failed or discarded bytes of a stream is refused.
+export function agentFileText(reply: ProgramReply, file: string): string {
+  if (reply.code !== 0) throw new Error(`agent file ${file}: agent-file exited with ${reply.code}: ${reply.stderr.trim()}`);
+  const cut = (["stdout", "stderr"] as const).filter((stream) => reply.truncated[stream]);
+  if (cut.length > 0) throw new Error(`agent file ${file}: agent-file output was truncated: ${cut.join(", ")}`);
+  return reply.stdout;
+}

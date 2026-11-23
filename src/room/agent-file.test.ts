@@ -1,6 +1,6 @@
 // The agent name of an agent file (C97-1, docs/spec/room.md#team): the `name` of its YAML frontmatter, by which Claude Code finds the agent.
 import { describe, expect, it } from "vitest";
-import { agentNameOf } from "./agent-file";
+import { agentFileText, agentNameOf } from "./agent-file";
 
 const FILE = "/p/.claude/agents/moai/manager-develop.md";
 
@@ -13,5 +13,21 @@ describe("agentNameOf", () => {
     expect(() => agentNameOf("---\ndescription: x\n---\n", FILE)).toThrow(`agent file ${FILE} has no name in its frontmatter`);
     expect(() => agentNameOf("---\nname: [a]\n---\n", FILE)).toThrow(`agent file ${FILE} has no name in its frontmatter`);
     expect(() => agentNameOf("---\nname: : :\n---\n", FILE)).toThrow(`agent file ${FILE}: frontmatter`);
+  });
+});
+
+// C97-3: the reply of runtime.program.run has `truncated: {stdout, stderr}` (core docs/spec/native-surfaces.md#program-runs).
+describe("agentFileText", () => {
+  const text = "---\nname: manager-develop\n---\n" + "x".repeat(19000);
+  it("reads the output of a clean run", () => {
+    expect(agentFileText({ code: 0, stdout: text, stderr: "", truncated: { stdout: false, stderr: false } }, FILE)).toBe(text);
+  });
+  it("refuses a run that failed or discarded bytes of a stream", () => {
+    expect(() => agentFileText({ code: 1, stdout: "", stderr: "cat: x: No such file\n", truncated: { stdout: false, stderr: false } }, FILE))
+      .toThrow(`agent file ${FILE}: agent-file exited with 1: cat: x: No such file`);
+    expect(() => agentFileText({ code: 0, stdout: text, stderr: "", truncated: { stdout: true, stderr: false } }, FILE))
+      .toThrow(`agent file ${FILE}: agent-file output was truncated: stdout`);
+    expect(() => agentFileText({ code: 0, stdout: text, stderr: "", truncated: { stdout: false, stderr: true } }, FILE))
+      .toThrow(`agent file ${FILE}: agent-file output was truncated: stderr`);
   });
 });
