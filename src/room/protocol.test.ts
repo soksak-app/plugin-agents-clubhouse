@@ -1,7 +1,7 @@
 // The room protocol (docs/spec/room.md#room-protocol): one line per session, submitted when the session first reports idle, whose turn
 // ends before any relayed message; a failure is reported and refuses the member.
 import { describe, expect, it } from "vitest";
-import { createProtocolInjector, roomProtocolLine } from "./protocol";
+import { agentLine, createProtocolInjector, roomProtocolLine } from "./protocol";
 import type { RelayPorts } from "./room-relay";
 import { createConversationStatus } from "./conversation-status";
 
@@ -77,7 +77,33 @@ describe("roomProtocolLine", () => {
   });
 });
 
+// C110 (docs/spec/room.md#agent-line): a program without --agent learns its agent from a room line.
+describe("agentLine", () => {
+  it("names the agent and the member and tells the member to read the agent file and its folder", () => {
+    expect(agentLine("Codex-1", { agent: "developer", file: "/roles/dev/developer.md" })).toBe(
+      "[@clubhouse] agent: you are developer, called @Codex-1. Read the agent file /roles/dev/developer.md and its folder /roles/dev, and follow them as your instructions from now on; this line takes no answer.",
+    );
+  });
+});
+
 describe("createProtocolInjector", () => {
+  it("submits the agent line after the protocol line to a member whose program takes no --agent", async () => {
+    const core = fakeCore({ "s-1": "idle" });
+    const injector = createProtocolInjector(core.ports, () => {});
+    const agent = { agent: "developer", file: "/roles/dev/developer.md" };
+    expect(await injector.ensure({ ...claude, agent })).toEqual({ ok: true });
+    expect(core.submitted.map((one) => one.text)).toEqual([roomProtocolLine("Claude", "room-1"), agentLine("Claude", agent)]);
+  });
+
+  it("submits the agent line of a retask to the open session without a new protocol line", async () => {
+    const core = fakeCore({ "s-1": "idle" });
+    const injector = createProtocolInjector(core.ports, () => {});
+    await injector.ensure(claude);
+    const agent = { agent: "tester", file: "/roles/qa/tester.md" };
+    await injector.teachAgent({ ...claude, agent });
+    expect(core.submitted.map((one) => one.text)).toEqual([roomProtocolLine("Claude", "room-1"), agentLine("Claude", agent)]);
+  });
+
   it("waits for the first idle state, submits the line once and resolves after its turn", async () => {
     const core = fakeCore({ "s-1": null });
     const reports: string[] = [];

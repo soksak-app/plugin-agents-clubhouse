@@ -6,13 +6,22 @@ import { createRoomRecord } from "./room-record";
 import { createAnswerChannel } from "./answer";
 import type { TeamEntry } from "./team";
 
-const DEFINITIONS = [{ id: "claude", name: "Claude" }, { id: "tester", name: "Tester" }, { id: "bare", name: "Bare" }];
+const DEFINITIONS = [{ id: "claude", name: "Claude" }, { id: "tester", name: "Tester" }, { id: "bare", name: "Bare" }, { id: "codex", name: "Codex" }, { id: "codex-qa", name: "Codex QA" }];
+const PROGRAMS: Record<string, string> = { claude: "claude", tester: "claude", bare: "claude", codex: "codex", "codex-qa": "codex" };
+const FILES: Record<string, { agent: string; file: string }> = {
+  claude: { agent: "developer", file: "/roles/dev/developer.md" },
+  tester: { agent: "e2e-tester", file: "/roles/qa/e2e-tester.md" },
+  codex: { agent: "developer", file: "/roles/dev/developer.md" },
+  "codex-qa": { agent: "reviewer", file: "/roles/qa/reviewer.md" },
+};
 
 function page() {
   const team: TeamEntry[] = [
     { id: "claude-1", definition: "claude", role: "server", directory: "/work/game", merged: null, agentSession: "u-1", resume: true, agent: "developer", worktree: null },
     { id: "claude-2", definition: "claude", role: "client", directory: "/work/game", merged: null, agentSession: null, resume: false, agent: null, worktree: null },
+    { id: "codex-1", definition: "codex", role: "server", directory: "/work/game", merged: null, agentSession: null, resume: false, agent: "developer", worktree: null },
   ];
+  const taught: string[] = [];
   const sessions = new Map([["claude-1", "s-1"], ["claude-2", "s-2"], ["lead", "s-l"]]);
   let core = [{ session: "s-1", program: { state: "idle" } }, { session: "s-2", program: { state: "working" } }, { session: "s-l", program: { state: "working" } }];
   const ended: string[] = [];
@@ -41,18 +50,22 @@ function page() {
       if (entry.worktree === "/w/dirty") throw new Error("fatal: '/w/dirty' contains modified or untracked files");
       removed.push(entry.worktree!);
     },
-    agentOf: async (definition) => ({ claude: "developer", tester: "e2e-tester" } as Record<string, string>)[definition] ?? null,
+    agentOf: async (definition) => FILES[definition] ?? null,
+    programOf: (definition) => PROGRAMS[definition]!,
+    takesAgent: (definition) => PROGRAMS[definition] === "claude",
+    teachAgent: async (entry, place) => void taught.push(`${entry.id} ${place.agent} ${place.file}`),
     busy: (member) => member === "claude-2",
     retasked: (member, session) => void log.push(`retasked ${member} ${session}`),
     gone: (session) => new Promise<void>((resolve) => void gones.push(() => { log.push(`gone ${session}`); resolve(); })),
     roleState: (member) => (member === "claude-1" ? "pending" : null),
   });
-  return { team, ended, removed, log, record, control, core: () => core, gones };
+  return { team, ended, removed, taught, log, record, control, core: () => core, gones };
 }
 
 describe("the team commands of the page", () => {
   it("member.release ends the session, removes the member, records the release and rearranges the tabs", async () => {
     const p = page();
+    p.team.pop();
     expect(p.control.view(p.core()).map((entry) => [entry.member, entry.state])).toEqual([["claude-1", "idle"], ["claude-2", "working"]]);
     const released = p.control.release({ turn: "t-1", member: "claude-1" });
     await Promise.resolve();
@@ -91,6 +104,7 @@ describe("the team commands of the page", () => {
 
   it("the stop releases every team session once and the team view empties", async () => {
     const p = page();
+    p.team.pop();
     expect(p.control.releaseAll()).toBe(2);
     await p.control.released();
     expect(p.ended).toEqual(["s-1", "s-2"]);
@@ -117,13 +131,30 @@ describe("member.retask", () => {
     expect(p.control.view(p.core()).find((entry) => entry.member === "claude-1")).toMatchObject({ name: "Tester-1", roleState: "pending" });
   });
 
+  // C110 (docs/spec/room.md#agent-line): a program without --agent keeps its session and receives the agent line of the new definition.
+  it("keeps the session of a member whose program takes no --agent and submits the agent line of the new definition", async () => {
+    const p = page();
+    expect(await p.control.retask({ turn: "t-1", member: "codex-1", definition: "codex-qa", role: "review" })).toEqual({ member: "codex-1", definition: "codex-qa", role: "review" });
+    expect(p.ended).toEqual([]);
+    expect(p.taught).toEqual(["codex-1 reviewer /roles/qa/reviewer.md"]);
+    expect(p.team[2]).toMatchObject({ definition: "codex-qa", role: "review", agent: "reviewer", agentSession: null });
+    expect(p.record.lines.at(-1)).toMatchObject({ speaker: "clubhouse", text: "@Codex-1 is now codex-qa, named @Codex QA-1" });
+    expect(p.log).toEqual(["changed"]);
+  });
+
+  it("refuses a retask to a definition of another program, because the session keeps its program", async () => {
+    const p = page();
+    await expect(p.control.retask({ turn: "t-1", member: "codex-1", definition: "tester", role: "x" })).rejects.toThrow("member codex-1 runs codex; member.retask takes a definition of the same program, got tester of claude");
+    expect(p.taught).toEqual([]);
+  });
+
   it("refuses a caller without the leader token, an unknown member or definition, a member in a turn, and a definition without an agent file", async () => {
     const p = page();
     await expect(p.control.retask({ turn: "t-9", member: "claude-1", definition: "tester", role: "e2e checks" })).rejects.toThrow("member.retask takes the turn token of the leader lead, got t-9");
     await expect(p.control.retask({ turn: "t-1", member: "gone", definition: "tester", role: "e2e checks" })).rejects.toThrow("member gone is not in the team");
     await expect(p.control.retask({ turn: "t-1", member: "claude-1", definition: "nope", role: "x" })).rejects.toThrow("definition nope is not an agent definition");
     await expect(p.control.retask({ turn: "t-1", member: "claude-2", definition: "tester", role: "e2e checks" })).rejects.toThrow("member claude-2 is in a turn; retask it after its answer");
-    await expect(p.control.retask({ turn: "t-1", member: "claude-1", definition: "bare", role: "x" })).rejects.toThrow("definition bare has no agent file for --agent");
+    await expect(p.control.retask({ turn: "t-1", member: "claude-1", definition: "bare", role: "x" })).rejects.toThrow("definition bare has no agent file");
     await expect(p.control.retask({ turn: "t-1", member: "claude-1", definition: "tester", role: "a\nb" })).rejects.toThrow("role must be a text of 0 to 200 characters without control characters");
     await expect(p.control.retask({ turn: "t-1", member: "claude-1", definition: "tester" })).rejects.toThrow("role must be a text of 0 to 200 characters without control characters, got undefined");
     p.team[0].agentSession = null;

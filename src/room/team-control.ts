@@ -2,6 +2,7 @@
 // close its tab, member.merged records the merge commit that the leader names, conversation.stop releases the whole team, and the team
 // view lists the team. The room reads no git state and judges no work.
 import type { AnswerChannel } from "./answer";
+import type { AgentPlace } from "./protocol";
 import { mergedCommit, releasedEntry, releaseTeam, retaskedEntry, teamName, teamView, type TeamEntry, type TeamViewEntry } from "./team";
 
 export interface TeamControlDeps {
@@ -21,8 +22,13 @@ export interface TeamControlDeps {
   // Writes the tab state and publishes the conversation status.
   changed: () => void;
   report: (where: string, text: string) => void;
-  // The agent name of a definition, null when its role lists no agent file.
-  agentOf: (definition: string) => Promise<string | null>;
+  // The agent of a definition, its frontmatter name and the path of its file, null when its role lists no agent file.
+  agentOf: (definition: string) => Promise<AgentPlace | null>;
+  // The program name of a definition, and whether that program loads an agent file through --agent (docs/spec/room.md#agent-line).
+  programOf: (definition: string) => string;
+  takesAgent: (definition: string) => boolean;
+  // Submits the agent line to the open session of a member whose program takes no --agent.
+  teachAgent: (entry: TeamEntry, place: AgentPlace) => Promise<void>;
   // Whether the member is in a turn: the room waits for its protocol turn or for its answer.
   busy: (member: string) => boolean;
   // Runs after a retask ended the session of the member, with that session or null, so the page moves its delivery to the resumed session.
@@ -84,9 +90,26 @@ export function createTeamControl(deps: TeamControlDeps): TeamControl {
     // (docs/spec/room.md#team). Every refusal comes before the session ends.
     async retask(params) {
       const { entry, definition, role } = retaskedEntry(params, deps.team, deps.definitions(), leaderTurns(), deps.busy);
-      const agent = await deps.agentOf(definition);
-      if (agent === null) throw new Error(`definition ${definition} has no agent file for --agent`);
+      const program = deps.programOf(entry.definition);
+      if (deps.programOf(definition) !== program) {
+        throw new Error(`member ${entry.id} runs ${program}; member.retask takes a definition of the same program, got ${definition} of ${deps.programOf(definition)}`);
+      }
+      const place = await deps.agentOf(definition);
+      if (place === null) throw new Error(`definition ${definition} has no agent file`);
+      const takesAgent = deps.takesAgent(definition);
+      if (takesAgent && entry.agentSession === null) throw new Error(`member ${entry.id} has no Claude Code session to resume`);
       const before = teamName(entry, deps.definitions());
+      // A program that takes --agent restarts with the new agent and resumes its session id; another program keeps its session and
+      // receives the agent line of the new definition (docs/spec/room.md#agent-line).
+      if (!takesAgent) {
+        entry.definition = definition;
+        entry.role = role;
+        entry.agent = place.agent;
+        deps.append(`@${before} is now ${definition}, named @${teamName(entry, deps.definitions())}`);
+        await deps.teachAgent(entry, place);
+        deps.changed();
+        return { member: entry.id, definition, role };
+      }
       const session = deps.sessionOf(entry.id);
       if (session !== null) {
         await deps.end(session);
@@ -94,7 +117,7 @@ export function createTeamControl(deps: TeamControlDeps): TeamControl {
       }
       entry.definition = definition;
       entry.role = role;
-      entry.agent = agent;
+      entry.agent = place.agent;
       entry.resume = true;
       deps.append(`@${before} is now ${definition}, named @${teamName(entry, deps.definitions())}`);
       deps.retasked(entry.id, session);

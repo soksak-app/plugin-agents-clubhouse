@@ -2,6 +2,7 @@
 
 ## 미출시
 
+- C110: Codex처럼 `--agent`를 받지 않는 program의 member는 자기 agent file과 folder를 알리는 agent 줄을 받는다. 그 retask는 session을 유지하고 새 agent 줄을 보내며, 다른 program으로의 retask는 거부된다.
 - C108: 방이 깊이 중첩된 collection의 stack overflow advisory 범위 밖의 `yaml` 2.9.1을 묶는다.
 - C107: 버전은 0.0.21이며 C106을 출시한다.
 - C106: Repository의 마지막 worktree를 지우면 `<home>/soksak/worktrees` 아래의 그 folder도 지운다.

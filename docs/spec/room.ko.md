@@ -130,6 +130,10 @@ Program이 Claude Code인 team member는 방이 summon 때 만드는 UUID인 `--
 
 Claude Code 2.1.330으로 측정했다. `--resume <id> --agent <name>`은 agent의 tool을 바꾸고 대화를 유지하지만 시작한 agent의 지시를 유지하므로, agent가 새 role을 따르게 하는 것은 role의 change message다. 둘을 함께 쓰면 agent는 새 role을 따르고 그 tool을 쓰며 대화를 기억했다. Agent frontmatter가 선언한 MCP server는 새 `--agent` session에서도 load되지 않았다. 이 contract는 그것에 대해 아무것도 말하지 않으며, 측정되지 않았다.
 
+## Agent line
+
+Claude Code는 `--agent <name>`으로 definition의 agent file을 읽고, 지원하는 다른 program에는 그런 argument가 없다. Program이 `--agent`를 받지 않고 definition에 agent file이 있는 member는 protocol 줄 뒤에 agent 줄 `[@clubhouse] agent: you are <agent>, called @<member name>. Read the agent file <file> and its folder <folder>, and follow them as your instructions from now on; this line takes no answer.`을 받는다. `<agent>`는 file의 frontmatter name이고 `<folder>`는 그 folder다. `member.retask`는 member의 program을 유지하고, 다른 program의 definition은 `member <id> runs <program>; member.retask takes a definition of the same program, got <definition> of <program>`으로 거부한다. Session이 program을 유지하기 때문이다. Claude Code member의 retask는 session을 끝내고 새 `--agent`로 session id를 resume하며, 다른 member의 retask는 session을 유지하고 새 definition의 agent 줄을 보낸다. Agent file이 없는 definition은 `definition <id> has no agent file`로 거부한다.
+
 ## Worktrees
 
 각 team member의 worktree는 agent가 아니라 방이 만들고 지운다. 둘 다 판단이 필요 없는 정해진 절차이고, code로 실행하는 절차는 매번 같게 실행되며 실패를 알리기 때문이다. `member.summon`은 session을 열기 전에 선언된 program `team-worktree add <directory> <member id>`를 실행한다. Program은 `git worktree add`로 branch `<member id>`에 worktree `<home>/soksak/worktrees/<repository name>-<hash>/<member id>`를 만들고(`<hash>`는 main checkout root 경로의 SHA-256 앞 8자리 16진수), 방은 그 worktree를 folder로 member를 시작하고 team entry의 `worktree`로 저장한다. Worktree는 project 밖에 있으므로 project에는 worktree folder가 없고 `.gitignore` 항목도 필요 없다. Member가 그 안에서 시작하므로 Claude Code는 `cd`와 edit를 session의 folder 안에서 permission 질문 없이 유지한다. Member의 기존 worktree는 그대로 두고 기존 branch를 checkout한다. Worktree가 생긴 뒤 실패한 summon은 그것을 다시 지운다.

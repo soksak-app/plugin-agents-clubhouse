@@ -120,7 +120,6 @@ export function retaskedEntry(
   }
   const role = roleOf(params?.role);
   if (busy(entry.id)) throw new Error(`member ${entry.id} is in a turn; retask it after its answer`);
-  if (entry.agentSession === null) throw new Error(`member ${entry.id} has no Claude Code session to resume`);
   return { entry, definition, role };
 }
 

@@ -36,7 +36,7 @@ import { agentFileText, agentNameOf } from "./room/agent-file";
 import { createTeamControl } from "./room/team-control";
 import { summonableDefinitions } from "./room/summonable";
 import { createConversationStatus, waitLabel } from "./room/conversation-status";
-import { createProtocolInjector } from "./room/protocol";
+import { createProtocolInjector, type AgentPlace } from "./room/protocol";
 import { parseRoomState, serializedRoomState, type RoomState as RoomTabState } from "./room/room-state";
 import { ownedSessionIds, shownByOf } from "./room/session-channel";
 import { readQuestion, showMember } from "./room/question";
@@ -539,12 +539,17 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   // The agent name of a definition: the frontmatter name of the agent file of its role in core.roles, read with the declared program
   // agent-file, or null when core.roles lists no file for it (docs/spec/room.md#team).
   const agentFileOf = (id: string): string | null => summonableDefinitions(definitions, {}, rolesValue).find((one) => one.id === id)?.file ?? null;
-  const agentOf = async (id: string): Promise<string | null> => {
+  const agentPlaceOf = async (id: string): Promise<AgentPlace | null> => {
     const file = agentFileOf(id);
     if (file === null) return null;
     const reply = await bridge!.runtime.program.run("agent-file", [file]);
-    return agentNameOf(agentFileText(reply, file), file);
+    return { agent: agentNameOf(agentFileText(reply, file), file), file };
   };
+  const agentOf = async (id: string): Promise<string | null> => (await agentPlaceOf(id))?.agent ?? null;
+  // The program name of a definition, the last segment of its program.
+  const programOf = (id: string): string => definitions.find((one) => one.id === id)?.program.split("/").at(-1) ?? "";
+  // The agents of the open members whose program takes no --agent, by member id, which their agent line states (docs/spec/room.md#agent-line).
+  const memberAgents = new Map<string, AgentPlace>();
   // The declared program team-worktree creates and removes the worktree of a team member and trusts its repository for Claude Code
   // (docs/spec/room.md#worktrees); its reply is one JSON object.
   const teamWorktree = async (args: string[]): Promise<Record<string, unknown>> => {
@@ -574,6 +579,13 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
       if (definitions.some((definition) => checked.includes(definition.id) && isClaude(definition.id))) {
         const reply = await bridge!.runtime.program.run("project-trust", ["trust"]);
         if (reply.code !== 0) throw new Error(`project-trust exited with ${reply.code}: ${reply.stderr.trim()}`);
+      }
+      // A checked roster member whose program takes no --agent learns the agent of its definition from the agent line (C110).
+      for (const definition of definitions) {
+        if (!checked.includes(definition.id) || isClaude(definition.id)) continue;
+        const place = await agentPlaceOf(definition.id);
+        if (place === null) memberAgents.delete(definition.id);
+        else memberAgents.set(definition.id, place);
       }
       // A checked Claude Code member of the roster starts with the agent of its definition, as a team member does (C101).
       const rosterDefinitions = await Promise.all(
@@ -836,7 +848,15 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
       conversationStatus.changed();
     },
     report,
-    agentOf: (definition) => agentOf(definition),
+    agentOf: (definition) => agentPlaceOf(definition),
+    programOf,
+    takesAgent: (definition) => isClaude(definition),
+    teachAgent: async (entry, place) => {
+      memberAgents.set(entry.id, place);
+      const session = memberSessions.get(entry.id);
+      if (session === undefined) throw new Error(`member ${entry.id}: its session is not open`);
+      await protocol.teachAgent({ id: entry.id, name: teamName(entry, definitions), session, agent: place });
+    },
     gone,
     busy: (member) =>
       answers.tokens().some((token) => token.member === member) || conversationStatus.read().waiting.some((wait: { member: string }) => wait.member === member),
@@ -917,7 +937,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   const taughtMembers = async (members: OpenMember[]): Promise<OpenMember[]> => {
     const outcomes = await Promise.all(
       members.map((member) =>
-        protocol.ensure({ ...member, team: placeOf(member) }),
+        protocol.ensure({ ...member, team: placeOf(member), agent: memberAgents.get(member.id) ?? null }),
       ),
     );
     return members.filter((_, index) => outcomes[index].ok);
@@ -948,6 +968,10 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
       if (isClaude(entry.definition)) {
         entry.agentSession = crypto.randomUUID();
         entry.agent = await agentOf(entry.definition);
+      } else {
+        const place = await agentPlaceOf(entry.definition);
+        entry.agent = place?.agent ?? null;
+        if (place !== null) memberAgents.set(entry.id, place);
       }
       const created = await teamWorktree(["add", entry.directory, entry.id]);
       if (typeof created.worktree !== "string") throw new Error(`team-worktree add: reply has no worktree, got ${JSON.stringify(created)}`);
@@ -966,7 +990,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
     }
     const member = openMembers().find((one) => one.id === entry.id);
     if (member === undefined) throw new Error(`member ${entry.id}: its session is not open`);
-    const outcome = await protocol.ensure({ ...member, team: placeOf(member) });
+    const outcome = await protocol.ensure({ ...member, team: placeOf(member), agent: memberAgents.get(member.id) ?? null });
     if (!outcome.ok) throw new Error(outcome.reason);
     return { member: entry.id, session: member.session };
   };

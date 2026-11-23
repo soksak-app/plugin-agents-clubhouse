@@ -14,6 +14,18 @@ export interface ProtocolMember {
   mcp?: boolean;
   // The place of the member in a room with a leader; absent without a leader.
   team?: TeamPlace | null;
+  // The agent of a member whose program takes no --agent, which the agent line states; absent otherwise (docs/spec/room.md#agent-line).
+  agent?: AgentPlace | null;
+}
+
+// The agent name of the frontmatter of an agent file and the absolute path of that file.
+export type AgentPlace = { agent: string; file: string };
+
+// The agent line of a member whose program takes no --agent: Claude Code loads an agent file through --agent, and another program
+// learns its agent only from this line, so the line names the agent and the member and tells it to read the file and its folder.
+export function agentLine(self: string, place: AgentPlace): string {
+  const folder = place.file.slice(0, Math.max(place.file.lastIndexOf("/"), 1));
+  return `[@clubhouse] agent: you are ${place.agent}, called @${self}. Read the agent file ${place.file} and its folder ${folder}, and follow them as your instructions from now on; this line takes no answer.`;
 }
 
 // The line states the commands with the surface of the room, because a command call without a surface goes to the active tab of the
@@ -87,6 +99,8 @@ export type ProtocolOutcome = { ok: true } | { ok: false; reason: string };
 export interface ProtocolInjector {
   // Resolves with the outcome once the protocol turn of the member's session has ended or failed; it never rejects.
   ensure(member: ProtocolMember): Promise<ProtocolOutcome>;
+  // Submits the agent line of a retask to the open session of the member, whose program takes no --agent.
+  teachAgent(member: ProtocolMember & { agent: AgentPlace }): Promise<void>;
 }
 
 export interface ProtocolMemory {
@@ -134,6 +148,7 @@ export function createProtocolInjector(
       // The protocol turn ends when core accepts the submit: the program queues the first turn line if it still works on this line
       // (docs/spec/room.md#turn-end).
       await sessionSubmit(ports, member.session)(roomProtocolLine(member.name, ports.surface, member.mcp ?? true, member.team ?? null));
+      if (member.agent) await sessionSubmit(ports, member.session)(agentLine(member.name, member.agent));
       memory.onTaught(member.session);
       return { ok: true };
     } catch (error) {
@@ -155,6 +170,9 @@ export function createProtocolInjector(
         done.set(member.session, turn);
       }
       return turn;
+    },
+    async teachAgent(member) {
+      await sessionSubmit(ports, member.session)(agentLine(member.name, member.agent));
     },
   };
 }
