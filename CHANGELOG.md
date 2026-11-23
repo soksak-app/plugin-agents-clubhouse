@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- C115: The room follows the data changes of the agents plugin, so a definition added later joins the roster and `definitions` without a restart.
 - C113: The version is 0.0.22, which releases C108, C110, C111 and C112.
 - C112: The options of a question with a cursor list are buttons; the new command `question.answer {member, choice}` reads the screen again and types the arrow keys and Enter that select the choice.
 - C111: The setting `acceptAll` (`ask` or `accept`) starts each member with `--dangerously-skip-permissions` for Claude Code or `--yolo` for Codex, unless the account arguments already hold a flag of the same meaning.

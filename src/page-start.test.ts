@@ -47,6 +47,15 @@ describe("the start of the room page (C96)", () => {
     await view.settled();
     expect({ errors: view.observed.errors, failures: view.observed.failures, tab: view.observed.tab.error }).toEqual({ errors: [], failures: [], tab: null });
     expect(view.window.document.body.textContent).toContain("harness");
+    // C115 (docs/spec/room.md#roster): a definition that the agents plugin adds later reaches the room through the data changes of
+    // the agents plugin, which runtime.data.on follows only with {plugin}.
+    view.change!.dependencyData("agents", "definitions", {
+      harness: { name: "harness", account: "claude-main", plugin: "terminal", role: "harness", cwd: "/work" },
+      reviewer: { name: "reviewer", account: "claude-main", plugin: "terminal", role: "reviewer", cwd: "/work" },
+    });
+    for (let step = 0; step < 20; step += 1) await turn();
+    await view.settled();
+    expect(view.window.document.body.textContent).toContain("reviewer");
     await view.close();
     delete (globalThis as { IntersectionObserver?: unknown }).IntersectionObserver;
   });

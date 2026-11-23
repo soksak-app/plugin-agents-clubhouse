@@ -488,7 +488,8 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
       })
       .catch((error: unknown) => report("agents.definitions", String((error as Error)?.message ?? error)));
   };
-  bridge!.runtime.data.on(() => refreshDefinitions());
+  // The definitions are data of the agents plugin, whose changes runtime.data.on follows only with {plugin} (C115).
+  bridge!.runtime.data.on(() => refreshDefinitions(), { plugin: AGENTS_PLUGIN });
   refreshDefinitions();
 
   // The ended sessions that a retask waits for core.sessions to drop, each with the resolve of its wait (docs/spec/room.md#team).

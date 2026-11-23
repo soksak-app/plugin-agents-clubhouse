@@ -2,6 +2,7 @@
 
 ## 미출시
 
+- C115: 방이 agents plugin의 data 변경을 따르므로 나중에 더한 definition이 재시작 없이 roster와 `definitions`에 들어온다.
 - C113: 버전은 0.0.22이며 C108, C110, C111, C112를 출시한다.
 - C112: cursor 목록이 있는 질문의 선택지는 button이다. 새 명령 `question.answer {member, choice}`는 화면을 다시 읽고 그 선택을 고르는 화살표 key와 Enter를 입력한다.
 - C111: 설정 `acceptAll`(`ask` 또는 `accept`)은 account 인자에 같은 뜻의 flag가 없으면 각 member를 Claude Code는 `--dangerously-skip-permissions`, Codex는 `--yolo`로 시작한다.

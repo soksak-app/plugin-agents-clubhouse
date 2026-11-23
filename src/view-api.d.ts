@@ -31,8 +31,9 @@ declare module "@soksak/plugin-api/view" {
         get(key: string): Promise<unknown>;
         set(key: string, value: unknown): Promise<unknown>;
         change(key: string, next: (value: unknown) => unknown): Promise<unknown>;
-        // A change of the project data of the view's plugin, or of another plugin's data that the view reads (F1075); the listener gets the event.
-        on(listener: (event: unknown) => void): Promise<() => void>;
+        // A change of the project data of the view's plugin, or with {plugin} of the data of a dependency that the view reads (core
+        // docs/spec/plugins.md#project-data); the listener gets the event.
+        on(listener: (event: unknown) => void, options?: { plugin?: string }): Promise<() => void>;
       };
       theme(listener: (theme: unknown) => void): { ready: Promise<void>; dispose: Promise<() => void> };
       error(where: string, text: string): Promise<void>;
