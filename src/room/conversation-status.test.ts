@@ -16,7 +16,7 @@ describe("conversation status", () => {
         entries: { type: "array", items: { required: ["speaker", "text", "at", "elapsedMs", "sections"] } },
         waiting: { type: "array", items: { required: ["member", "session", "step", "program"], properties: { step: { enum: ["protocol", "turn", "answer"] } } } },
         delivery: { type: "array", items: { required: ["member", "name", "role", "session", "sent", "delivered", "length", "unreceived"] } },
-        questions: { type: "array", items: { required: ["member", "session", "rows"] } },
+        questions: { type: "array", items: { required: ["member", "session", "rows", "choices"] } },
       },
       required: ["entries", "waiting", "delivery", "team", "questions"],
     });
@@ -115,7 +115,7 @@ describe("waitLabel (docs/spec/room.md#conversation-status)", () => {
 
 describe("questions of the conversation status (docs/spec/room.md#questions)", () => {
   it("lists the question that the room read from the screen of each blocked member", () => {
-    const questions = [{ member: "lead", session: "s-1", rows: [" Accessing workspace:", " ❯ No, exit"] }];
+    const questions = [{ member: "lead", session: "s-1", rows: [" Accessing workspace:", " ❯ No, exit"], choices: ["No, exit"] }];
     const status = createConversationStatus([], () => [], () => [], () => [], () => [], () => questions);
     expect(status.read().questions).toEqual(questions);
   });

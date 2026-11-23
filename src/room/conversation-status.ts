@@ -55,6 +55,8 @@ export interface QuestionEntry {
   member: string;
   session: string;
   rows: string[];
+  // The options of the cursor list of the question, empty for a question without one (docs/spec/room.md#questions).
+  choices: string[];
 }
 
 export interface ConversationValue {

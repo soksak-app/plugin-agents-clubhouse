@@ -39,7 +39,7 @@ import { createConversationStatus, waitLabel } from "./room/conversation-status"
 import { createProtocolInjector, type AgentPlace } from "./room/protocol";
 import { parseRoomState, serializedRoomState, type RoomState as RoomTabState } from "./room/room-state";
 import { ownedSessionIds, shownByOf } from "./room/session-channel";
-import { readQuestion, showMember } from "./room/question";
+import { answerQuestion, questionChoices, readQuestion, showMember } from "./room/question";
 import { insertMention, mentionCandidates, mentionQuery } from "./room/mention-hint";
 import { reattachedChecks, rosterFrom, type RosterEntry } from "./room/roster";
 import { measuredCardSize } from "./room/card-size";
@@ -115,6 +115,7 @@ const CSS = `
 .st-question-title{font-size:12px;color:var(--warn,#d9a441)}
 .st-question-screen{margin:0;font:11px/1.4 ui-monospace,monospace;white-space:pre-wrap;color:var(--fg2,#ccc);max-height:220px;overflow:auto}
 .st-question-answer{align-self:flex-start}
+.st-question-choices{display:flex;flex-wrap:wrap;gap:6px}
 .st-dot{width:6px;height:6px;border-radius:50%;background:currentColor;animation:st-pulse 1.1s ease-in-out infinite}
 .st-fail{align-self:flex-start;max-width:88%;font-size:11.5px;color:var(--danger-soft,#d77);border:1px solid var(--danger-soft,#d77);border-radius:8px;padding:6px 9px;white-space:pre-wrap;word-break:break-word;opacity:.85}
 .st-box-time{display:block;text-align:right;font-size:9px;opacity:.5;margin-top:3px;font-variant-numeric:tabular-nums}
@@ -707,6 +708,17 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
       const box = el("div", "st-question");
       box.append(elText("div", tp("questionAsks", lang, { name: memberName(question.member) }), "st-question-title"));
       box.append(elText("pre", question.rows.join("\n"), "st-question-screen"));
+      // Each option of a cursor list is a button that selects it in the program (C112).
+      if (question.choices.length > 0) {
+        const choices = el("div", "st-question-choices");
+        for (const choice of question.choices) {
+          const button = elText("button", choice, "st-question-choice");
+          button.dataset.expose = `${EXPOSE}.question.choice`;
+          bound(expose.bind(button, `${EXPOSE}.question.answer`, { member: question.member, choice }, { failed: failed("question.answer") }), "question.answer");
+          choices.append(button);
+        }
+        box.append(choices);
+      }
       const answer = elText("button", tp("questionAnswer", lang, { name: memberName(question.member) }), "st-question-answer");
       answer.dataset.expose = `${EXPOSE}.question`;
       bound(expose.bind(answer, `${EXPOSE}.member.show`, { member: question.member }, { failed: failed("member.show") }), "member.show");
@@ -837,7 +849,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
     }
   };
   // The questions of the blocked members by session, and the sessions whose screen the room reads (docs/spec/room.md#questions).
-  const questions = new Map<string, { member: string; rows: string[] }>();
+  const questions = new Map<string, { member: string; rows: string[]; choices: string[] }>();
   const questionReads = new Set<string>();
   const teamControl = createTeamControl({
     team,
@@ -875,7 +887,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   const conversationStatus = createConversationStatus(conversation, () => sessionsValue, () => deliveryEntries(), (entry) =>
     entry.speaker === "owner" || entry.speaker === "clubhouse" ? [] : answerSections(entry.text, roster),
     () => teamControl.view(sessionsValue),
-    () => [...questions.entries()].map(([session, entry]) => ({ member: entry.member, session, rows: entry.rows })),
+    () => [...questions.entries()].map(([session, entry]) => ({ member: entry.member, session, rows: entry.rows, choices: entry.choices })),
   );
   conversationStatus.subscribe(() => showConversation());
   // The question of each blocked member (docs/spec/room.md#questions): the room reads the screen of its session once when its program
@@ -890,7 +902,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
       readQuestion(room, session)
         .then((rows) => {
           if (!conversationStatus.read().waiting.some((wait) => wait.session === session && wait.program === "blocked")) return;
-          questions.set(session, { member, rows });
+          questions.set(session, { member, rows, choices: questionChoices(rows).map((one) => one.text) });
           conversationStatus.changed();
         })
         .catch((error: unknown) => report("room question", `member ${member}: ${String((error as Error)?.message ?? error)}`))
@@ -1159,6 +1171,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
     [`${EXPOSE}.mode`]: kib,
     [`${EXPOSE}.tower`]: towerButton,
     [`${EXPOSE}.question`]: () => [...msgs.querySelectorAll<HTMLElement>(".st-question-answer")],
+    [`${EXPOSE}.question.choice`]: () => [...msgs.querySelectorAll<HTMLElement>(".st-question-choice")],
     [`${EXPOSE}.mention`]: () => [...mentionBox.querySelectorAll<HTMLElement>(".st-mention-item")],
   };
   return {
@@ -1172,6 +1185,14 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
       [`${EXPOSE}.member.merged`]: async (params: unknown) => teamControl.merged(params),
       [`${EXPOSE}.member.retask`]: async (params: unknown) => teamControl.retask(params),
       [`${EXPOSE}.mention.insert`]: async (params: unknown) => insertMentionName(params),
+      [`${EXPOSE}.question.answer`]: async (params: unknown) => {
+        const { member, choice } = (params ?? {}) as { member?: unknown; choice?: unknown };
+        if (typeof member !== "string" || member === "") throw new Error("question.answer member must be a non-empty text");
+        if (typeof choice !== "string" || choice === "") throw new Error("question.answer choice must be a non-empty text");
+        const question = [...questions.entries()].find(([, entry]) => entry.member === member);
+        if (question === undefined) throw new Error(`member ${member} has no question`);
+        return answerQuestion(room, member, question[0], choice);
+      },
       [`${EXPOSE}.member.show`]: async (params: unknown) => {
         const member = (params as { member?: unknown } | null)?.member;
         if (typeof member !== "string" || member === "") throw new Error("member.show member must be a non-empty text");

@@ -167,9 +167,10 @@
                 "properties": {
                   "member": { "type": "string" },
                   "session": { "type": "string" },
-                  "rows": { "type": "array", "items": { "type": "string" } }
+                  "rows": { "type": "array", "items": { "type": "string" } },
+                  "choices": { "type": "array", "items": { "type": "string" } }
                 },
-                "required": ["member", "session", "rows"]
+                "required": ["member", "session", "rows", "choices"]
               }
             }
           },
@@ -366,6 +367,20 @@
           "type": "object",
           "properties": { "member": { "type": "string" }, "tab": { "type": "string" } },
           "required": ["member", "tab"]
+        }
+      },
+      {
+        "name": "soksak-plugin-agents-clubhouse.question.answer",
+        "description": "Select a choice of the question of a blocked member: reads the screen of its session again and types the arrow keys from the cursor to the choice and Enter. A choice that the screen no longer shows is refused and nothing is typed.",
+        "params": {
+          "type": "object",
+          "properties": { "member": { "type": "string" }, "choice": { "type": "string" } },
+          "required": ["member", "choice"]
+        },
+        "result": {
+          "type": "object",
+          "properties": { "member": { "type": "string" }, "choice": { "type": "string" } },
+          "required": ["member", "choice"]
         }
       },
       {
@@ -666,6 +681,10 @@
       {
         "name": "soksak-plugin-agents-clubhouse.question",
         "description": "Answer button of the question of a blocked member under the conversation: runs member.show for that member, which makes the tab of its session active"
+      },
+      {
+        "name": "soksak-plugin-agents-clubhouse.question.choice",
+        "description": "Choice buttons of the question of a blocked member, one for each option of its cursor list: runs question.answer with the member and the text of the option"
       },
       {
         "name": "soksak-plugin-agents-clubhouse.mention",
