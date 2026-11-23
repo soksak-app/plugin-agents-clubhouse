@@ -2,6 +2,7 @@
 
 ## 미출시
 
+- C116: 버전은 0.0.23이며 C114, C115를 출시한다.
 - C114: 받지 않은 줄 없이 continue인 member는 빈 turn을 받지 않고, 방은 대화가 owner를 기다린다고 기록한다.
 - C115: 방이 agents plugin의 data 변경을 따르므로 나중에 더한 definition이 재시작 없이 roster와 `definitions`에 들어온다.
 - C113: 버전은 0.0.22이며 C108, C110, C111, C112를 출시한다.
