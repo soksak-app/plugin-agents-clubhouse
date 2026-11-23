@@ -61,7 +61,9 @@
     }
   },
   "programs": {
-    "agent-file": { "program": "cat", "args": [{ "pattern": "/.+\\.md" }] }
+    "agent-file": { "program": "cat", "args": [{ "pattern": "/.+\\.md" }] },
+    "project-trust": { "program": "plugin:bin/team-worktree.mjs", "args": ["trust"] },
+    "team-worktree": { "program": "plugin:bin/team-worktree.mjs", "args": [{ "pattern": "add|remove" }, { "pattern": "/.+" }, { "pattern": "[a-z0-9][a-z0-9._-]{0,99}" }] }
   },
   "exposes": {
     "status": [

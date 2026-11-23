@@ -24,8 +24,8 @@ export interface ProtocolMember {
 // (docs/spec/room.md#team).
 export type TeamPlace = { leader: string | null };
 
-// The team rules of the leader and of a worker. A worker works in `.worktrees/<name>` inside the project, because Claude Code keeps a cd
-// of the shell only inside the folders of the session (docs/spec/room.md#team).
+// The team rules of the leader and of a worker. The room creates the worktree of each worker outside the project on the branch of its
+// member id, starts the worker in it and removes it when the leader releases the worker (docs/spec/room.md#worktrees).
 function teamRules(self: string, surface: string, team: TeamPlace): string[] {
   if (team.leader === null) {
     return [
@@ -33,15 +33,15 @@ function teamRules(self: string, surface: string, team: TeamPlace): string[] {
       "List summonable agents with definitions {} and read each file before choosing.",
       `Summon workers with member.summon {"turn":"<token>","definition":"<id>","role":"<role>","directory":"<project>"}; workers mentioned in one answer start together.`,
       "Record a merge with member.merged {turn, member, commit}; end a worker with member.release {turn, member}, or retask it with member.retask {turn, member, definition, role}.",
-      "Add .worktrees/ to .gitignore if missing. Each brief fixes the API contract; workers unit-test and merge integration into their branch before asking for a merge; merge server branches first, then dependents update from integration; name each merge commit.",
+      "Branch=member id; release drops worktree. Each brief fixes the API contract; workers unit-test and merge integration into their branch before asking for a merge; merge server branches first, then dependents update from integration; name each merge commit.",
     ];
   }
   const leader = `@${team.leader}`;
   return [
     `You work for ${leader} and get the owner lines and the lines mentioning you; your brief is your scope.`,
-    `In one Bash call create your worktree and branch, named as you, and cd into it (W=${self}; git worktree add -q .worktrees/$W -b $W && cd .worktrees/$W); work there.`,
+    `You start in your own worktree on the branch ${self}; work and commit there, and leave its removal to the room.`,
     `Unit-test thoroughly; before reporting done, merge the latest integration and resolve conflicts, then report the branch ready.`,
-    "After it names the merge commit, check your work and unit tests in integration, cd to the project root, remove your worktree, delete your branch, and report it.",
+    "After it names the merge commit, check your work and unit tests in integration and report it.",
     "Leave no background task running when you answer.",
   ];
 }

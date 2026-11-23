@@ -545,13 +545,23 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
     const reply = await bridge!.runtime.program.run("agent-file", [file]);
     return agentNameOf(agentFileText(reply, file), file);
   };
+  // The declared program team-worktree creates and removes the worktree of a team member and trusts its repository for Claude Code
+  // (docs/spec/room.md#worktrees); its reply is one JSON object.
+  const teamWorktree = async (args: string[]): Promise<Record<string, unknown>> => {
+    const reply = await bridge!.runtime.program.run("team-worktree", args);
+    if (reply.code !== 0) throw new Error(`team-worktree ${args.join(" ")} exited with ${reply.code}: ${reply.stderr.trim()}`);
+    if (reply.truncated.stdout || reply.truncated.stderr) throw new Error(`team-worktree ${args.join(" ")}: output was truncated`);
+    const value = JSON.parse(reply.stdout) as unknown;
+    if (value === null || typeof value !== "object" || Array.isArray(value)) throw new Error(`team-worktree ${args.join(" ")}: reply is not a JSON object, got ${reply.stdout}`);
+    return value as Record<string, unknown>;
+  };
   // The member definitions of the summon: the roster definitions and the team members, each team member with its own id, name, role
   // and directory, so its relation is stored under its summon id (docs/spec/room.md#team).
   const teamDefinitions = () =>
     team.flatMap((entry) => {
       const definition = definitions.find((one) => one.id === entry.definition);
       if (definition === undefined) return [];
-      const member = toMemberDefinition({ ...definition, id: entry.id, name: teamName(entry, definitions), role: entry.role, cwd: entry.directory });
+      const member = toMemberDefinition({ ...definition, id: entry.id, name: teamName(entry, definitions), role: entry.role, cwd: entry.worktree ?? entry.directory });
       // A Claude Code member starts with its session id and agent, and a later launch resumes the id (docs/spec/room.md#team).
       return [{ ...member, params: { ...member.params, args: [...(member.params.args as string[]), ...agentArgs(entry)] } }];
     });
@@ -559,6 +569,12 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
     const checked = [...roster.filter((entry) => entry.checked).map((entry) => entry.id), ...team.map((entry) => entry.id)];
     return runTrigger(async () => {
       await sessionsReady;
+      // Before a checked Claude Code member of the roster starts in the project folder, the declared program project-trust trusts that
+      // folder for Claude Code, so the member opens without the folder trust question (docs/spec/room.md#worktrees).
+      if (definitions.some((definition) => checked.includes(definition.id) && isClaude(definition.id))) {
+        const reply = await bridge!.runtime.program.run("project-trust", ["trust"]);
+        if (reply.code !== 0) throw new Error(`project-trust exited with ${reply.code}: ${reply.stderr.trim()}`);
+      }
       // A checked Claude Code member of the roster starts with the agent of its definition, as a team member does (C101).
       const rosterDefinitions = await Promise.all(
         definitions.map(async (definition) =>
@@ -829,6 +845,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
       roleStates.delete(member);
     },
     roleState: (member) => roleStates.get(member) ?? null,
+    removeWorktree: async (entry) => void (await teamWorktree(["remove", entry.directory, entry.id])),
   });
   const conversationStatus = createConversationStatus(conversation, () => sessionsValue, () => deliveryEntries(), (entry) =>
     entry.speaker === "owner" || entry.speaker === "clubhouse" ? [] : answerSections(entry.text, roster),
@@ -932,11 +949,19 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
         entry.agentSession = crypto.randomUUID();
         entry.agent = await agentOf(entry.definition);
       }
+      const created = await teamWorktree(["add", entry.directory, entry.id]);
+      if (typeof created.worktree !== "string") throw new Error(`team-worktree add: reply has no worktree, got ${JSON.stringify(created)}`);
+      entry.worktree = created.worktree;
       persist();
       await summonRun();
     } catch (error) {
       team.splice(team.indexOf(entry), 1);
       persist();
+      // A summon that fails after the worktree exists removes it again, so a refused summon leaves no folder or branch.
+      if (entry.worktree !== null) {
+        await teamWorktree(["remove", entry.directory, entry.id]).catch((removal: unknown) =>
+          report("room worktree", `member ${entry.id}: ${removal instanceof Error ? removal.message : String(removal)}`));
+      }
       throw error;
     }
     const member = openMembers().find((one) => one.id === entry.id);

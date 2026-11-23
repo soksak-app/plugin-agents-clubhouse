@@ -9,3 +9,4 @@ node_modules/
 secret/
 dist/
 ui/clubhouse.js
+bin/team-worktree.mjs

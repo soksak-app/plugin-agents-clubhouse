@@ -10,12 +10,13 @@ const DEFINITIONS = [{ id: "claude", name: "Claude" }, { id: "tester", name: "Te
 
 function page() {
   const team: TeamEntry[] = [
-    { id: "claude-1", definition: "claude", role: "server", directory: "/work/game", merged: null, agentSession: "u-1", resume: true, agent: "developer" },
-    { id: "claude-2", definition: "claude", role: "client", directory: "/work/game", merged: null, agentSession: null, resume: false, agent: null },
+    { id: "claude-1", definition: "claude", role: "server", directory: "/work/game", merged: null, agentSession: "u-1", resume: true, agent: "developer", worktree: null },
+    { id: "claude-2", definition: "claude", role: "client", directory: "/work/game", merged: null, agentSession: null, resume: false, agent: null, worktree: null },
   ];
   const sessions = new Map([["claude-1", "s-1"], ["claude-2", "s-2"], ["lead", "s-l"]]);
   let core = [{ session: "s-1", program: { state: "idle" } }, { session: "s-2", program: { state: "working" } }, { session: "s-l", program: { state: "working" } }];
   const ended: string[] = [];
+  const removed: string[] = [];
   const log: string[] = [];
   const gones: (() => void)[] = [];
   const record = createRoomRecord([], {}, (speaker) => speaker, () => {});
@@ -36,31 +37,56 @@ function page() {
     summon: () => void log.push("summon"),
     changed: () => void log.push("changed"),
     report: (where, text) => void log.push(`${where}: ${text}`),
+    removeWorktree: async (entry) => {
+      if (entry.worktree === "/w/dirty") throw new Error("fatal: '/w/dirty' contains modified or untracked files");
+      removed.push(entry.worktree!);
+    },
     agentOf: async (definition) => ({ claude: "developer", tester: "e2e-tester" } as Record<string, string>)[definition] ?? null,
     busy: (member) => member === "claude-2",
     retasked: (member, session) => void log.push(`retasked ${member} ${session}`),
     gone: (session) => new Promise<void>((resolve) => void gones.push(() => { log.push(`gone ${session}`); resolve(); })),
     roleState: (member) => (member === "claude-1" ? "pending" : null),
   });
-  return { team, ended, log, record, control, core: () => core, gones };
+  return { team, ended, removed, log, record, control, core: () => core, gones };
 }
 
 describe("the team commands of the page", () => {
   it("member.release ends the session, removes the member, records the release and rearranges the tabs", async () => {
     const p = page();
     expect(p.control.view(p.core()).map((entry) => [entry.member, entry.state])).toEqual([["claude-1", "idle"], ["claude-2", "working"]]);
-    expect(await p.control.release({ turn: "t-1", member: "claude-1" })).toEqual({ member: "claude-1" });
+    const released = p.control.release({ turn: "t-1", member: "claude-1" });
+    await Promise.resolve();
+    p.gones.shift()!();
+    expect(await released).toEqual({ member: "claude-1" });
     expect(p.ended).toEqual(["s-1"]);
     expect(p.team.map((entry) => entry.id)).toEqual(["claude-2"]);
     expect(p.record.lines.at(-1)).toMatchObject({ speaker: "clubhouse", text: "@Claude-1 was released" });
-    expect(p.log).toEqual(["changed", "summon"]);
+    expect(p.log).toEqual(["gone s-1", "changed", "summon"]);
     await expect(p.control.release({ turn: "t-9", member: "claude-2" })).rejects.toThrow("member.release takes the turn token of the leader lead, got t-9");
+  });
+
+  it("member.release removes the worktree of the member after its session is gone, and names a worktree that git keeps", async () => {
+    const p = page();
+    p.team[0]!.worktree = "/w/claude-1";
+    p.team[1]!.worktree = "/w/dirty";
+    const first = p.control.release({ turn: "t-1", member: "claude-1" });
+    await Promise.resolve();
+    expect(p.removed).toEqual([]);
+    p.gones.shift()!();
+    await first;
+    expect(p.removed).toEqual(["/w/claude-1"]);
+    const second = p.control.release({ turn: "t-1", member: "claude-2" });
+    await Promise.resolve();
+    p.gones.shift()!();
+    await second;
+    expect(p.record.lines.at(-1)!.text).toBe("the worktree /w/dirty of @Claude-2 stays: fatal: '/w/dirty' contains modified or untracked files");
+    expect(p.log.at(-3)).toBe("room worktree: member claude-2: fatal: '/w/dirty' contains modified or untracked files");
   });
 
   it("member.merged shows the commit in the team view", async () => {
     const p = page();
     expect(await p.control.merged({ turn: "t-1", member: "claude-2", commit: "abc1234" })).toEqual({ member: "claude-2", commit: "abc1234" });
-    expect(p.control.view(p.core()).find((entry) => entry.member === "claude-2")).toMatchObject({ merged: "abc1234", branch: "Claude-2" });
+    expect(p.control.view(p.core()).find((entry) => entry.member === "claude-2")).toMatchObject({ merged: "abc1234", branch: "claude-2" });
   });
 
   it("the stop releases every team session once and the team view empties", async () => {
@@ -85,7 +111,7 @@ describe("member.retask", () => {
     p.gones.forEach((done) => done());
     expect(await retask).toEqual({ member: "claude-1", definition: "tester", role: "e2e checks" });
     expect(p.ended).toEqual(["s-1"]);
-    expect(p.team[0]).toMatchObject({ id: "claude-1", definition: "tester", role: "e2e checks", agentSession: "u-1", resume: true, agent: "e2e-tester" });
+    expect(p.team[0]).toMatchObject({ id: "claude-1", definition: "tester", role: "e2e checks", agentSession: "u-1", resume: true, agent: "e2e-tester", worktree: null });
     expect(p.record.lines.at(-1)).toMatchObject({ speaker: "clubhouse", text: "@Claude-1 is now tester, named @Tester-1" });
     expect(p.log).toEqual(["gone s-1", "retasked claude-1 s-1", "changed", "summon"]);
     expect(p.control.view(p.core()).find((entry) => entry.member === "claude-1")).toMatchObject({ name: "Tester-1", roleState: "pending" });

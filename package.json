@@ -13,10 +13,14 @@
   "engines": {
     "soksak": "^0.0.47"
   },
+  "bin": {
+    "sok-team-worktree": "bin/team-worktree.mjs"
+  },
   "files": [
     "plugin.json",
     "ui/clubhouse.html",
-    "ui/clubhouse.js"
+    "ui/clubhouse.js",
+    "bin/team-worktree.mjs"
   ],
   "scripts": {
     "build": "node build.mjs",
@@ -28,12 +32,14 @@
     "@soksak/kit": "https://github.com/soksak-app/kit/releases/download/v0.0.14/soksak-kit-0.0.14.tgz",
     "@soksak/plugin-api": "https://github.com/soksak-app/core/releases/download/v0.0.48/soksak-plugin-api-0.0.48.tgz",
     "@types/node": "^24.10.1",
+    "@types/proper-lockfile": "^4.1.4",
     "esbuild": "^0.28.2",
     "jsdom": "^31.0.1",
     "typescript": "~5.9.3",
     "vitest": "^4.1.12"
   },
   "dependencies": {
+    "proper-lockfile": "4.1.2",
     "yaml": "^2.8.1"
   }
 }

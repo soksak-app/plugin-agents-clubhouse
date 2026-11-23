@@ -234,19 +234,19 @@ describe("the team protocol", () => {
     const line = roomProtocolLine("Lead", "room-1", true, { leader: null });
     expect(line).toContain("You lead: you get every line and split the work; your settled answer ends the conversation.");
     expect(line).toContain('member.summon {"turn":"<token>","definition":"<id>","role":"<role>","directory":"<project>"}');
-    expect(line).toContain("Add .worktrees/ to .gitignore if missing.");
+    expect(line).toContain("Branch=member id; release drops worktree.");
     expect(line).toContain("Record a merge with member.merged {turn, member, commit}; end a worker with member.release {turn, member}, or retask it with member.retask {turn, member, definition, role}.");
     expect(line).toContain("workers mentioned in one answer start together.");
     expect(line).toContain("@all addresses everyone, and yours starts every worker.");
     expect(line).toContain("List summonable agents with definitions {} and read each file before choosing.");
   });
 
-  it("tells a worker the worktree lifecycle inside the project", () => {
+  it("tells a worker that it starts in its own worktree and leaves its removal to the room", () => {
     const line = roomProtocolLine("W1", "room-1", true, { leader: "Lead" });
     expect(line).toContain("You work for @Lead and get the owner lines and the lines mentioning you; your brief is your scope.");
-    expect(line).toContain("In one Bash call create your worktree and branch, named as you, and cd into it (W=W1; git worktree add -q .worktrees/$W -b $W && cd .worktrees/$W); work there.");
+    expect(line).toContain("You start in your own worktree on the branch W1; work and commit there, and leave its removal to the room.");
     expect(line).toContain("@all addresses everyone, and yours starts no turn.");
-    expect(line).toContain("After it names the merge commit, check your work and unit tests in integration, cd to the project root, remove your worktree, delete your branch, and report it.");
+    expect(line).toContain("After it names the merge commit, check your work and unit tests in integration and report it.");
     expect(line).toContain("Leave no background task running when you answer.");
   });
 

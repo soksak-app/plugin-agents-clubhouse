@@ -15,6 +15,9 @@ export interface TeamEntry {
   resume: boolean;
   // The agent name of --agent, the frontmatter name of the agent file of the role of the definition, or null.
   agent: string | null;
+  // The worktree of the member that the room created at the summon outside the repository, on the branch of its id, null before it
+  // (docs/spec/room.md#worktrees).
+  worktree: string | null;
 }
 
 export interface SummonCheck {
@@ -59,7 +62,7 @@ export function summonedEntry(params: any, check: SummonCheck): TeamEntry {
   const used = new Set(check.team.filter((entry) => entry.definition === definition).map((entry) => entry.id));
   let n = 1;
   while (used.has(`${definition}-${n}`)) n += 1;
-  return { id: `${definition}-${n}`, definition, role, directory, merged: null, agentSession: null, resume: false, agent: null };
+  return { id: `${definition}-${n}`, definition, role, directory, merged: null, agentSession: null, resume: false, agent: null, worktree: null };
 }
 
 // The Claude Code arguments of a launch of the team member (docs/spec/room.md#team): the first launch names the session id, a later
@@ -176,7 +179,7 @@ export function teamView(
     const session = sessionOf(entry.id);
     const found = listed.find((one) => one?.session === session);
     const state = session === null || found === undefined ? "ended" : ((found.program?.state as TeamViewEntry["state"]) ?? null);
-    return { member: entry.id, name, role: entry.role, directory: entry.directory, branch: name, merged: entry.merged, session, state, roleState: roleState(entry.id) };
+    return { member: entry.id, name, role: entry.role, directory: entry.worktree ?? entry.directory, branch: entry.id, merged: entry.merged, session, state, roleState: roleState(entry.id) };
   });
 }
 

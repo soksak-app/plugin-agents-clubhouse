@@ -30,6 +30,8 @@ export interface TeamControlDeps {
   // Resolves when core.sessions no longer lists the session: core.session.end answers before core.sessions drops it, and a summon
   // before that sees the ended session open and opens nothing.
   gone: (session: string) => Promise<void>;
+  // Removes the worktree and the merged branch of a released member with the declared program team-worktree (docs/spec/room.md#worktrees).
+  removeWorktree: (entry: TeamEntry) => Promise<void>;
   // The state of core.tab.role of the tab of the member, null without a role change.
   roleState: (member: string) => "pending" | "ready" | null;
 }
@@ -52,13 +54,28 @@ export function createTeamControl(deps: TeamControlDeps): TeamControl {
     return { id: leader.id, turns: deps.answers.tokens().filter((token) => token.member === leader.id).map((token) => token.turn) };
   };
   let lastRelease: Promise<void> = Promise.resolve();
+  // A worktree that git refuses to remove, such as one with uncommitted changes, stays with its branch, and the record names it.
+  const removeOf = async (entry: TeamEntry): Promise<void> => {
+    if (entry.worktree === null) return;
+    try {
+      await deps.removeWorktree(entry);
+    } catch (error) {
+      const text = error instanceof Error ? error.message : String(error);
+      deps.append(`the worktree ${entry.worktree} of @${teamName(entry, deps.definitions())} stays: ${text}`);
+      deps.report("room worktree", `member ${entry.id}: ${text}`);
+    }
+  };
   return {
     async release(params) {
       const entry = releasedEntry(params, deps.team, leaderTurns());
       const session = deps.sessionOf(entry.id);
-      if (session !== null) await deps.end(session);
+      if (session !== null) {
+        await deps.end(session);
+        await deps.gone(session);
+      }
       deps.team.splice(deps.team.indexOf(entry), 1);
       deps.append(`@${teamName(entry, deps.definitions())} was released`);
+      await removeOf(entry);
       deps.changed();
       deps.summon();
       return { member: entry.id };
@@ -94,8 +111,10 @@ export function createTeamControl(deps: TeamControlDeps): TeamControl {
     releaseAll() {
       const count = deps.team.length;
       if (count === 0) return 0;
+      const released = [...deps.team];
       lastRelease = releaseTeam(deps.team, deps.sessionOf, deps.end, deps.append)
-        .then(() => {
+        .then(async () => {
+          for (const entry of released) await removeOf(entry);
           deps.changed();
           deps.summon();
         })
