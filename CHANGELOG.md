@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- C102: Typing `@` in the composer lists `all` and the members of the room that start with the typed text; a choice inserts `@<name> ` through the new command `mention.insert {name}`.
 - C101: A checked Claude Code member of the roster, such as the leader, starts with `--agent <name>` of its definition, so it runs with the instructions and tools of its agent file.
 - C100: The version is 0.0.18, which releases C99.
 - C99: The room shows the question of a blocked member program, read from the screen of its session, with the button that makes the tab of the session active through the new command `member.show {member}`, so every question of a program is answerable from the room.

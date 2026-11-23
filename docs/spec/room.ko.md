@@ -72,6 +72,10 @@ Leader가 있는 방에서 owner의 `@all`은 이름 mention된 worker를 mentio
 
 거부한 반론: turn 줄에는 길이 bound가 없다. 그것이 싣는 record는 설계상 한계가 없고, 450,000자 submit이 Claude Code의 transcript에 온전히 도착했다. 명시적 bound는 tab state 한도 1 MiB다([restart](#restart)).
 
+## Mention hint
+
+composer의 caret 앞 단어가 text의 시작이나 공백 뒤에서 `@`로 시작하는 동안, composer 위의 목록이 `all`과, 체크된 roster member와 team member 가운데 단어의 나머지로 시작하는 이름을 대소문자 구분 없이 `all`을 먼저 보인다. 각 항목은 element `soksak-plugin-agents-clubhouse.mention`이다. 항목을 click하거나 표시된 항목에서 Enter나 Tab을 누르면 `mention.insert {name}`이 실행되고, 이는 그 단어를 `@<name> `으로 바꾸고 caret을 그 뒤에 둔다. caret에 `@` 단어가 없는 호출은 `mention.insert: no @ word ends at the caret of the composer`로 거부된다. 화살표 key는 표시를 옮기고, Escape는 다음 입력까지 목록을 닫으며, Enter는 목록이 닫혀 있을 때만 message를 보낸다.
+
 ## Mode
 
 방의 mode(`facil`, `turn`, `simul`)는 메시지를 누가 어떤 순서로 받는지 정한다. Mention된 member가 먼저 turn을 받는다([mention](#mention)). [Leader](#leader)가 있으면 owner의 메시지는 모든 mode에서 mention된 member 다음에 leader의 turn을 시작한다.

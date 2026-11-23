@@ -72,6 +72,10 @@ The names and identifiers `all`, `owner` and `clubhouse`, compared without case,
 
 Rejected objection: a turn line has no length bound. The record that it carries is unbounded by design, and a submit of 450,000 characters arrived whole in the transcript of Claude Code; the explicit bound is the tab state limit of 1 MiB ([restart](#restart)).
 
+## Mention hint
+
+While the word before the caret of the composer starts with `@`, at the start of the text or after a space, a list above the composer shows `all` and the names of the checked roster members and the team members that start with the rest of the word, compared without case, `all` first. Each item is the element `soksak-plugin-agents-clubhouse.mention`. A click on an item, or Enter or Tab on the marked item, runs `mention.insert {name}`, which replaces the word with `@<name> ` and puts the caret after it; a call without an `@` word at the caret is refused with `mention.insert: no @ word ends at the caret of the composer`. The arrow keys move the mark, Escape closes the list until the next input, and Enter sends the message only while the list is closed.
+
 ## Modes
 
 The mode of the room (`facil`, `turn`, `simul`) decides who receives a message and in which order; mentioned members take their turns first ([mentions](#mentions)). With a [leader](#leader) a message of the owner starts the turn of the leader, after the mentioned members, in every mode:

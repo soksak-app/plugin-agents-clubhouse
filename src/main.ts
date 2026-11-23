@@ -40,6 +40,7 @@ import { createProtocolInjector } from "./room/protocol";
 import { parseRoomState, serializedRoomState, type RoomState as RoomTabState } from "./room/room-state";
 import { ownedSessionIds, shownByOf } from "./room/session-channel";
 import { readQuestion, showMember } from "./room/question";
+import { insertMention, mentionCandidates, mentionQuery } from "./room/mention-hint";
 import { reattachedChecks, rosterFrom, type RosterEntry } from "./room/roster";
 import { measuredCardSize } from "./room/card-size";
 import { createRoomOperations } from "./room/operations";
@@ -1003,8 +1004,76 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   bound(expose.bind(send, `${EXPOSE}.message.send`, () => ({ text: input.value }), { failed: shownBySend }), "message.send");
   bound(expose.bind(pill, `${EXPOSE}.conversation.scroll.bottom`, {}, { failed: failed("conversation.scroll.bottom") }), "conversation.scroll.bottom");
   bound(expose.bind(stop, `${EXPOSE}.conversation.stop`, {}, { failed: failed("conversation.stop") }), "conversation.stop");
-  // Enter without Shift sends; the newline that it would insert is prevented. Enter during an IME composition commits the text.
-  const sendKey = (event: KeyboardEvent): boolean => event.key === "Enter" && !event.shiftKey && !event.isComposing;
+  // The mention hint (C102, docs/spec/room.md#mention-hint): while the word before the caret starts with @, the list above the composer
+  // shows all and the names of the checked roster members and the team members that start with its text. A click on an item, or Enter
+  // or Tab on the marked item, runs mention.insert; the arrow keys move the mark and Escape closes the list.
+  const mentionBox = el("div", "st-mention");
+  mentionBox.hidden = true;
+  composer.append(mentionBox);
+  let mentionItems: string[] = [];
+  let mentionMark = 0;
+  let mentionClosed = false;
+  const roomNames = (): { id: string; name: string }[] => [
+    ...roster.filter((entry) => entry.checked).map((entry) => ({ id: entry.id, name: entry.name })),
+    ...team.map((entry) => ({ id: entry.id, name: teamName(entry, definitions) })),
+  ];
+  const drawMentions = (): void => {
+    const query = input.disabled || mentionClosed ? null : mentionQuery(input.value, input.selectionStart ?? input.value.length);
+    mentionItems = query === null ? [] : mentionCandidates(roomNames(), query.query);
+    if (mentionMark >= mentionItems.length) mentionMark = 0;
+    mentionBox.hidden = mentionItems.length === 0;
+    mentionBox.replaceChildren(
+      ...mentionItems.map((name, index) => {
+        const item = el("div", `st-mention-item${index === mentionMark ? " on" : ""}`);
+        item.dataset.expose = `${EXPOSE}.mention`;
+        item.append(elText("span", "@", "st-mention-at"), elText("span", name, "st-mention-nm"));
+        item.addEventListener("pointerdown", (event) => event.preventDefault());
+        bound(expose.bind(item, `${EXPOSE}.mention.insert`, { name }, { failed: failed("mention.insert") }), "mention.insert");
+        return item;
+      }),
+    );
+  };
+  const mentionOpen = (): boolean => mentionItems.length > 0;
+  const insertMentionName = (params: unknown): { text: string } => {
+    const name = (params as { name?: unknown } | null)?.name;
+    if (typeof name !== "string" || name === "") throw new Error("mention.insert name must be a non-empty text");
+    const caret = input.selectionStart ?? input.value.length;
+    const query = mentionQuery(input.value, caret);
+    if (query === null) throw new Error("mention.insert: no @ word ends at the caret of the composer");
+    const next = insertMention(input.value, caret, query.start, name);
+    input.value = next.text;
+    input.setSelectionRange(next.caret, next.caret);
+    input.focus();
+    drawMentions();
+    return { text: input.value };
+  };
+  input.addEventListener("input", () => {
+    mentionClosed = false;
+    drawMentions();
+  });
+  input.addEventListener("click", () => drawMentions());
+  input.addEventListener("blur", () => {
+    mentionItems = [];
+    mentionBox.hidden = true;
+  });
+  input.addEventListener("keydown", (event) => {
+    if (!mentionOpen() || event.isComposing) return;
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      mentionMark = (mentionMark + (event.key === "ArrowDown" ? 1 : mentionItems.length - 1)) % mentionItems.length;
+      drawMentions();
+    } else if (event.key === "Escape") {
+      event.preventDefault();
+      mentionClosed = true;
+      drawMentions();
+    } else if ((event.key === "Enter" && !event.shiftKey) || event.key === "Tab") {
+      event.preventDefault();
+      expose.run(`${EXPOSE}.mention.insert`, { name: mentionItems[mentionMark] }).catch(failed("mention.insert"));
+    }
+  });
+  // Enter without Shift sends; the newline that it would insert is prevented. Enter during an IME composition commits the text, and
+  // Enter while the mention list is open chooses its marked item.
+  const sendKey = (event: KeyboardEvent): boolean => event.key === "Enter" && !event.shiftKey && !event.isComposing && !mentionOpen();
   input.addEventListener("keydown", (event) => {
     if (sendKey(event)) event.preventDefault();
   });
@@ -1036,6 +1105,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
     [`${EXPOSE}.mode`]: kib,
     [`${EXPOSE}.tower`]: towerButton,
     [`${EXPOSE}.question`]: () => [...msgs.querySelectorAll<HTMLElement>(".st-question-answer")],
+    [`${EXPOSE}.mention`]: () => [...mentionBox.querySelectorAll<HTMLElement>(".st-mention-item")],
   };
   return {
     commands: {
@@ -1047,6 +1117,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
       [`${EXPOSE}.member.release`]: async (params: unknown) => teamControl.release(params),
       [`${EXPOSE}.member.merged`]: async (params: unknown) => teamControl.merged(params),
       [`${EXPOSE}.member.retask`]: async (params: unknown) => teamControl.retask(params),
+      [`${EXPOSE}.mention.insert`]: async (params: unknown) => insertMentionName(params),
       [`${EXPOSE}.member.show`]: async (params: unknown) => {
         const member = (params as { member?: unknown } | null)?.member;
         if (typeof member !== "string" || member === "") throw new Error("member.show member must be a non-empty text");

@@ -332,6 +332,20 @@
         }
       },
       {
+        "name": "soksak-plugin-agents-clubhouse.mention.insert",
+        "description": "Replace the @ word that ends at the caret of the composer with @<name> and a space; the mention hint list runs it for its chosen item. Without an @ word at the caret it is refused.",
+        "params": {
+          "type": "object",
+          "properties": { "name": { "type": "string" } },
+          "required": ["name"]
+        },
+        "result": {
+          "type": "object",
+          "properties": { "text": { "type": "string" } },
+          "required": ["text"]
+        }
+      },
+      {
         "name": "soksak-plugin-agents-clubhouse.member.show",
         "description": "Make the tab that shows the session of the member active, so that the person answers there the question that its program asks. A member whose session no tab shows is refused.",
         "params": {
@@ -643,6 +657,10 @@
       {
         "name": "soksak-plugin-agents-clubhouse.question",
         "description": "Answer button of the question of a blocked member under the conversation: runs member.show for that member, which makes the tab of its session active"
+      },
+      {
+        "name": "soksak-plugin-agents-clubhouse.mention",
+        "description": "Items of the mention hint list above the composer, shown while the word before the caret starts with @: all and the names of the checked roster members and the team members that start with its text; a click runs mention.insert with the name of the item"
       }
     ]
   }
