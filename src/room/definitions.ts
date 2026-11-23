@@ -22,6 +22,8 @@ export type AgentDataGet = (key: string) => Promise<unknown>;
 
 const WHERE = "agents project data";
 const DEFINITION_MEMBERS = ["account", "cwd", "name", "plugin", "role"];
+// The agents plugin stores maker on a definition that the listing of a maker group stored (agents docs/spec/definitions.md).
+const DEFINITION_OPTIONAL = ["maker"];
 const ACCOUNT_MEMBERS = ["args", "cli", "env", "id"];
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -51,8 +53,10 @@ export async function readAgentDefinitions(get: AgentDataGet, report: (text: str
   });
   const definitions = Object.keys(stored).sort().map((id) => {
     const record = stored[id];
-    if (!isRecord(record) || !sameMembers(record, DEFINITION_MEMBERS) || !DEFINITION_MEMBERS.every((key) => typeof record[key] === "string")) {
-      throw new Error(`${WHERE} definitions: definition ${id} must have the members account, cwd, name, plugin and role`);
+    const required = isRecord(record) ? Object.keys(record).filter((key) => !DEFINITION_OPTIONAL.includes(key)) : [];
+    const shaped = isRecord(record) && sameMembers(Object.fromEntries(required.map((key) => [key, record[key]])), DEFINITION_MEMBERS);
+    if (!shaped || !Object.values(record).every((value) => typeof value === "string")) {
+      throw new Error(`${WHERE} definitions: definition ${id} must have the members account, cwd, name, plugin and role, and optionally maker`);
     }
     const account = (accounts as Record<string, unknown>[]).find((entry) => entry.id === record.account);
     if (account === undefined) throw new Error(`${WHERE}: definition ${id} uses account ${String(record.account)} that is not defined`);

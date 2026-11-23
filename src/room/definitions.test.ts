@@ -54,7 +54,17 @@ describe("readAgentDefinitions", () => {
       "agents project data definitions: the value is not an object of definition identifier to {name, account, plugin, role, cwd}",
     );
     await expect(readAgentDefinitions(storeOf({ definitions: { a: { name: "A" } }, accounts: [] }).get, fail)).rejects.toThrow(
-      "agents project data definitions: definition a must have the members account, cwd, name, plugin and role",
+      "agents project data definitions: definition a must have the members account, cwd, name, plugin and role, and optionally maker",
+    );
+  });
+
+  // The agents plugin stores the optional member maker on a definition that a maker group listed (agents docs/spec/definitions.md).
+  it("reads a definition with the optional member maker, and refuses a maker that is not a text", async () => {
+    const listed = { reviewer: { ...DEFINITIONS.reviewer, maker: "moai" } };
+    const read = await readAgentDefinitions(storeOf({ definitions: listed, accounts: ACCOUNTS }).get, fail);
+    expect(read.map((definition) => definition.id)).toEqual(["reviewer"]);
+    await expect(readAgentDefinitions(storeOf({ definitions: { a: { ...DEFINITIONS.reviewer, maker: 1 } }, accounts: ACCOUNTS }).get, fail)).rejects.toThrow(
+      "agents project data definitions: definition a must have the members account, cwd, name, plugin and role, and optionally maker",
     );
   });
 
