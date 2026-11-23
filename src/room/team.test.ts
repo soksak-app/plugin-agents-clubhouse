@@ -1,7 +1,7 @@
 // The team of the leader (docs/spec/room.md#team): member.summon checks only its input, names each summoned member by its definition
 // and the smallest free number, and refuses a summon beyond the setting maxMembers.
 import { describe, expect, it } from "vitest";
-import { agentArgs, maxMembersOf, mergedCommit, releasedEntry, releaseTeam, summonedEntry, teamName, teamView, type TeamEntry } from "./team";
+import { agentArgs, teamRowText, maxMembersOf, mergedCommit, releasedEntry, releaseTeam, summonedEntry, teamName, teamView, type TeamEntry } from "./team";
 
 const DEFINITIONS = [{ id: "claude", name: "Claude" }, { id: "codex", name: "Codex" }];
 const LEADER = { id: "lead", turns: ["t-1"] };
@@ -72,8 +72,8 @@ describe("teamView", () => {
   it("shows member, name, role, directory, branch, merge and session state", () => {
     const sessions = [{ session: "s-1", program: { state: "idle" } }];
     expect(teamView([ENTRY, { ...ENTRY, id: "claude-2", merged: "abc" }], DEFINITIONS, (id) => (id === "claude-1" ? "s-1" : "s-9"), sessions)).toEqual([
-      { member: "claude-1", name: "Claude-1", role: "server", directory: "/work/game", branch: "Claude-1", merged: null, session: "s-1", state: "idle" },
-      { member: "claude-2", name: "Claude-2", role: "server", directory: "/work/game", branch: "Claude-2", merged: "abc", session: "s-9", state: "ended" },
+      { member: "claude-1", name: "Claude-1", role: "server", directory: "/work/game", branch: "Claude-1", merged: null, session: "s-1", state: "idle", roleState: null },
+      { member: "claude-2", name: "Claude-2", role: "server", directory: "/work/game", branch: "Claude-2", merged: "abc", session: "s-9", state: "ended", roleState: null },
     ]);
   });
 });
@@ -91,5 +91,13 @@ describe("agentArgs", () => {
   });
   it("keeps the number of the name when the definition changes", () => {
     expect(teamName(entry({ id: "claude-3", definition: "codex" }), DEFINITIONS)).toBe("Codex-3");
+  });
+});
+
+describe("teamRowText (C97-2)", () => {
+  it("shows the role state of core.tab.role after a retask, and nothing without one", () => {
+    const row = { member: "c-1", name: "Tester-1", role: "e2e", directory: "/w", branch: "Tester-1", merged: null, session: "s-1", state: "idle" as const };
+    expect(teamRowText({ ...row, roleState: "pending" })).toBe("Tester-1 · e2e · /w · Tester-1 · not merged · idle · role pending");
+    expect(teamRowText({ ...row, roleState: null })).toBe("Tester-1 · e2e · /w · Tester-1 · not merged · idle");
   });
 });

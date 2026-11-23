@@ -6,11 +6,11 @@ import { createRoomRecord } from "./room-record";
 import { createAnswerChannel } from "./answer";
 import type { TeamEntry } from "./team";
 
-const DEFINITIONS = [{ id: "claude", name: "Claude" }];
+const DEFINITIONS = [{ id: "claude", name: "Claude" }, { id: "tester", name: "Tester" }, { id: "bare", name: "Bare" }];
 
 function page() {
   const team: TeamEntry[] = [
-    { id: "claude-1", definition: "claude", role: "server", directory: "/work/game", merged: null, agentSession: null, resume: false, agent: null },
+    { id: "claude-1", definition: "claude", role: "server", directory: "/work/game", merged: null, agentSession: "u-1", resume: true, agent: "developer" },
     { id: "claude-2", definition: "claude", role: "client", directory: "/work/game", merged: null, agentSession: null, resume: false, agent: null },
   ];
   const sessions = new Map([["claude-1", "s-1"], ["claude-2", "s-2"], ["lead", "s-l"]]);
@@ -35,6 +35,10 @@ function page() {
     summon: () => void log.push("summon"),
     changed: () => void log.push("changed"),
     report: (where, text) => void log.push(`${where}: ${text}`),
+    agentOf: async (definition) => ({ claude: "developer", tester: "e2e-tester" } as Record<string, string>)[definition] ?? null,
+    busy: (member) => member === "claude-2",
+    retasked: (member, session) => void log.push(`retasked ${member} ${session}`),
+    roleState: (member) => (member === "claude-1" ? "pending" : null),
   });
   return { team, ended, log, record, control, core: () => core };
 }
@@ -65,5 +69,31 @@ describe("the team commands of the page", () => {
     expect(p.control.view(p.core())).toEqual([]);
     expect(p.record.lines.map((line) => line.text)).toEqual(["the team was released"]);
     expect(p.control.releaseAll()).toBe(0);
+  });
+});
+
+// C97-2 (docs/spec/room.md#team): member.retask gives a team member another definition and keeps its conversation.
+describe("member.retask", () => {
+  it("ends the session, sets the definition and the agent, resumes the session id, records the change and rearranges", async () => {
+    const p = page();
+    expect(await p.control.retask({ turn: "t-1", member: "claude-1", definition: "tester" })).toEqual({ member: "claude-1", definition: "tester" });
+    expect(p.ended).toEqual(["s-1"]);
+    expect(p.team[0]).toMatchObject({ id: "claude-1", definition: "tester", agentSession: "u-1", resume: true, agent: "e2e-tester" });
+    expect(p.record.lines.at(-1)).toMatchObject({ speaker: "clubhouse", text: "@Claude-1 is now tester, named @Tester-1" });
+    expect(p.log).toEqual(["retasked claude-1 s-1", "changed", "summon"]);
+    expect(p.control.view(p.core()).find((entry) => entry.member === "claude-1")).toMatchObject({ name: "Tester-1", roleState: "pending" });
+  });
+
+  it("refuses a caller without the leader token, an unknown member or definition, a member in a turn, and a definition without an agent file", async () => {
+    const p = page();
+    await expect(p.control.retask({ turn: "t-9", member: "claude-1", definition: "tester" })).rejects.toThrow("member.retask takes the turn token of the leader lead, got t-9");
+    await expect(p.control.retask({ turn: "t-1", member: "gone", definition: "tester" })).rejects.toThrow("member gone is not in the team");
+    await expect(p.control.retask({ turn: "t-1", member: "claude-1", definition: "nope" })).rejects.toThrow("definition nope is not an agent definition");
+    await expect(p.control.retask({ turn: "t-1", member: "claude-2", definition: "tester" })).rejects.toThrow("member claude-2 is in a turn; retask it after its answer");
+    await expect(p.control.retask({ turn: "t-1", member: "claude-1", definition: "bare" })).rejects.toThrow("definition bare has no agent file for --agent");
+    p.team[0].agentSession = null;
+    await expect(p.control.retask({ turn: "t-1", member: "claude-1", definition: "tester" })).rejects.toThrow("member claude-1 has no Claude Code session to resume");
+    expect(p.ended).toEqual([]);
+    expect(p.team[0].definition).toBe("claude");
   });
 });

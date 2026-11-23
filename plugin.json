@@ -306,6 +306,20 @@
         }
       },
       {
+        "name": "soksak-plugin-agents-clubhouse.member.retask",
+        "description": "Give the team member another agent definition with the turn token of the leader: the room ends its session, resumes the Claude Code session with the agent of the definition and sets the tab role, keeping the conversation.",
+        "params": {
+          "type": "object",
+          "properties": { "turn": { "type": "string" }, "member": { "type": "string" }, "definition": { "type": "string" } },
+          "required": ["turn", "member", "definition"]
+        },
+        "result": {
+          "type": "object",
+          "properties": { "member": { "type": "string" }, "definition": { "type": "string" } },
+          "required": ["member", "definition"]
+        }
+      },
+      {
         "name": "soksak-plugin-agents-clubhouse.member.role",
         "description": "Set the role of the roster member id, a text of 0 to 200 characters without control characters; the protocol line and each turn line state the roles. Setting the current role changes nothing.",
         "params": {

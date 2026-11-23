@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- C97-2: `member.retask {turn, member, definition}` gives a team member another definition with the turn token of the leader: the room ends its session, resumes the Claude Code session id with the agent of the definition, moves the delivery to the new session, sets the role of its tab with `core.tab.role`, records `@<old name> is now <definition>, named @<new name>`, and the team view shows the role state. The leader protocol line names the command.
 - C97-1: A Claude Code team member starts with `--session-id <id>` and `--agent <name>`, the frontmatter `name` of the agent file of its role that the declared program `agent-file` reads and the `yaml` library parses; a later launch resumes the id. The team entry of the tab state gains `agentSession`, `resume` and `agent`, and an entry without them is refused.
 - C65: The version is 0.0.16, which releases C64 and C66 to C96.
 - C96: The room page starts without the error `Cannot access 'deliveryEntries' before initialization`: the delivery entries are declared before the conversation status, and the core.sessions listener is added after the record. A page start test loads the built page into the view test host.

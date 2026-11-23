@@ -2,6 +2,7 @@
 
 ## 미출시
 
+- C97-2: `member.retask {turn, member, definition}`는 leader의 turn token으로 team member에게 다른 definition을 준다. 방은 그 session을 끝내고, definition의 agent로 Claude Code session id를 resume하며, 전달을 새 session으로 옮기고, `core.tab.role`로 그 tab의 role을 정하며, `@<old name> is now <definition>, named @<new name>`을 기록하고, team view는 role 상태를 보인다. Leader protocol 줄이 그 command를 알린다.
 - C97-1: Claude Code team member는 `--session-id <id>`와 `--agent <name>`으로 시작한다. `<name>`은 선언된 program `agent-file`이 읽고 `yaml` library가 parse하는 자기 role의 agent file frontmatter `name`이다. 이후 launch는 그 id를 resume한다. Tab state의 team entry는 `agentSession`, `resume`, `agent`를 얻고, 그것이 없는 entry는 거부된다.
 - C65: 버전은 0.0.16이며 C64와 C66부터 C96까지를 출시한다.
 - C96: Room page가 `Cannot access 'deliveryEntries' before initialization` 오류 없이 시작한다. Delivery entry는 conversation status보다 먼저 선언되고, core.sessions listener는 record 뒤에 추가된다. Page 시작 test는 build된 page를 view test host에 load한다.

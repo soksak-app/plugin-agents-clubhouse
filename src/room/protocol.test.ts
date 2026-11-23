@@ -235,10 +235,10 @@ describe("the team protocol", () => {
     expect(line).toContain("You lead: you get every line and split the work; your settled answer ends the conversation.");
     expect(line).toContain('member.summon {"turn":"<token>","definition":"<id>","role":"<role>","directory":"<project>"}');
     expect(line).toContain("Add .worktrees/ to .gitignore if missing.");
-    expect(line).toContain("Record a merge with member.merged {turn, member, commit} and end a worker with member.release {turn, member}.");
+    expect(line).toContain("Record a merge with member.merged {turn, member, commit}; end a worker with member.release {turn, member}, or retask it with member.retask {turn, member, definition}.");
     expect(line).toContain("workers mentioned in one answer start together.");
     expect(line).toContain("@all addresses everyone, and yours starts every worker.");
-    expect(line).toContain("List the agents you can summon with definitions {} and read the file of each before you choose.");
+    expect(line).toContain("List summonable agents with definitions {} and read each file before choosing.");
   });
 
   it("tells a worker the worktree lifecycle inside the project", () => {

@@ -31,7 +31,7 @@ import { createSubmitQueue } from "./room/submit-queue";
 import { CLAIM_COMMAND, RELEASE_COMMAND, REPORT_COMMAND, createWorkReports, type WorkReports } from "./room/work-reports";
 import { answerSections } from "./room/sections";
 import { createRoomRecord, leaderRoute, settledRelay } from "./room/room-record";
-import { agentArgs, maxMembersOf, summonedEntry, teamName, type TeamEntry } from "./room/team";
+import { agentArgs, teamRowText, maxMembersOf, summonedEntry, teamName, type TeamEntry } from "./room/team";
 import { agentNameOf } from "./room/agent-file";
 import { createTeamControl } from "./room/team-control";
 import { summonableDefinitions } from "./room/summonable";
@@ -543,6 +543,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
         for (const session of memberSessions.values()) roomSessions.add(session);
         // After its first launch a Claude Code member resumes its session id at every later launch.
         for (const entry of team) if (entry.agentSession !== null && memberSessions.has(entry.id)) entry.resume = true;
+        settleRetasks();
         persist();
       })
       .then(teachMembers);
@@ -642,7 +643,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
     const top = msgs.scrollTop;
     // The team view lists each team member with its role, directory, branch, merge and session state (docs/spec/room.md#team).
     const teamRows = value.team.map((entry) =>
-      elText("div", [entry.name, entry.role, entry.directory, entry.branch, entry.merged === null ? "not merged" : `merged ${entry.merged}`, String(entry.state)].filter((part) => part !== "").join(" · "), "st-note st-team"),
+      elText("div", teamRowText(entry), "st-note st-team"),
     );
     msgs.replaceChildren(...rows, ...waitRows, ...teamRows);
     msgs.scrollTop = top;
@@ -720,6 +721,51 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
         unreceived: record.unsent(member.session, member.id).length,
       };
     });
+  // The retasks whose resumed session has not yet been shown by a tab with the role of the new definition (docs/spec/room.md#team), and
+  // the state of core.tab.role of the tab of each retasked member, which the team view shows and the room judges nothing from.
+  const retasks = new Map<string, { ended: string | null; tab: string | null }>();
+  const roleStates = new Map<string, "pending" | "ready">();
+  const roleWatches = new Map<string, () => void>();
+  // Moves the delivery of the ended session to the resumed one, counts its protocol as received, and sets the role of the tab that shows
+  // it; it runs at each value of core.sessions, the event of a new session and of its tab, and does each step once.
+  const settleRetasks = (): void => {
+    for (const [member, retask] of [...retasks]) {
+      const session = memberSessions.get(member);
+      if (session === undefined || session === retask.ended || !openSessionIds.has(session) || retask.tab !== null) continue;
+      let tab: string | null;
+      try {
+        tab = shownByOf(sessionsValue, session);
+      } catch (error) {
+        report("room retask", String((error as Error)?.message ?? error));
+        continue;
+      }
+      if (tab === null) continue;
+      retask.tab = tab;
+      if (retask.ended !== null) record.moveSession(retask.ended, session);
+      taughtSessions.add(session);
+      persist();
+      const entry = team.find((one) => one.id === member);
+      const role = definitions.find((one) => one.id === entry?.definition)?.role;
+      if (role === undefined) {
+        report("room retask", `member ${member}: its definition has no role for core.tab.role`);
+        retasks.delete(member);
+        continue;
+      }
+      room.commands
+        .execute("core.tab.role", { tab, role })
+        .then(() =>
+          bridge!.runtime.status.watch("core.tab.role", (value: unknown) => {
+            const state = (value as { state?: unknown } | null)?.state;
+            if (state === "pending" || state === "ready") roleStates.set(member, state);
+            else roleStates.delete(member);
+            conversationStatus.changed();
+          }, { surface: tab }),
+        )
+        .then((stop) => roleWatches.set(member, stop))
+        .catch((error: unknown) => report("room retask", `core.tab.role ${tab}: ${String((error as Error)?.message ?? error)}`))
+        .finally(() => retasks.delete(member));
+    }
+  };
   const teamControl = createTeamControl({
     team,
     definitions: () => definitions,
@@ -734,6 +780,16 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
       conversationStatus.changed();
     },
     report,
+    agentOf: (definition) => agentOf(definition),
+    busy: (member) =>
+      answers.tokens().some((token) => token.member === member) || conversationStatus.read().waiting.some((wait: { member: string }) => wait.member === member),
+    retasked: (member, session) => {
+      retasks.set(member, { ended: session, tab: null });
+      roleStates.delete(member);
+      roleWatches.get(member)?.();
+      roleWatches.delete(member);
+    },
+    roleState: (member) => roleStates.get(member) ?? null,
   });
   const conversationStatus = createConversationStatus(conversation, () => sessionsValue, () => deliveryEntries(), (entry) =>
     entry.speaker === "owner" || entry.speaker === "clubhouse" ? [] : answerSections(entry.text, roster),
@@ -758,6 +814,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   // The listener of core.sessions reads the conversation status, the delivery entries and the record, so it is added after them (C96).
   sessionListeners.add((value) => {
     work?.inject();
+    settleRetasks();
     try {
       conversationStatus.changed();
     } catch (error) {
@@ -943,6 +1000,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
       [`${EXPOSE}.definitions`]: async () => ({ definitions: summonableDefinitions(definitions, await agentData("groups"), rolesValue) }),
       [`${EXPOSE}.member.release`]: async (params: unknown) => teamControl.release(params),
       [`${EXPOSE}.member.merged`]: async (params: unknown) => teamControl.merged(params),
+      [`${EXPOSE}.member.retask`]: async (params: unknown) => teamControl.retask(params),
       [REPORT_COMMAND]: async (params: unknown) => work!.reportCommand(params),
       [CLAIM_COMMAND]: async (params: unknown) => work!.claim(params),
       [RELEASE_COMMAND]: async (params: unknown) => work!.release(params),

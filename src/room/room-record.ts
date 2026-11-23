@@ -53,6 +53,9 @@ export interface RoomRecord {
   markDelivered(session: string, count: number): void;
   // Removes the line at `index` when it is the last line of the record and no session has been sent it. Returns whether it removed the line.
   withdrawLast(index: number): boolean;
+  // Moves the addressed list, the sent and the delivered position of `from` to `to`, the session that resumed the conversation of `from`
+  // (docs/spec/room.md#team). A `to` that already has a position is refused.
+  moveSession(from: string, to: string): void;
 }
 
 // Whether a record line is addressed to a session; without a leader every line is (docs/spec/room.md#addressed-views).
@@ -159,6 +162,16 @@ export function createRoomRecord(
       lines.pop();
       changed();
       return true;
+    },
+    moveSession(from, to) {
+      if (lists.has(to) || sentCounts.has(to) || counts.has(to)) throw new Error(`session ${to} already has a delivery; ${from} cannot move to it`);
+      lists.set(to, listOf(from));
+      lists.delete(from);
+      for (const map of [sentCounts, counts]) {
+        if (map.has(from)) map.set(to, map.get(from)!);
+        map.delete(from);
+      }
+      changed();
     },
   };
 }

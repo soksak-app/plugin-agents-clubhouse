@@ -100,6 +100,26 @@ export function releasedEntry(params: any, team: readonly TeamEntry[], leader: L
   return teamMember(params, team);
 }
 
+// The team member and the definition of a retask (docs/spec/room.md#team), checked in this order: the turn token of the leader, the
+// member, the definition, an open turn of the member and its Claude Code session id.
+export function retaskedEntry(
+  params: any,
+  team: readonly TeamEntry[],
+  definitions: readonly { id: string }[],
+  leader: Leader,
+  busy: (member: string) => boolean,
+): { entry: TeamEntry; definition: string } {
+  leaderTurn("member.retask", params, leader);
+  const entry = teamMember(params, team);
+  const definition = params?.definition;
+  if (typeof definition !== "string" || !definitions.some((one) => one.id === definition)) {
+    throw new Error(`definition ${typeof definition === "string" ? definition : JSON.stringify(definition)} is not an agent definition`);
+  }
+  if (busy(entry.id)) throw new Error(`member ${entry.id} is in a turn; retask it after its answer`);
+  if (entry.agentSession === null) throw new Error(`member ${entry.id} has no Claude Code session to resume`);
+  return { entry, definition };
+}
+
 // The team member and the commit that member.merged records.
 export function mergedCommit(params: any, team: readonly TeamEntry[], leader: Leader): { entry: TeamEntry; commit: string } {
   leaderTurn("member.merged", params, leader);
@@ -137,6 +157,8 @@ export interface TeamViewEntry {
   merged: string | null;
   session: string | null;
   state: "idle" | "working" | "blocked" | "ended" | null;
+  // The state of core.tab.role of the tab of the member after a retask, null without a role change (docs/spec/room.md#team).
+  roleState: "pending" | "ready" | null;
 }
 
 // The team view of the conversation status: `branch` is the member name of the worktree rule (docs/spec/room.md#team).
@@ -145,6 +167,7 @@ export function teamView(
   definitions: readonly { id: string; name: string }[],
   sessionOf: (id: string) => string | null,
   sessions: unknown,
+  roleState: (member: string) => "pending" | "ready" | null = () => null,
 ): TeamViewEntry[] {
   const listed = Array.isArray(sessions) ? (sessions as { session?: unknown; program?: { state?: unknown } | null }[]) : [];
   return team.map((entry) => {
@@ -152,6 +175,13 @@ export function teamView(
     const session = sessionOf(entry.id);
     const found = listed.find((one) => one?.session === session);
     const state = session === null || found === undefined ? "ended" : ((found.program?.state as TeamViewEntry["state"]) ?? null);
-    return { member: entry.id, name, role: entry.role, directory: entry.directory, branch: name, merged: entry.merged, session, state };
+    return { member: entry.id, name, role: entry.role, directory: entry.directory, branch: name, merged: entry.merged, session, state, roleState: roleState(entry.id) };
   });
+}
+
+// The row of the team view: name, role, directory, branch, merge, session state and, after a retask, the state of core.tab.role.
+export function teamRowText(entry: TeamViewEntry): string {
+  return [entry.name, entry.role, entry.directory, entry.branch, entry.merged === null ? "not merged" : `merged ${entry.merged}`, String(entry.state), entry.roleState === null ? "" : `role ${entry.roleState}`]
+    .filter((part) => part !== "")
+    .join(" · ");
 }

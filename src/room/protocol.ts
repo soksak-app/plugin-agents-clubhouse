@@ -30,9 +30,9 @@ function teamRules(self: string, surface: string, team: TeamPlace): string[] {
   if (team.leader === null) {
     return [
       "You lead: you get every line and split the work; your settled answer ends the conversation.",
-      "List the agents you can summon with definitions {} and read the file of each before you choose.",
+      "List summonable agents with definitions {} and read each file before choosing.",
       `Summon workers with member.summon {"turn":"<token>","definition":"<id>","role":"<role>","directory":"<project>"}; workers mentioned in one answer start together.`,
-      "Record a merge with member.merged {turn, member, commit} and end a worker with member.release {turn, member}.",
+      "Record a merge with member.merged {turn, member, commit}; end a worker with member.release {turn, member}, or retask it with member.retask {turn, member, definition}.",
       "Add .worktrees/ to .gitignore if missing. Each brief fixes the API contract; workers unit-test and merge integration into their branch before asking for a merge; merge server branches first, then dependents update from integration; name each merge commit.",
     ];
   }

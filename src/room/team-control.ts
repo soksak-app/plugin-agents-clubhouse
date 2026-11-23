@@ -2,7 +2,7 @@
 // close its tab, member.merged records the merge commit that the leader names, conversation.stop releases the whole team, and the team
 // view lists the team. The room reads no git state and judges no work.
 import type { AnswerChannel } from "./answer";
-import { mergedCommit, releasedEntry, releaseTeam, teamName, teamView, type TeamEntry, type TeamViewEntry } from "./team";
+import { mergedCommit, releasedEntry, releaseTeam, retaskedEntry, teamName, teamView, type TeamEntry, type TeamViewEntry } from "./team";
 
 export interface TeamControlDeps {
   team: TeamEntry[];
@@ -21,11 +21,20 @@ export interface TeamControlDeps {
   // Writes the tab state and publishes the conversation status.
   changed: () => void;
   report: (where: string, text: string) => void;
+  // The agent name of a definition, null when its role lists no agent file.
+  agentOf: (definition: string) => Promise<string | null>;
+  // Whether the member is in a turn: the room waits for its protocol turn or for its answer.
+  busy: (member: string) => boolean;
+  // Runs after a retask ended the session of the member, with that session or null, so the page moves its delivery to the resumed session.
+  retasked: (member: string, session: string | null) => void;
+  // The state of core.tab.role of the tab of the member, null without a role change.
+  roleState: (member: string) => "pending" | "ready" | null;
 }
 
 export interface TeamControl {
   release(params: unknown): Promise<{ member: string }>;
   merged(params: unknown): Promise<{ member: string; commit: string }>;
+  retask(params: unknown): Promise<{ member: string; definition: string }>;
   // Starts the release of the whole team and returns the number of team members that it ends.
   releaseAll(): number;
   // Resolves when the last release of the whole team has ended.
@@ -51,6 +60,24 @@ export function createTeamControl(deps: TeamControlDeps): TeamControl {
       deps.summon();
       return { member: entry.id };
     },
+    // member.retask ends the session, gives the entry the new definition and agent, and the summon resumes the session id with it
+    // (docs/spec/room.md#team). Every refusal comes before the session ends.
+    async retask(params) {
+      const { entry, definition } = retaskedEntry(params, deps.team, deps.definitions(), leaderTurns(), deps.busy);
+      const agent = await deps.agentOf(definition);
+      if (agent === null) throw new Error(`definition ${definition} has no agent file for --agent`);
+      const before = teamName(entry, deps.definitions());
+      const session = deps.sessionOf(entry.id);
+      if (session !== null) await deps.end(session);
+      entry.definition = definition;
+      entry.agent = agent;
+      entry.resume = true;
+      deps.append(`@${before} is now ${definition}, named @${teamName(entry, deps.definitions())}`);
+      deps.retasked(entry.id, session);
+      deps.changed();
+      deps.summon();
+      return { member: entry.id, definition };
+    },
     async merged(params) {
       const { entry, commit } = mergedCommit(params, deps.team, leaderTurns());
       entry.merged = commit;
@@ -69,6 +96,6 @@ export function createTeamControl(deps: TeamControlDeps): TeamControl {
       return count;
     },
     released: () => lastRelease,
-    view: (sessions) => teamView(deps.team, deps.definitions(), deps.sessionOf, sessions),
+    view: (sessions) => teamView(deps.team, deps.definitions(), deps.sessionOf, sessions, deps.roleState),
   };
 }
