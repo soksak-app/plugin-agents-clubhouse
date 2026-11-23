@@ -10,7 +10,7 @@
 
 ## Roster
 
-Roster는 agents plugin의 agent definition마다 entry 하나를 나열한다. Entry는 그 definition이 있는 동안 체크 상태와 자리를 유지한다. 제거된 definition은 roster에서 빠지고, 새 definition은 체크되지 않은 채 끝에 들어온다. Member를 초대하는 것은 사람의 선택이기 때문이다. 체크된 member가 바뀌면 open session이 없는 체크된 member를 summon한다.
+Roster는 agents plugin의 agent definition마다 entry 하나를 나열한다. Entry는 그 definition이 있는 동안 체크 상태와 자리를 유지한다. 제거된 definition은 roster에서 빠지고, 새 definition은 체크되지 않은 채 끝에 들어온다. Member를 초대하는 것은 사람의 선택이기 때문이다. 체크된 member가 바뀌면 open session이 없는 체크된 member를 summon한다. program이 Claude Code이고 definition이 `core.roles`에 agent file을 가진 체크된 member는 team member처럼([team](#team)) 선언된 program `agent-file`로 읽은 그 file의 frontmatter name으로 `--agent <name>`과 함께 시작하므로, 그 member는 자기 agent의 지시와 도구로 실행된다.
 
 ## Header
 

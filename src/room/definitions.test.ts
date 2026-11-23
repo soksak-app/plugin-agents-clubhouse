@@ -79,6 +79,13 @@ describe("toMemberDefinition", () => {
       cwd: "/work/project",
     });
   });
+
+  it("starts a member with the agent of its definition when one is given (C101, docs/spec/room.md#roster)", async () => {
+    const [definition] = await readAgentDefinitions(storeOf({ definitions: { reviewer: DEFINITIONS.reviewer }, accounts: ACCOUNTS }).get, fail);
+    expect(toMemberDefinition(definition!, "manager-lead").params.args).toEqual([
+      "--verbose", "--setting-sources", "project,local", "--settings", '{"env":{"CLAUDE_CODE_SHELL":"/bin/bash"}}', "--agent", "manager-lead",
+    ]);
+  });
 });
 
 describe("reserved names (C95, docs/spec/room.md#mentions)", () => {

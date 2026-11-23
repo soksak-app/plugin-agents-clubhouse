@@ -2,6 +2,7 @@
 
 ## 미출시
 
+- C101: leader처럼 roster에서 체크된 Claude Code member는 definition의 `--agent <name>`으로 시작해서, 자기 agent file의 지시와 도구로 실행된다.
 - C100: 버전은 0.0.18이며 C99를 출시한다.
 - C99: 방은 막힌 member program의 질문을 그 session 화면에서 읽어 보이고, 새 command `member.show {member}`로 session의 tab을 active로 만드는 button을 보여서, program의 모든 질문을 방에서 답할 수 있다.
 - C98: 버전은 0.0.17이며 C97부터 C97-6까지를 출시한다. Claude Code team member의 summon은 선언된 program `agent-file`을 실행하며, Go host(mygo와 Wails)는 core F1112가 들어간 core release에서만 그것을 실행한다.

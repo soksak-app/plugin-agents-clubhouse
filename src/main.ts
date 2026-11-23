@@ -533,6 +533,17 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
       }),
     ended: (session) => roomSessions.has(session) && !openSessionIds.has(session),
   };
+  // Whether the program of a definition is Claude Code, which takes --session-id, --resume and --agent.
+  const isClaude = (id: string): boolean => (definitions.find((one) => one.id === id)?.program.split("/").at(-1) ?? "") === "claude";
+  // The agent name of a definition: the frontmatter name of the agent file of its role in core.roles, read with the declared program
+  // agent-file, or null when core.roles lists no file for it (docs/spec/room.md#team).
+  const agentFileOf = (id: string): string | null => summonableDefinitions(definitions, {}, rolesValue).find((one) => one.id === id)?.file ?? null;
+  const agentOf = async (id: string): Promise<string | null> => {
+    const file = agentFileOf(id);
+    if (file === null) return null;
+    const reply = await bridge!.runtime.program.run("agent-file", [file]);
+    return agentNameOf(agentFileText(reply, file), file);
+  };
   // The member definitions of the summon: the roster definitions and the team members, each team member with its own id, name, role
   // and directory, so its relation is stored under its summon id (docs/spec/room.md#team).
   const teamDefinitions = () =>
@@ -547,7 +558,13 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
     const checked = [...roster.filter((entry) => entry.checked).map((entry) => entry.id), ...team.map((entry) => entry.id)];
     return runTrigger(async () => {
       await sessionsReady;
-      await summonAndArrange(trigger, [...definitions.map(toMemberDefinition), ...teamDefinitions()], checked);
+      // A checked Claude Code member of the roster starts with the agent of its definition, as a team member does (C101).
+      const rosterDefinitions = await Promise.all(
+        definitions.map(async (definition) =>
+          toMemberDefinition(definition, checked.includes(definition.id) && isClaude(definition.id) ? await agentOf(definition.id) : null),
+        ),
+      );
+      await summonAndArrange(trigger, [...rosterDefinitions, ...teamDefinitions()], checked);
       // The arrangement closed the tabs of the ended sessions; the room keeps the sessions that are open.
       for (const session of [...roomSessions]) if (!openSessionIds.has(session)) roomSessions.delete(session);
     })
@@ -900,17 +917,6 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   const leaderTurns = () => {
     const leader = leaderEntry();
     return leader === undefined ? null : { id: leader.id, turns: answers.tokens().filter((token) => token.member === leader.id).map((token) => token.turn) };
-  };
-  // Whether the program of a definition is Claude Code, which takes --session-id, --resume and --agent.
-  const isClaude = (id: string): boolean => (definitions.find((one) => one.id === id)?.program.split("/").at(-1) ?? "") === "claude";
-  // The agent name of a definition: the frontmatter name of the agent file of its role in core.roles, read with the declared program
-  // agent-file, or null when core.roles lists no file for it (docs/spec/room.md#team).
-  const agentFileOf = (id: string): string | null => summonableDefinitions(definitions, {}, rolesValue).find((one) => one.id === id)?.file ?? null;
-  const agentOf = async (id: string): Promise<string | null> => {
-    const file = agentFileOf(id);
-    if (file === null) return null;
-    const reply = await bridge!.runtime.program.run("agent-file", [file]);
-    return agentNameOf(agentFileText(reply, file), file);
   };
   const endSession = async (session: string): Promise<void> => {
     await room.commands.execute("core.session.end", { session });

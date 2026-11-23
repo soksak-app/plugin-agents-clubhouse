@@ -75,13 +75,15 @@ export async function readAgentDefinitions(get: AgentDataGet, report: (text: str
 }
 
 // The member of the room for a definition: the session opens with the terminal's start values of the definition (program, arguments,
-// the directory of the definition and its role), and the plugin that runs the session is the one of the definition.
-export function toMemberDefinition(definition: AgentDefinition): MemberDefinition {
+// the directory of the definition and its role), and the plugin that runs the session is the one of the definition. A Claude Code member
+// whose definition has an agent file starts with `--agent <agent>`, so it runs with the instructions and tools of that agent (C101).
+export function toMemberDefinition(definition: AgentDefinition, agent: string | null = null): MemberDefinition {
+  const args = memberLaunch(definition.program, definition.args).args;
   return {
     id: definition.id,
     name: definition.name,
     plugin: definition.plugin,
-    params: { program: definition.program, args: memberLaunch(definition.program, definition.args).args, directory: definition.cwd, role: definition.role },
+    params: { program: definition.program, args: agent === null ? args : [...args, "--agent", agent], directory: definition.cwd, role: definition.role },
     cwd: definition.cwd,
   };
 }
