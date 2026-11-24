@@ -15,6 +15,8 @@ export interface AgentDefinition {
   args: string[];
   // The configuration home of the account, {variable, folder}, or null for an account without one.
   home: { variable: string; folder: string } | null;
+  // The launch of a definition that a maker group listed: the arguments and variables of a session of the maker folder, or null.
+  launch: { args: string[]; env: Record<string, string> } | null;
   role: string;
   cwd: string;
 }
@@ -24,8 +26,15 @@ export type AgentDataGet = (key: string) => Promise<unknown>;
 
 const WHERE = "agents project data";
 const DEFINITION_MEMBERS = ["account", "cwd", "name", "plugin", "role"];
-// The agents plugin stores maker on a definition that the listing of a maker group stored (agents docs/spec/definitions.md).
-const DEFINITION_OPTIONAL = ["maker"];
+// The agents plugin stores maker with launch on a definition that the listing of a maker group stored (agents docs/spec/definitions.md).
+const DEFINITION_OPTIONAL = ["maker", "launch"];
+const VARIABLE = /^[A-Za-z_][A-Za-z0-9_]{0,127}$/;
+
+// Whether a value is {args, env}: args a list of text and env an object of variable name to text.
+function isLaunch(value: unknown): value is { args: string[]; env: Record<string, string> } {
+  return isRecord(value) && sameMembers(value, ["args", "env"]) && Array.isArray(value.args) && value.args.every((arg) => typeof arg === "string")
+    && isRecord(value.env) && Object.entries(value.env).every(([name, text]) => VARIABLE.test(name) && typeof text === "string");
+}
 const ACCOUNT_MEMBERS = ["args", "cli", "env", "home", "id"];
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -61,8 +70,12 @@ export async function readAgentDefinitions(get: AgentDataGet, report: (text: str
     const record = stored[id];
     const required = isRecord(record) ? Object.keys(record).filter((key) => !DEFINITION_OPTIONAL.includes(key)) : [];
     const shaped = isRecord(record) && sameMembers(Object.fromEntries(required.map((key) => [key, record[key]])), DEFINITION_MEMBERS);
-    if (!shaped || !Object.values(record).every((value) => typeof value === "string")) {
-      throw new Error(`${WHERE} definitions: definition ${id} must have the members account, cwd, name, plugin and role, and optionally maker`);
+    const texts = shaped && Object.entries(record).every(([key, value]) => key === "launch" || typeof value === "string");
+    if (!shaped || !texts || Object.hasOwn(record, "maker") !== Object.hasOwn(record, "launch")) {
+      throw new Error(`${WHERE} definitions: definition ${id} must have the members account, cwd, name, plugin and role, and maker with launch or neither`);
+    }
+    if (Object.hasOwn(record, "launch") && !isLaunch(record.launch)) {
+      throw new Error(`${WHERE} definitions: definition ${id} launch must be {args, env} with args a list of text and env an object of variable name to text`);
     }
     const account = (accounts as Record<string, unknown>[]).find((entry) => entry.id === record.account);
     if (account === undefined) throw new Error(`${WHERE}: definition ${id} uses account ${String(record.account)} that is not defined`);
@@ -74,6 +87,7 @@ export async function readAgentDefinitions(get: AgentDataGet, report: (text: str
       program: account.cli as string,
       args: [...(account.args as string[])],
       home: account.home === null ? null : { ...(account.home as { variable: string; folder: string }) },
+      launch: isLaunch(record.launch) ? { args: [...record.launch.args], env: { ...record.launch.env } } : null,
       role: record.role as string,
       cwd: record.cwd as string,
     };
@@ -101,18 +115,25 @@ export function acceptAllArgs(program: string, args: readonly string[]): string[
   return flag.same.some((one) => args.includes(one)) ? [] : [flag.add];
 }
 
-// The program and arguments that start the cli with args: through env in the home of the account, so the member uses its login, or the
-// cli itself for an account without a home (agents docs/spec/definitions.md#resolution).
+// The program and arguments that start the cli with args: through env with the variable of the home of the account, so the member uses its
+// login, and the variables of the launch of a maker definition sorted by name; the cli itself when there is no variable (agents
+// docs/spec/definitions.md#resolution).
 function homeLaunch(definition: AgentDefinition, args: string[]): { program: string; args: string[] } {
-  if (definition.home === null) return { program: definition.program, args };
-  return { program: "env", args: [`${definition.home.variable}=${definition.home.folder}`, definition.program, ...args] };
+  const env = definition.launch?.env ?? {};
+  const variables = [
+    ...(definition.home === null ? [] : [`${definition.home.variable}=${definition.home.folder}`]),
+    ...Object.keys(env).sort().map((name) => `${name}=${env[name]}`),
+  ];
+  if (variables.length === 0) return { program: definition.program, args };
+  return { program: "env", args: [...variables, definition.program, ...args] };
 }
 
 // The member of the room for a definition: the session opens with the terminal's start values of the definition (program, arguments,
 // the directory of the definition and its role), and the plugin that runs the session is the one of the definition. A Claude Code member
 // whose definition has an agent file starts with `--agent <agent>`, so it runs with the instructions and tools of that agent (C101).
 export function toMemberDefinition(definition: AgentDefinition, agent: string | null = null, acceptAll = false): MemberDefinition {
-  const launched = memberLaunch(definition.program, definition.args).args;
+  // The arguments of the launch of a maker definition follow those of the account (agents docs/spec/definitions.md#resolution).
+  const launched = memberLaunch(definition.program, [...definition.args, ...(definition.launch?.args ?? [])]).args;
   const args = acceptAll ? [...launched, ...acceptAllArgs(definition.program, launched)] : launched;
   return {
     id: definition.id,

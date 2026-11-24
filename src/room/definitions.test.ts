@@ -33,8 +33,8 @@ describe("readAgentDefinitions", () => {
   it("resolves each definition with the program and arguments of its account, in the code point order of its identifier", async () => {
     const store = storeOf({ definitions: DEFINITIONS, accounts: ACCOUNTS });
     expect(await readAgentDefinitions(store.get, fail)).toEqual([
-      { id: "reviewer", name: "Reviewer", account: "claude-main", plugin: "terminal", program: "claude", args: ["--verbose"], home: { variable: "CLAUDE_CONFIG_DIR", folder: "/c/plugin-data/agents/accounts/claude-main" }, role: "reviewer", cwd: "/work/project" },
-      { id: "writer", name: "Writer", account: "codex-main", plugin: "terminal", program: "codex", args: [], home: null, role: "writer", cwd: "/work/docs" },
+      { id: "reviewer", name: "Reviewer", account: "claude-main", plugin: "terminal", program: "claude", args: ["--verbose"], home: { variable: "CLAUDE_CONFIG_DIR", folder: "/c/plugin-data/agents/accounts/claude-main" }, launch: null, role: "reviewer", cwd: "/work/project" },
+      { id: "writer", name: "Writer", account: "codex-main", plugin: "terminal", program: "codex", args: [], home: null, launch: null, role: "writer", cwd: "/work/docs" },
     ]);
   });
 
@@ -61,17 +61,22 @@ describe("readAgentDefinitions", () => {
       "agents project data definitions: the value is not an object of definition identifier to {name, account, plugin, role, cwd}",
     );
     await expect(readAgentDefinitions(storeOf({ definitions: { a: { name: "A" } }, accounts: [] }).get, fail)).rejects.toThrow(
-      "agents project data definitions: definition a must have the members account, cwd, name, plugin and role, and optionally maker",
+      "agents project data definitions: definition a must have the members account, cwd, name, plugin and role, and maker with launch or neither",
     );
   });
 
-  // The agents plugin stores the optional member maker on a definition that a maker group listed (agents docs/spec/definitions.md).
-  it("reads a definition with the optional member maker, and refuses a maker that is not a text", async () => {
-    const listed = { reviewer: { ...DEFINITIONS.reviewer, maker: "moai" } };
+  // The agents plugin stores maker with launch on a definition that a maker group listed (agents docs/spec/definitions.md).
+  it("reads a definition with maker and launch, and refuses maker without launch and a launch of another form (A35)", async () => {
+    const launch = { args: ["--plugin-dir", "/m/plugin", "--add-dir", "/m/plugin"], env: { MOAI_PLUGIN: "/m/plugin" } };
+    const listed = { reviewer: { ...DEFINITIONS.reviewer, maker: "moai", launch } };
     const read = await readAgentDefinitions(storeOf({ definitions: listed, accounts: ACCOUNTS }).get, fail);
-    expect(read.map((definition) => definition.id)).toEqual(["reviewer"]);
-    await expect(readAgentDefinitions(storeOf({ definitions: { a: { ...DEFINITIONS.reviewer, maker: 1 } }, accounts: ACCOUNTS }).get, fail)).rejects.toThrow(
-      "agents project data definitions: definition a must have the members account, cwd, name, plugin and role, and optionally maker",
+    expect(read.map((definition) => definition.launch)).toEqual([launch]);
+    const members = "agents project data definitions: definition a must have the members account, cwd, name, plugin and role, and maker with launch or neither";
+    for (const record of [{ ...DEFINITIONS.reviewer, maker: "moai" }, { ...DEFINITIONS.reviewer, launch }, { ...DEFINITIONS.reviewer, maker: 1, launch }]) {
+      await expect(readAgentDefinitions(storeOf({ definitions: { a: record }, accounts: ACCOUNTS }).get, fail)).rejects.toThrow(members);
+    }
+    await expect(readAgentDefinitions(storeOf({ definitions: { a: { ...DEFINITIONS.reviewer, maker: "moai", launch: { args: [], env: { "1X": "a" } } } }, accounts: ACCOUNTS }).get, fail)).rejects.toThrow(
+      "agents project data definitions: definition a launch must be {args, env} with args a list of text and env an object of variable name to text",
     );
   });
 
@@ -97,6 +102,21 @@ describe("toMemberDefinition", () => {
     });
   });
 
+  it("starts a maker member with the variables of its launch after the home variable and its arguments after the account (A35)", async () => {
+    const launch = { args: ["--plugin-dir", "/m/plugin", "--add-dir", "/m/plugin"], env: { MOAI_PLUGIN: "/m/plugin", A_FIRST: "1" } };
+    const [definition] = await readAgentDefinitions(storeOf({ definitions: { reviewer: { ...DEFINITIONS.reviewer, maker: "moai", launch } }, accounts: ACCOUNTS }).get, fail);
+    expect(toMemberDefinition(definition!, "manager-lead").params).toMatchObject({
+      program: "env",
+      args: [
+        "CLAUDE_CONFIG_DIR=/c/plugin-data/agents/accounts/claude-main", "A_FIRST=1", "MOAI_PLUGIN=/m/plugin", "claude", "--verbose",
+        "--plugin-dir", "/m/plugin", "--add-dir", "/m/plugin", "--setting-sources", "project,local", "--settings", '{"env":{"CLAUDE_CODE_SHELL":"/bin/bash"}}', "--agent", "manager-lead",
+      ],
+    });
+    const plain = [{ id: "claude-main", cli: "claude", args: [], env: [], home: null }];
+    const [bare] = await readAgentDefinitions(storeOf({ definitions: { reviewer: { ...DEFINITIONS.reviewer, maker: "moai", launch } }, accounts: plain }).get, fail);
+    expect(toMemberDefinition(bare!).params.program).toBe("env");
+  });
+
   it("starts a member with the agent of its definition when one is given (C101, docs/spec/room.md#roster)", async () => {
     const [definition] = await readAgentDefinitions(storeOf({ definitions: { reviewer: DEFINITIONS.reviewer }, accounts: ACCOUNTS }).get, fail);
     expect(toMemberDefinition(definition!, "manager-lead").params.args).toEqual([
@@ -107,7 +127,7 @@ describe("toMemberDefinition", () => {
 
 // C111 (docs/spec/room.md#accept-all): the setting acceptAll starts each member with the flag of its program that accepts every request.
 describe("acceptAll", () => {
-  const base = { id: "w", name: "W", account: "a", plugin: "terminal", role: "", cwd: "/p", home: null };
+  const base = { id: "w", name: "W", account: "a", plugin: "terminal", role: "", cwd: "/p", home: null, launch: null };
   it("adds --dangerously-skip-permissions to Claude Code and --yolo to Codex", () => {
     expect(toMemberDefinition({ ...base, program: "claude", args: [] }, null, true).params.args).toContain("--dangerously-skip-permissions");
     expect(toMemberDefinition({ ...base, program: "/opt/homebrew/bin/codex", args: [] }, null, true).params.args).toEqual(["--yolo"]);

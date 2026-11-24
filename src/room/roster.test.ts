@@ -5,7 +5,7 @@ import { reattachedChecks, rosterFrom } from "./roster";
 import type { AgentDefinition } from "./definitions";
 
 const def = (id: string, name = id.toUpperCase()): AgentDefinition => ({
-  id, name, account: "claude-main", plugin: "terminal", program: "claude", args: [], home: null, role: id, cwd: "/work",
+  id, name, account: "claude-main", plugin: "terminal", program: "claude", args: [], home: null, launch: null, role: id, cwd: "/work",
 });
 
 describe("rosterFrom", () => {
