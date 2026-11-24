@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { parseRoomState, serializedRoomState, type RoomState } from "./room-state";
 
 const state: RoomState = {
-  roster: [{ id: "harness-harness", checked: true, role: "", leader: true }, { id: "moai-manager-lead", checked: false, role: "", leader: false }],
+  roster: [{ id: "harness-harness", member: true, checked: true, role: "", leader: true }, { id: "moai-manager-lead", member: false, checked: false, role: "", leader: false }],
   team: [{ id: "claude-1", definition: "claude", role: "server", directory: "/work/game", merged: null, agentSession: "28e7fee6-d618-4598-b9a6-775f3053340e", resume: true, agent: "manager-develop", worktree: null }],
   mode: "turn",
   conversation: [
@@ -25,9 +25,12 @@ describe("parseRoomState", () => {
   });
 
   it("refuses two leaders, a roster entry without leader, a team entry with a relative directory and an addressed list out of order", () => {
-    const both = state.roster.map((entry) => ({ ...entry, leader: true }));
+    const both = state.roster.map((entry) => ({ ...entry, member: true, leader: true }));
     expect(() => parseRoomState({ ...state, roster: both })).toThrow("room tab state: roster has more than one leader");
-    expect(() => parseRoomState({ ...state, roster: [{ id: "a", checked: true, role: "" }] })).toThrow("roster must be an array of {id, checked, role, leader}");
+    expect(() => parseRoomState({ ...state, roster: [{ id: "a", checked: true, role: "" }] })).toThrow("roster must be an array of {id, member, checked, role, leader}");
+    expect(() => parseRoomState({ ...state, roster: [{ id: "a", checked: true, role: "", leader: false }] })).toThrow("roster must be an array of {id, member, checked, role, leader}");
+    expect(() => parseRoomState({ ...state, roster: [{ id: "a", member: false, checked: true, role: "", leader: false }] })).toThrow("room tab state: roster entry a is checked or the leader but no member");
+    expect(() => parseRoomState({ ...state, roster: [{ id: "a", member: false, checked: false, role: "", leader: true }] })).toThrow("room tab state: roster entry a is checked or the leader but no member");
     expect(() => parseRoomState({ ...state, team: [{ ...state.team[0], directory: "work" }] })).toThrow("room tab state: team must be an array of {id, definition, role, directory, merged, agentSession, resume, agent, worktree}");
     // C97-1: a team entry of the earlier form, without the agent members, is refused.
     const { agentSession: _s, resume: _r, agent: _a, ...earlier } = state.team[0];
@@ -70,7 +73,7 @@ describe("parseRoomState", () => {
 
   it("refuses a value of another form with the field and the value it found", () => {
     expect(() => parseRoomState({ ...state, mode: "solo" })).toThrow('room tab state: mode must be facil, turn or simul, got "solo"');
-    expect(() => parseRoomState({ ...state, roster: [{ id: 1 }] })).toThrow("room tab state: roster must be an array of {id, checked, role, leader}");
+    expect(() => parseRoomState({ ...state, roster: [{ id: 1 }] })).toThrow("room tab state: roster must be an array of {id, member, checked, role, leader}");
     expect(() => parseRoomState({ ...state, conversation: "x" })).toThrow("room tab state: conversation must be an array of {speaker, text, at, elapsedMs}");
     expect(() => parseRoomState({ ...state, protocolSessions: [3] })).toThrow(
       "room tab state: protocolSessions must be an array of session identifiers",

@@ -41,6 +41,8 @@ import { ownedSessionIds, shownByOf } from "./room/session-channel";
 import { answerQuestion, questionChoices, readQuestion, showMember } from "./room/question";
 import { insertMention, mentionCandidates, mentionQuery } from "./room/mention-hint";
 import { reattachedChecks, rosterFrom, type RosterEntry } from "./room/roster";
+import { initialsOf, memberCount, memberState } from "./room/member-card";
+import { inviteParams } from "./room/invite";
 import { roomTitle } from "./room/title";
 import { measuredCardSize } from "./room/card-size";
 import { createRoomOperations } from "./room/operations";
@@ -61,12 +63,18 @@ const MEMBER_COLORS = 6;
 const CSS = `
 .st{position:absolute;inset:0;display:flex;flex-direction:column;background:var(--bg,#1e1e1e);color:var(--fg,#ddd);font:13px system-ui,-apple-system,sans-serif;overflow:hidden}
 .st-tab{flex:0 0 auto}
-.st-tab{display:inline-flex;align-items:center;gap:6px;padding:3px 9px;border-radius:8px;border:1px solid rgba(127,127,127,.28);background:rgba(127,127,127,.08);cursor:grab;font-size:12px;user-select:none;touch-action:none;transition:opacity .12s,border-color .12s}
-.st-tab.off{opacity:.4}
+.st-tab{display:inline-flex;align-items:center;gap:7px;padding:4px 9px 4px 5px;border-radius:9px;border:1px solid rgba(127,127,127,.28);background:rgba(127,127,127,.06);cursor:grab;font-size:12px;user-select:none;touch-action:none;transition:background .12s,border-color .12s}
+.st-tab.on{border-color:var(--accent,#4c8dff);background:color-mix(in srgb,var(--accent,#4c8dff) 18%,transparent)}
+.st-tab.none{border-style:dashed}
 .st-tab.drag{cursor:grabbing;opacity:.95;border-color:currentColor;box-shadow:0 3px 10px rgba(0,0,0,.35);transform:scale(1.06);position:relative;z-index:3}
-.st-tab .chk{width:13px;height:13px;border-radius:4px;border:1.5px solid currentColor;display:inline-flex;align-items:center;justify-content:center;font-size:10px;line-height:1}
-.st-tab .nm{font-weight:600}
-.st-role{width:72px;font:inherit;font-size:11px;background:transparent;color:inherit;border:0;border-bottom:1px dashed rgba(127,127,127,.4);padding:0 2px}
+.st-tab .ini{width:24px;height:24px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;background:rgba(127,127,127,.22);flex:0 0 auto}
+.st-tab.on .ini{background:var(--accent,#4c8dff);color:#fff}
+.st-tab .txt{display:flex;flex-direction:column;min-width:0;line-height:1.25}
+.st-tab .nm{font-weight:600;white-space:nowrap}
+.st-tab .sub{display:flex;align-items:center;gap:4px;font-size:11px;color:var(--fg3,#888);white-space:nowrap}
+.st-label{font-size:11px;color:var(--fg3,#888);white-space:nowrap;flex:0 0 auto}
+.st-invite{appearance:none;flex:0 0 auto;width:26px;height:26px;border-radius:50%;border:1px dashed rgba(127,127,127,.5);background:transparent;color:inherit;font:inherit;font-size:15px;line-height:1;cursor:pointer}
+.st-role{width:64px;font:inherit;font-size:11px;background:transparent;color:inherit;border:0;border-bottom:1px dashed rgba(127,127,127,.4);padding:0 2px}
 .st-roster-rail{display:flex;flex-direction:column;height:100%;min-height:0;overflow-y:auto;padding:8px}
 .st-roster-rail .st-tabs{flex-direction:column;align-items:stretch;flex:0 0 auto;overflow:visible}
 .st-roster-rail .st-tab{justify-content:flex-start}
@@ -205,7 +213,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   const saved = parseRoomState(await bridge!.calls.request("tab.state.read", null));
   let mode: RoomMode = saved?.mode ?? modeSetting;
   // The roster of the saved state orders and checks the first roster that the definitions give.
-  let seed: RosterEntry[] = (saved?.roster ?? []).map((entry) => ({ id: entry.id, name: "", checked: entry.checked, role: entry.role, leader: entry.leader }));
+  let seed: RosterEntry[] = (saved?.roster ?? []).map((entry) => ({ id: entry.id, name: "", member: entry.member, checked: entry.checked, role: entry.role, leader: entry.leader }));
   // The members that the leader summoned (docs/spec/room.md#team).
   const team: TeamEntry[] = [...(saved?.team ?? [])];
   const conversation: RoomTabState["conversation"] = [...(saved?.conversation ?? [])];
@@ -214,10 +222,10 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   const taughtSessions = new Set<string>(saved?.protocolSessions ?? []);
   // The last write of the tab state, which a turn line waits for (docs/spec/room.md#restart).
   let lastWrite: Promise<void> = Promise.resolve();
-  // The tab title of the room follows its checked members (C119); a refused title is reported through the room error path.
+  // The tab title of the room follows its members (C119, C123); a refused title is reported through the room error path.
   let shownTitle: string | null = null;
   const showTitle = (): void => {
-    const title = roomTitle(roster.filter((entry) => entry.checked).map((entry) => entry.name), manifest.name);
+    const title = roomTitle(roster.filter((entry) => entry.member).map((entry) => entry.name), manifest.name);
     if (title === shownTitle) return;
     shownTitle = title;
     void bridge!.calls.request("tab.title", title).catch((error: unknown) => report("tab title", String((error as Error)?.message ?? error)));
@@ -225,7 +233,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   const persist = (): void => {
     showTitle();
     const value: RoomTabState = {
-      roster: roster.map((entry) => ({ id: entry.id, checked: entry.checked, role: entry.role, leader: entry.leader })),
+      roster: roster.map((entry) => ({ id: entry.id, member: entry.member, checked: entry.checked, role: entry.role, leader: entry.leader })),
       team: team.map((entry) => ({ ...entry })),
       mode,
       conversation,
@@ -251,6 +259,8 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   // The roster lists the agent definitions of the agents plugin (C13); it is empty until the status arrives.
   const roster: RosterEntry[] = [];
   let definitions: AgentDefinition[] = [];
+  // The open session of each member of the room and of each team member, read again after each change of core.sessions (C3).
+  let memberSessions = new Map<string, string>();
   // The ids of the sessions that core.sessions lists as open, and the summons that run one after the other (C3, C4).
   const openSessionIds = new Set<string>();
   const runTrigger = serialRunner();
@@ -266,7 +276,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   const arrangement = createArrangementStatus();
   const state = (): RoomState => ({
     mode,
-    roster: roster.map((r) => ({ id: r.id, checked: r.checked })),
+    roster: roster.map((r) => ({ id: r.id, member: r.member, checked: r.checked })),
     transport: { ...transport, notIsolated: [...transport.notIsolated] },
   });
 
@@ -350,13 +360,28 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   const failed = (where: string) => (error: unknown) => report(where, String((error as Error)?.message ?? error));
   // A binding is refused only for an undeclared command; the refusal is reported.
   const bound = (binding: Promise<unknown>, where: string): void => void binding.catch(failed(`bind ${where}`));
+  // The members that the room waits for an answer of; the conversation status gives them once it exists (docs/spec/room.md#header).
+  let waitedMembers: () => ReadonlySet<string> = () => new Set();
+  // The member part of the header (C123): the label, the count, one card per member and the invite button.
+  const countEl = elText("span", "", "st-label");
+  const inviteButton = elText("button", "+", "st-invite") as HTMLButtonElement;
+  inviteButton.type = "button";
+  inviteButton.title = t("inviteTitle", lang);
+  inviteButton.dataset.expose = `${EXPOSE}.invite`;
+  bound(expose.bind(inviteButton, `${EXPOSE}.invite`, {}, { failed: failed("invite") }), "invite");
   function renderTabs(): void {
-    tabsEl.replaceChildren();
+    const { checked, members } = memberCount(roster);
+    countEl.textContent = tp("memberCount", lang, { checked: String(checked), members: String(members) });
+    tabsEl.replaceChildren(elText("span", t("membersLabel", lang), "st-label"), countEl);
     for (const entry of roster) {
-      const tab = el("span", `st-tab${entry.checked ? "" : " off"}`);
+      if (!entry.member) continue;
+      const tab = el("span", `st-tab${entry.checked ? " on" : ""}`);
       tab.dataset.id = entry.id;
       tab.dataset.expose = `${EXPOSE}.tab`;
-      tab.append(elText("span", entry.checked ? "✓" : "", "chk"), elText("span", entry.name, "nm"));
+      const text = el("span", "txt");
+      const sub = el("span", "sub");
+      text.append(elText("span", entry.name, "nm"), sub);
+      tab.append(elText("span", initialsOf(entry.name), "ini"), text);
       // The role input of the entry runs member.role when its text changes (docs/spec/room.md#roles).
       const role = document.createElement("input");
       role.className = "st-role";
@@ -369,8 +394,8 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
         expose.bind(role, `${EXPOSE}.member.role`, () => ({ id: entry.id, role: role.value }), { event: "change", failed: failed("member.role") }),
         "member.role",
       );
-      tab.append(role);
-      // A click runs member.set with the toggled state; the click that ends a drag runs nothing (docs/spec/room.md#commands).
+      sub.append(role, elText("span", "", "state"));
+      // A press runs member.set with the toggled state; the click that ends a drag runs nothing (docs/spec/room.md#commands).
       bound(
         expose.bind(tab, `${EXPOSE}.member.set`, () => ({ id: entry.id, checked: !entry.checked }), {
           when: () => !dragged,
@@ -378,7 +403,20 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
         }),
         "member.set",
       );
+      // A right click removes the member from the room.
+      bound(
+        expose.bind(tab, `${EXPOSE}.member.leave`, () => ({ id: entry.id }), {
+          event: "contextmenu",
+          when: (event: Event) => {
+            event.preventDefault();
+            return true;
+          },
+          failed: failed("member.leave"),
+        }),
+        "member.leave",
+      );
       tab.addEventListener("pointerdown", (down) => {
+        if (down.button !== 0) return;
         const startX = down.clientX;
         dragged = false;
         const onMove = (ev: PointerEvent) => {
@@ -398,6 +436,18 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
       });
       tabsEl.append(tab);
     }
+    tabsEl.append(inviteButton);
+    showStates();
+  }
+  // Shows the state of each member card without drawing the cards again, so a role input keeps its focus and its text.
+  function showStates(): void {
+    const waited = waitedMembers();
+    for (const tab of tabsEl.querySelectorAll<HTMLElement>(".st-tab")) {
+      const id = tab.dataset.id!;
+      const state = memberState(memberSessions.has(id), waited.has(id));
+      tab.classList.toggle("none", state === "none");
+      tab.querySelector(".state")!.textContent = t(state === "answering" ? "stateAnswering" : state === "idle" ? "stateIdle" : "stateNone", lang);
+    }
   }
 
   function renderMode(): void {
@@ -416,7 +466,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   renderTabs();
   renderMode();
 
-  // The member sessions of the room: the owned session of each checked definition, while core.sessions lists it as open (C3).
+  // The member sessions of the room: the owned session of each member, while core.sessions lists it as open (C3).
   // The room reattaches only to the sessions that it owns, and its member relations are kept per room surface (docs/spec/room.md#restart).
   const surface = window.sokSurface?.surface;
   if (typeof surface !== "string" || surface === "") throw new Error("the room needs the surface identifier of its start values");
@@ -424,12 +474,11 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   const sessions = createMemberSessionStore(collections, surface);
   // The sessions that a summon opened before core.sessions listed them.
   const openedSessions = createOpenedSessions();
-  let memberSessions = new Map<string, string>();
   const refreshMembers = async (): Promise<void> => {
-    const checked = new Set(roster.filter((entry) => entry.checked).map((entry) => entry.id));
+    const present = new Set(roster.filter((entry) => entry.member).map((entry) => entry.id));
     const next = new Map<string, string>();
     for (const definition of definitions) {
-      if (!checked.has(definition.id)) continue;
+      if (!present.has(definition.id)) continue;
       const stored = await sessions.get(definition.id);
       if (stored !== null && openSessionIds.has(stored.sessionId)) next.set(definition.id, stored.sessionId);
     }
@@ -438,7 +487,9 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
       if (stored !== null && openSessionIds.has(stored.sessionId)) next.set(entry.id, stored.sessionId);
     }
     memberSessions = next;
-    setTransport(next.size > 0);
+    // The transport is ready while a member that receives the next message, a checked member or a team member, has an open session.
+    setTransport(roster.some((entry) => entry.checked && next.has(entry.id)) || team.some((entry) => next.has(entry.id)));
+    showStates();
   };
   const refreshReported = (): void => {
     refreshMembers().catch((error: unknown) => report("room members", String((error as Error)?.message ?? error)));
@@ -465,9 +516,9 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
         // The conversation names each member by its roster name.
         showConversation();
         refreshReported();
-        // At start the checked members of the saved state are summoned: a member with an open session of this room is reattached,
-        // and only a member without one opens a session (docs/spec/room.md#restart).
-        if (seed.length > 0 && roster.some((entry) => entry.checked)) summon();
+        // At start the members of the saved state are summoned: a member with an open session of this room is reattached, and only a
+        // member without one opens a session (docs/spec/room.md#restart).
+        if (seed.length > 0 && roster.some((entry) => entry.member)) summon();
         seed = [];
       })
       .catch((error: unknown) => report("agents.definitions", String((error as Error)?.message ?? error)));
@@ -562,7 +613,8 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
       return [{ ...member, params: { ...member.params, args: [...(member.params.args as string[]), ...agentArgs(entry)] } }];
     });
   const summonRun = (): Promise<void> => {
-    const checked = [...roster.filter((entry) => entry.checked).map((entry) => entry.id), ...team.map((entry) => entry.id)];
+    // The members of the room and the team members have sessions; a member that is not checked keeps its session (docs/spec/room.md#roster).
+    const checked = [...roster.filter((entry) => entry.member).map((entry) => entry.id), ...team.map((entry) => entry.id)];
     return runTrigger(async () => {
       await sessionsReady;
       // Before a checked Claude Code member of the roster starts in the project folder, the declared program project-trust trusts that
@@ -885,6 +937,9 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
     () => [...questions.entries()].map(([session, entry]) => ({ member: entry.member, session, rows: entry.rows, choices: entry.choices })),
   );
   conversationStatus.subscribe(() => showConversation());
+  // The member cards show answering while the room waits for an answer of the member (docs/spec/room.md#header).
+  waitedMembers = () => new Set(conversationStatus.read().waiting.map((wait) => wait.member));
+  conversationStatus.subscribe(() => showStates());
   // The question of each blocked member (docs/spec/room.md#questions): the room reads the screen of its session once when its program
   // reports blocked, at the value of core.sessions that carries the state, and drops the question when the state changes.
   conversationStatus.subscribe((value) => {
@@ -1039,6 +1094,13 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
       persist();
     },
     summon,
+    leave: async (id) => {
+      const session = memberSessions.get(id);
+      if (session === undefined) return;
+      await endSession(session);
+      await gone(session);
+      summon();
+    },
     openMembers: () => openMembers().length,
     accept: (text) => {
       input.value = "";
@@ -1154,6 +1216,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
     [`${EXPOSE}.pill`]: pill,
     [`${EXPOSE}.input`]: input,
     [`${EXPOSE}.tab`]: tabTargets,
+    [`${EXPOSE}.invite`]: inviteButton,
     [`${EXPOSE}.role`]: () => [...tabsEl.querySelectorAll<HTMLElement>(".st-role")],
     [`${EXPOSE}.mode`]: kib,
     [`${EXPOSE}.question`]: () => [...msgs.querySelectorAll<HTMLElement>(".st-question-answer")],
@@ -1166,6 +1229,15 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
       ...operations,
       [ANSWER_COMMAND]: async (params: unknown) => answers.deliver(params),
       [`${EXPOSE}.member.summon`]: async (params: unknown) => summonMember(params),
+      // invite opens the invite dialog and joins the picked definitions in roster order (docs/spec/room.md#invite).
+      [`${EXPOSE}.invite`]: async () => {
+        const result = await bridge!.runtime.dialog("invite", inviteParams(roster, await agentData("groups")));
+        if (result === null) return { invited: [] };
+        const ids = (result as { ids?: unknown }).ids;
+        if (!Array.isArray(ids) || !ids.every((id) => typeof id === "string")) throw new Error(`invite dialog result must be {ids} or null, got ${JSON.stringify(result)}`);
+        for (const id of ids) await operations[`${EXPOSE}.member.join`]({ id });
+        return { invited: ids };
+      },
       [`${EXPOSE}.definitions`]: async () => ({ definitions: summonableDefinitions(definitions, await agentData("groups"), rolesValue) }),
       [`${EXPOSE}.member.release`]: async (params: unknown) => teamControl.release(params),
       [`${EXPOSE}.member.merged`]: async (params: unknown) => teamControl.merged(params),

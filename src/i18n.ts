@@ -135,8 +135,32 @@ const strings = {
     ko: "{name} 탭에서 답하기",
   },
   transportUnavailable: {
-    en: "No member session is open. Check a member of the roster to summon it.",
-    ko: "열린 멤버 세션이 없습니다. 명단에서 멤버를 체크하면 세션을 엽니다.",
+    en: "No member that receives a message has an open session. Invite a member with + or select one.",
+    ko: "메시지를 받을 멤버의 열린 세션이 없습니다. +로 멤버를 초대하거나 멤버를 선택하세요.",
+  },
+  membersLabel: {
+    en: "Receivers",
+    ko: "받는 멤버",
+  },
+  memberCount: {
+    en: "{checked} / {members} selected",
+    ko: "{checked} / {members} 선택",
+  },
+  inviteTitle: {
+    en: "Invite a member",
+    ko: "멤버 초대",
+  },
+  stateAnswering: {
+    en: "answering",
+    ko: "응답 중",
+  },
+  stateIdle: {
+    en: "idle",
+    ko: "대기",
+  },
+  stateNone: {
+    en: "no session",
+    ko: "세션 없음",
   },
   transportReady: {
     en: "Connected: messages go to the checked members with an open session.",

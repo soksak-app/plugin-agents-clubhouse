@@ -12,8 +12,10 @@ export interface OperationDeps {
   setMode: (mode: RoomMode) => void;
   // Redraws the roster and the mode after a change.
   changed: () => void;
-  // Summons the checked members that have no open session.
+  // Summons the members that have no open session.
   summon: () => void;
+  // Ends the open session of an entry that left the room and lets the arrangement close its tab (docs/spec/room.md#commands).
+  leave: (id: string) => Promise<void>;
   // The number of checked members whose session is open.
   openMembers: () => number;
   // Shows the accepted text in the conversation and clears the input.
@@ -42,6 +44,12 @@ function entryOf(roster: RosterEntry[], id: string): RosterEntry {
   return entry;
 }
 
+function memberOf(roster: RosterEntry[], id: string): RosterEntry {
+  const entry = entryOf(roster, id);
+  if (!entry.member) throw new Error(`member ${id} is not a member of the room`);
+  return entry;
+}
+
 export function createRoomOperations(deps: OperationDeps): Record<string, (params: any) => Promise<any>> {
   let relaying = false;
   // Whether conversation.stop ended the conversation of the current relay.
@@ -51,13 +59,38 @@ export function createRoomOperations(deps: OperationDeps): Record<string, (param
       const id = idOf(params);
       const checked = params?.checked;
       if (typeof checked !== "boolean") throw new Error(`checked must be a boolean, got ${JSON.stringify(checked)}`);
-      const entry = entryOf(deps.roster, id);
+      const entry = memberOf(deps.roster, id);
       if (entry.checked !== checked) {
         entry.checked = checked;
         deps.changed();
-        deps.summon();
       }
       return { id, checked };
+    },
+    // member.join makes the entry a checked member and summons it; a member stays as it is (docs/spec/room.md#commands).
+    [`${P}.member.join`]: async (params) => {
+      const id = idOf(params);
+      const entry = entryOf(deps.roster, id);
+      if (!entry.member) {
+        entry.member = true;
+        entry.checked = true;
+        deps.changed();
+        deps.summon();
+      }
+      return { id };
+    },
+    // member.leave clears the membership, the check and the leader of the entry and ends its session; an entry that is no member
+    // changes nothing (docs/spec/room.md#commands).
+    [`${P}.member.leave`]: async (params) => {
+      const id = idOf(params);
+      const entry = entryOf(deps.roster, id);
+      if (entry.member) {
+        entry.member = false;
+        entry.checked = false;
+        entry.leader = false;
+        deps.changed();
+        await deps.leave(id);
+      }
+      return { id };
     },
     // member.role sets the role of a roster entry, a text of 0 to 200 characters without control characters (docs/spec/room.md#roles).
     [`${P}.member.role`]: async (params) => {
@@ -79,9 +112,8 @@ export function createRoomOperations(deps: OperationDeps): Record<string, (param
       const id = idOf(params);
       const leader = params?.leader;
       if (typeof leader !== "boolean") throw new Error(`leader must be a boolean, got ${JSON.stringify(leader)}`);
-      const entry = entryOf(deps.roster, id);
-      const summon = leader && !entry.checked;
-      let change = entry.leader !== leader || summon;
+      const entry = memberOf(deps.roster, id);
+      let change = entry.leader !== leader || (leader && !entry.checked);
       for (const other of deps.roster) {
         if (other === entry || !other.leader || !leader) continue;
         other.leader = false;
@@ -90,7 +122,6 @@ export function createRoomOperations(deps: OperationDeps): Record<string, (param
       entry.leader = leader;
       if (leader) entry.checked = true;
       if (change) deps.changed();
-      if (summon) deps.summon();
       return { id, leader };
     },
     [`${P}.member.move`]: async (params) => {

@@ -6,8 +6,8 @@ import type { OpenToken } from "./answer";
 import type { TeamEntry } from "./team";
 
 export interface RoomState {
-  // The roster order, the checked state, the role of each entry and the leader, at most one (docs/spec/room.md#leader).
-  roster: { id: string; checked: boolean; role: string; leader: boolean }[];
+  // The roster order, the membership, the checked state, the role of each entry and the leader, at most one (docs/spec/room.md#leader).
+  roster: { id: string; member: boolean; checked: boolean; role: string; leader: boolean }[];
   // The members that the leader summoned, in summon order (docs/spec/room.md#team).
   team: TeamEntry[];
   mode: RoomMode;
@@ -52,10 +52,12 @@ export function parseRoomState(value: unknown): RoomState | null {
   const roster = state.roster;
   if (
     !Array.isArray(roster) ||
-    !roster.every((entry) => isText(entry?.id) && typeof entry?.checked === "boolean" && typeof entry?.role === "string" && typeof entry?.leader === "boolean")
+    !roster.every((entry) => isText(entry?.id) && typeof entry?.member === "boolean" && typeof entry?.checked === "boolean" && typeof entry?.role === "string" && typeof entry?.leader === "boolean")
   ) {
-    throw new Error("room tab state: roster must be an array of {id, checked, role, leader}");
+    throw new Error("room tab state: roster must be an array of {id, member, checked, role, leader}");
   }
+  const outside = roster.find((entry) => !entry.member && (entry.checked || entry.leader));
+  if (outside !== undefined) throw new Error(`room tab state: roster entry ${outside.id} is checked or the leader but no member`);
   if (roster.filter((entry) => entry.leader).length > 1) throw new Error("room tab state: roster has more than one leader");
   const team = state.team;
   if (
@@ -127,7 +129,7 @@ export function parseRoomState(value: unknown): RoomState | null {
     }
   }
   return {
-    roster: roster.map((entry) => ({ id: entry.id, checked: entry.checked, role: entry.role, leader: entry.leader })),
+    roster: roster.map((entry) => ({ id: entry.id, member: entry.member, checked: entry.checked, role: entry.role, leader: entry.leader })),
     team: team.map((entry) => ({ id: entry.id, definition: entry.definition, role: entry.role, directory: entry.directory, merged: entry.merged, agentSession: entry.agentSession, resume: entry.resume, agent: entry.agent, worktree: entry.worktree })),
     mode: state.mode as RoomMode,
     conversation: conversation.map((entry) => ({ speaker: entry.speaker, text: entry.text, at: entry.at, elapsedMs: entry.elapsedMs })),

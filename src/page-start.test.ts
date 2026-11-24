@@ -46,8 +46,12 @@ describe("the start of the room page (C96)", () => {
     for (let step = 0; step < 20; step += 1) await turn();
     await view.settled();
     expect({ errors: view.observed.errors, failures: view.observed.failures, tab: view.observed.tab.error }).toEqual({ errors: [], failures: [], tab: null });
-    expect(view.window.document.body.textContent).toContain("harness");
-    // C119 (docs/spec/room.md#header): a room without a checked member reports the plugin name as its tab title.
+    // C123 (docs/spec/room.md#header): a definition joins the roster as no member, so the header lists no card and counts 0 / 0.
+    const state = (await view.request("soksak-plugin-agents-clubhouse.state", {})) as { roster: { id: string; member: boolean; checked: boolean }[] };
+    expect(state.roster).toEqual([{ id: "harness", member: false, checked: false }]);
+    expect(view.window.document.querySelectorAll(".st-tab").length).toBe(0);
+    expect(view.window.document.body.textContent).toContain("0 / 0");
+    // C119 (docs/spec/room.md#header): a room without a member reports the plugin name as its tab title.
     expect(view.observed.tab.title).toBe(manifest.name);
     // C115 (docs/spec/room.md#roster): a definition that the agents plugin adds later reaches the room through the data changes of
     // the agents plugin, which runtime.data.on follows only with {plugin}.
@@ -57,7 +61,8 @@ describe("the start of the room page (C96)", () => {
     });
     for (let step = 0; step < 20; step += 1) await turn();
     await view.settled();
-    expect(view.window.document.body.textContent).toContain("reviewer");
+    const later = (await view.request("soksak-plugin-agents-clubhouse.state", {})) as { roster: { id: string }[] };
+    expect(later.roster.map((entry) => entry.id)).toEqual(["harness", "reviewer"]);
     await view.close();
     delete (globalThis as { IntersectionObserver?: unknown }).IntersectionObserver;
   });

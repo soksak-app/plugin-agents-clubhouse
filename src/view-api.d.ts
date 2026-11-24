@@ -6,6 +6,8 @@ interface Window {
   sokSurface?: {
     surface: string;
     project?: { root?: string } | null;
+    // The params of the surface; a dialog page receives the params of its open call (core docs/spec/plugins.md#dialogs).
+    params?: unknown;
     declarations: unknown;
   };
   webkit: { messageHandlers: Record<string, { postMessage(message: unknown): void }> };
@@ -37,6 +39,8 @@ declare module "@soksak/plugin-api/view" {
       };
       theme(listener: (theme: unknown) => void): { ready: Promise<void>; dispose: Promise<() => void> };
       error(where: string, text: string): Promise<void>;
+      // The dialogs of plugin.json (core docs/spec/plugins.md#dialogs): the call resolves with the result of the close of the dialog.
+      dialog: ((name: string, params?: unknown) => Promise<unknown>) & { close(result?: unknown): Promise<void> };
     };
   }
   export function createViewBridge(options: {

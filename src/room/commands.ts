@@ -4,7 +4,7 @@ export type RoomMode = "turn" | "facil" | "simul";
 
 export interface RoomState {
   mode: RoomMode;
-  roster: { id: string; checked: boolean }[];
+  roster: { id: string; member: boolean; checked: boolean }[];
   transport: { state: "unavailable" | "ready"; reason?: string; notIsolated: string[] };
 }
 

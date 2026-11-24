@@ -14,9 +14,9 @@ const manifest = JSON.parse(read("plugin.json")) as {
 };
 
 describe("core range", () => {
-  // The room uses the owned session input, read and program state and runtime.data.get {plugin}, which core 0.0.47 provides.
-  it("declares engines.soksak ^0.0.47", () => {
-    expect(pkg.engines).toEqual({ soksak: "^0.0.47" });
+  // The room opens its invite dialog with runtime.dialog, which core 0.0.52 provides (docs/spec/room.md#invite).
+  it("declares engines.soksak ^0.0.52", () => {
+    expect(pkg.engines).toEqual({ soksak: "^0.0.52" });
   });
 });
 

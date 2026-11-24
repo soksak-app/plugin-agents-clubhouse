@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- C120, C123: The header lists only the members of the room as cards with their initials, name, role and state (`응답 중`, `대기`, `세션 없음`), under the label `받는 멤버` and the count of the checked members, and ends with a `+` button that opens the invite dialog of the window, which lists the definitions by group. A member joins checked with `member.join` and leaves with `member.leave` on a right click, which ends its session; `member.set` only selects the members that receive the next message, and an unchecked member keeps its session. The tab state stores `member` for each roster entry, and the room requires core 0.0.52 for its dialog. Red: 16 tests of the roster, the tab state, the operations, the exposure and the page start failed on the earlier code. Green: all 363 tests of `npx vitest run` pass and `npx tsc --noEmit` passes.
 - C126: The answer form of the room protocol quotes the text in single quotes, `--text '<text>'`, which every shell runs on one line, instead of a heredoc that a member's shell refused on one line.
 - C127: A member of an account with a home starts as `env <variable>=<folder> <cli> <args>`, so it uses the login of its account (agents A36); an account without `home` is refused.
 - C124-1: A member ends each turn with the single text `.`, because the agent CLI answers a turn without text by asking for a visible response, after which the member wrote a summary. Measured terminal text per member turn: 1 character, from 926 on average before C124.
