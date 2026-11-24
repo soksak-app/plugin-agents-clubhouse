@@ -202,7 +202,7 @@ describe("createProtocolInjector after a restart (docs/spec/room.md#restart)", (
 describe("nothing said outside the room", () => {
   it("the protocol line states the rules in short imperative sentences", () => {
     const line = roomProtocolLine("Claude", "room-1");
-    expect(line).toContain("The room cannot read your terminal: say everything in your answer, a report or a claim; write nothing there, not even a closing word.");
+    expect(line).toContain("The room cannot read your terminal: say everything in your answer, a report or a claim; end each turn with the single text . and nothing else.");
     expect(line).toContain("(@owner: the owner, @all: everyone)");
     // C95 (docs/spec/room.md#mentions): `@all` has one meaning, and only the owner and the leader start turns with it.
     expect(line).toContain("@all addresses everyone, and yours starts no turn.");

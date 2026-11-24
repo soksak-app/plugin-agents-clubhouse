@@ -2,6 +2,7 @@
 
 ## 미출시
 
+- C124-1: member는 각 turn을 한 글자 text `.`로 끝낸다. agent CLI가 text 없는 turn에 보이는 응답을 요구하고 그 뒤 member가 요약을 썼기 때문이다. member turn당 terminal text 측정: C124 전 평균 926자에서 1자.
 - C124: turn rule이 member에게 background 작업 중에도 각 단계를 terminal text 없이 끝내라고 하고, 받아들여진 답의 응답이 turn이 끝났고 아무도 terminal을 읽지 않는다고 알리는 `next`를 담는다. member turn당 terminal text 측정: 이전 1.85개, 이후 1.4개. 남은 text는 보낸 답의 요약이다(C124-1).
 - C125: 방에는 control tower가 없다. Header button `AI 명령`, 그 modal, `tower.*` command, element `tower`, project data key `tower-plans`, `tower-steps`, `macros`가 제거되었다.
 - C122: 열린 turn의 claim이나 report는 그 turn의 답이 올 때까지 기록의 자리에서 member 이름 아래에 보이고, 답이 오면 그 답 아래로 옮겨진다. release는 member의 마지막 답 아래에 붙는다. Red: 새 `conversationView` test 둘이 실패했고, claim과 report가 이전 답 아래에 있었다. Green: `npx vitest run`의 547개 test가 모두 통과하고 `npm run typecheck`가 통과한다.

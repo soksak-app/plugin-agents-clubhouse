@@ -133,6 +133,6 @@ describe("an answer across a reload of the room page", () => {
 // terminal text (C124).
 describe("the reply of an accepted answer", () => {
   it("tells the member that the turn ended and that it writes nothing in its terminal", () => {
-    expect(ANSWER_NEXT).toBe("The room has your answer and your turn ended. Stop now and write nothing in your terminal: nobody reads it.");
+    expect(ANSWER_NEXT).toBe("The room has your answer and your turn ended. Nobody reads your terminal: end now with the single text . and nothing else.");
   });
 });

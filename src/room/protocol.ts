@@ -66,7 +66,7 @@ export function roomProtocolLine(self: string, surface: string, mcp = true, team
     // The isolation loads no user-scope skill, so the soksak skill comes from sok itself (docs/spec/room.md#soksak-knowledge).
     "First run sok skill print once and follow it.",
     "Check web pages and local servers in a soksak browser tab (core.layout.open plugin browser, then browser.navigate {url}), another browser only without that plugin, and say which applied.",
-    "The room cannot read your terminal: say everything in your answer, a report or a claim; write nothing there, not even a closing word.",
+    "The room cannot read your terminal: say everything in your answer, a report or a claim; end each turn with the single text . and nothing else.",
     "Never write a state word (Waiting, Settled, Ready, Done, Sent, Noted); state lives only in the answer status.",
     "Do not narrate plans or confirm a sent answer.",
     "Answer each addressed speaker in speaking order, one section per line starting @<name>: (@owner: the owner, @all: everyone).",

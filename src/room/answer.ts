@@ -8,8 +8,9 @@
 
 export const ANSWER_COMMAND = "soksak-plugin-agents-clubhouse.answer";
 // The reply of an accepted answer, which is the last text that the member reads in its turn: a member otherwise writes a summary of
-// the sent answer to the person, which costs tokens and which nobody reads (docs/spec/room.md#answer).
-export const ANSWER_NEXT = "The room has your answer and your turn ended. Stop now and write nothing in your terminal: nobody reads it.";
+// the sent answer to the person, which costs tokens and which nobody reads. It asks for one character rather than no text, because the
+// agent CLI answers a turn that ends with no text by asking for a visible response (docs/spec/room.md#answer).
+export const ANSWER_NEXT = "The room has your answer and your turn ended. Nobody reads your terminal: end now with the single text . and nothing else.";
 
 // The state that an answer declares (docs/spec/room.md#settling): `continue` while an open question, a disagreement or work remains, and
 // `settled` when the member agrees and its work is done.

@@ -32,7 +32,7 @@ export const TURN_TEXT = "네 차례야. 아래는 네가 아직 못 본 기록�
 export const EMPTY_TURN_TEXT = "네 차례야. 네가 아직 못 본 기록은 없어.";
 // A member that writes a note while its background agents run spends tokens on text that nobody reads, so the rule names that case
 // (docs/spec/room.md#room-protocol).
-export const TURN_RULE = "answer through the room only: reply to the speakers, put a message to the owner in @owner:, end every step with no terminal text, also while background work runs";
+export const TURN_RULE = "answer through the room only: reply to the speakers, put a message to the owner in @owner:, end every step with the single text . and nothing else, also while background work runs";
 
 export function rolesLine(member: NamedRelayMember, members: NamedRelayMember[]): string | null {
   if (!members.some((entry) => (entry.role ?? "") !== "")) return null;
