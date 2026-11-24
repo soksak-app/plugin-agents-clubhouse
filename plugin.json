@@ -59,7 +59,8 @@
     }
   },
   "programs": {
-    "account-login": { "program": "/usr/bin/env", "args": [{ "pattern": "(CLAUDE_CONFIG_DIR|CODEX_HOME)=/.+/plugin-data/agents/accounts/[a-z][a-z0-9-]{0,39}" }, { "pattern": "[^\\s]{1,255}" }, { "pattern": "auth|login" }, "status"] },
+    "claude-status": { "program": "/usr/bin/env", "args": [{ "pattern": "CLAUDE_CONFIG_DIR=/.+/plugin-data/agents/accounts/[a-z][a-z0-9-]{0,39}" }, { "pattern": "[^\\s]{1,255}" }, "auth", "status", "--json"] },
+    "codex-status": { "program": "/usr/bin/env", "args": [{ "pattern": "CODEX_HOME=/.+/plugin-data/agents/accounts/[a-z][a-z0-9-]{0,39}" }, { "pattern": "[^\\s]{1,255}" }, "login", "status"] },
     "agent-file": { "program": "cat", "args": [{ "pattern": "/.+\\.md" }] },
     "project-trust": { "program": "plugin:bin/team-worktree.mjs", "args": ["trust"] },
     "team-worktree": { "program": "plugin:bin/team-worktree.mjs", "args": [{ "pattern": "add|remove" }, { "pattern": "/.+" }, { "pattern": "[a-z0-9][a-z0-9._-]{0,99}" }] }

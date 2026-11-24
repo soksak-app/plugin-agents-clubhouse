@@ -37,7 +37,7 @@ import { summonableDefinitions } from "./room/summonable";
 import { createConversationStatus, waitLabel } from "./room/conversation-status";
 import { createProtocolInjector, type AgentPlace } from "./room/protocol";
 import { parseRoomState, serializedRoomState, type RoomState as RoomTabState } from "./room/room-state";
-import { ownedSessionIds, shownByOf } from "./room/session-channel";
+import { ownedSessionEntries, ownedSessionIds, shownByOf } from "./room/session-channel";
 import { answerQuestion, questionChoices, readQuestion, showMember } from "./room/question";
 import { insertMention, mentionCandidates, mentionQuery } from "./room/mention-hint";
 import { reattachedChecks, rosterFrom, type RosterEntry } from "./room/roster";
@@ -265,7 +265,8 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   // The members that wait for the login of their home and the login sessions of the room (docs/spec/room.md#login); the size of a login
   // session is the measured card size of the summon.
   const loginGate = createLoginGate({
-    run: async (args) => bridge!.runtime.program.run("account-login", args),
+    definitions: () => definitions,
+    run: async (program, args) => bridge!.runtime.program.run(program, args),
     commands: room.commands,
     size: () => trigger.size(),
   });
@@ -585,7 +586,12 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
     }
     sessionsValue = value;
     // A login session that ended summons the members again, which reads the login of their homes (docs/spec/room.md#login).
-    if (loginGate.sessionsChanged(openSessionIds)) summon();
+    Promise.resolve()
+      .then(() => loginGate.sessionsChanged(ownedSessionEntries(value, surface)))
+      .then((ended) => {
+        if (ended) summon();
+      })
+      .catch((error: unknown) => report("room login", String((error as Error)?.message ?? error)));
     for (const listener of [...sessionListeners]) listener(value);
     refreshReported();
   })).catch((error: unknown) => report("core.sessions", `status watch: ${String((error as Error)?.message ?? error)}`));
