@@ -34,6 +34,26 @@ describe("conversationView", () => {
     expect(last).toMatchObject({ kind: "bubble", speaker: "a", text: "done", notes: [{ kind: "claim" }, { kind: "report" }, { kind: "release", text: "src/api.ts" }] });
   });
 
+  // C122: a claim and a report come in the open turn before its answer, so until the answer arrives they show at their place in the
+  // record, after the owner line that started the turn, and not under the answer of an earlier turn above that line.
+  it("draws the claims and reports of an open turn at their place in the record until its answer arrives", () => {
+    const entries = [entry("owner", "first"), entry("a", "earlier answer", 900), entry("owner", "build a game"), entry("a", "(claim) game.js"), entry("a", "(report) I build it")];
+    const view = conversationView(entries, ["a"]);
+    expect(view.map((item) => item.kind)).toEqual(["bubble", "divider", "bubble", "bubble", "notes"]);
+    expect(view[2]).toMatchObject({ kind: "bubble", text: "earlier answer", notes: [] });
+    expect(view[4]).toEqual({ kind: "notes", index: 3, speaker: "a", color: 0, notes: [{ kind: "claim", text: "game.js" }, { kind: "report", text: "I build it" }] });
+    const answered = conversationView([...entries, entry("a", "built", 3000)], ["a"]);
+    expect(answered.map((item) => item.kind)).toEqual(["bubble", "divider", "bubble", "bubble", "divider", "bubble"]);
+    expect(answered.at(-1)).toMatchObject({ text: "built", notes: [{ kind: "claim" }, { kind: "report" }] });
+  });
+
+  // C122: a release at the close of a turn follows its answer, so it goes under that answer and not under the answer of a later turn.
+  it("puts a release under the last answer of its member when it comes", () => {
+    const view = conversationView([entry("owner", "go"), entry("a", "done", 10), entry("a", "(release) x.js"), entry("owner", "next"), entry("a", "again", 10)], ["a"]);
+    const bubbles = view.filter((item) => item.kind === "bubble");
+    expect(bubbles.map((item) => item.kind === "bubble" && [item.text, item.notes.length])).toEqual([["go", 0], ["done", 1], ["next", 0], ["again", 0]]);
+  });
+
   it("keeps the sections of an answer as the blocks of its bubble", () => {
     const sections = [{ to: "owner", text: "done" }, { to: "b", text: "yes" }];
     expect(conversationView([entry("a", "@owner: done\n@b: yes", 10, sections)], ["a", "b"])).toContainEqual(expect.objectContaining({ kind: "bubble", sections }));
@@ -41,7 +61,7 @@ describe("conversationView", () => {
 
   it("starts a new round with its number when a member speaks again after the owner line", () => {
     const view = conversationView([entry("owner", "go"), entry("a", "1"), entry("b", "2"), entry("a", "3"), entry("owner", "next"), entry("b", "4")], ["a", "b"]);
-    expect(view.map((item) => (item.kind === "divider" ? `#${item.round}` : item.kind === "bubble" ? item.text : item.text))).toEqual(["go", "#1", "1", "2", "#2", "3", "next", "#1", "4"]);
+    expect(view.map((item) => (item.kind === "divider" ? `#${item.round}` : item.kind === "notes" ? item.speaker : item.text))).toEqual(["go", "#1", "1", "2", "#2", "3", "next", "#1", "4"]);
   });
 });
 

@@ -1,7 +1,8 @@
 // The view of the conversation (docs/spec/room.md#conversation-view). The room draws each record entry as a bubble: the owner on the
 // right, a member on the left with the color of its place in the roster, so the color of a member stays the same while the roster keeps
-// its order. A line of the room is a centered system line. A report, a claim or a release of a member is a compact note under the answer
-// bubble of the turn in which the member gave it, or under its last bubble when no answer follows. A divider with the round number goes
+// its order. A line of the room is a centered system line. A claim or a report of a member comes in its open turn before the answer of
+// that turn: it is a compact note at its place in the record until that answer arrives, and then under that answer. A release follows
+// the answer at the close of a turn, so it goes under the last answer of its member. A divider with the round number goes
 // before the first answer after a line of the owner and before each answer of a member that already answered since that line.
 import type { AnswerSection } from "./sections";
 import type { StatusEntry } from "./conversation-status";
@@ -11,6 +12,8 @@ export type NoteKind = "report" | "claim" | "release";
 export type ViewItem =
   | { kind: "divider"; round: number }
   | { kind: "system"; text: string; index: number }
+  // The claims and reports of the open turn of a member whose answer has not arrived, at the place of the first of them in the record.
+  | { kind: "notes"; index: number; speaker: string; color: number | null; notes: { kind: NoteKind; text: string }[] }
   | {
       kind: "bubble";
       // The index of the record entry.
@@ -26,12 +29,14 @@ export type ViewItem =
     };
 
 type Bubble = Extract<ViewItem, { kind: "bubble" }>;
+type Notes = Extract<ViewItem, { kind: "notes" }>;
 const NOTE = /^\((report|claim|release)\) ([\s\S]*)$/;
 
 export function conversationView(entries: readonly StatusEntry[], roster: readonly string[]): ViewItem[] {
   const items: ViewItem[] = [];
   const last = new Map<string, Bubble>();
-  const held = new Map<string, Bubble["notes"]>();
+  // The notes item of the open turn of each member, removed from the items when the answer of that turn takes its notes.
+  const held = new Map<string, Notes>();
   let round = 0;
   let spoken = new Set<string>();
   for (const [index, entry] of entries.entries()) {
@@ -45,11 +50,22 @@ export function conversationView(entries: readonly StatusEntry[], roster: readon
       spoken = new Set();
       continue;
     }
+    const place = roster.indexOf(entry.speaker);
     const note = NOTE.exec(entry.text);
     if (note) {
-      const notes = held.get(entry.speaker) ?? [];
-      notes.push({ kind: note[1] as NoteKind, text: note[2] });
-      held.set(entry.speaker, notes);
+      const kind = note[1] as NoteKind;
+      const answer = last.get(entry.speaker);
+      if (kind === "release" && answer !== undefined && !held.has(entry.speaker)) {
+        answer.notes.push({ kind, text: note[2] });
+        continue;
+      }
+      let open = held.get(entry.speaker);
+      if (open === undefined) {
+        open = { kind: "notes", index, speaker: entry.speaker, color: place < 0 ? null : place, notes: [] };
+        held.set(entry.speaker, open);
+        items.push(open);
+      }
+      open.notes.push({ kind, text: note[2] });
       continue;
     }
     if (round === 0 || spoken.has(entry.speaker)) {
@@ -58,7 +74,8 @@ export function conversationView(entries: readonly StatusEntry[], roster: readon
       items.push({ kind: "divider", round });
     }
     spoken.add(entry.speaker);
-    const place = roster.indexOf(entry.speaker);
+    const open = held.get(entry.speaker);
+    if (open !== undefined) items.splice(items.indexOf(open), 1);
     const bubble: Bubble = {
       kind: "bubble",
       index,
@@ -68,17 +85,11 @@ export function conversationView(entries: readonly StatusEntry[], roster: readon
       text: entry.text,
       sections: entry.sections,
       elapsedMs: entry.elapsedMs,
-      notes: held.get(entry.speaker) ?? [],
+      notes: open?.notes ?? [],
     };
     held.delete(entry.speaker);
     last.set(entry.speaker, bubble);
     items.push(bubble);
-  }
-  // Notes after the last answer of a member, such as the release at the close of its turn, go under that answer.
-  for (const [speaker, notes] of held) {
-    const bubble = last.get(speaker);
-    if (bubble) bubble.notes.push(...notes);
-    else for (const note of notes) items.push({ kind: "system", text: `${speaker} (${note.kind}) ${note.text}`, index: entries.length - 1 });
   }
   return items;
 }

@@ -218,7 +218,7 @@ cursor 목록이 있는 질문은 그 선택지를 element `soksak-plugin-agents
 
 ## Conversation view
 
-Room view는 각 record 항목을 말풍선으로 그린다. Owner의 말풍선은 오른쪽, member의 말풍선은 왼쪽에 놓이고, 화자의 이름과 role이 말풍선 위에 온다. 각 member는 roster 자리를 6으로 나눈 나머지에 해당하는 자기 말풍선 색을 가지므로, roster 순서가 같은 동안 색은 바뀌지 않는다. Owner 말풍선은 core theme의 accent token을 쓰고, member 색은 theme의 card token에 hue를 섞는다. 방의 줄(`clubhouse`)은 가운데 정렬된 system 줄이다. Member의 report, claim, release([work reports](#work-reports))는 member가 그것을 준 turn의 답 말풍선 아래, 답이 뒤따르지 않으면 마지막 말풍선 아래의 짧은 note다. 답의 section([section](#sections))은 말풍선 안에서 addressee를 머리로 단 별도 block이다. Owner의 줄 뒤 첫 답 앞과, 그 줄 이후 이미 답한 member의 답 앞에는 round 번호를 단 구분선이 오므로 [settling](#settling)의 각 round가 눈에 보이게 나뉜다.
+Room view는 각 record 항목을 말풍선으로 그린다. Owner의 말풍선은 오른쪽, member의 말풍선은 왼쪽에 놓이고, 화자의 이름과 role이 말풍선 위에 온다. 각 member는 roster 자리를 6으로 나눈 나머지에 해당하는 자기 말풍선 색을 가지므로, roster 순서가 같은 동안 색은 바뀌지 않는다. Owner 말풍선은 core theme의 accent token을 쓰고, member 색은 theme의 card token에 hue를 섞는다. 방의 줄(`clubhouse`)은 가운데 정렬된 system 줄이다. Member의 member의 claim이나 report([work reports](#work-reports))는 열린 turn에서 그 turn의 답보다 먼저 온다. 그 답이 올 때까지 기록의 자리에서 member 이름 아래의 짧은 note이고, 답이 오면 그 답 아래의 note다. release는 turn을 닫을 때 답 뒤에 오므로 member의 마지막 답 아래의 note다. 답의 section([section](#sections))은 말풍선 안에서 addressee를 머리로 단 별도 block이다. Owner의 줄 뒤 첫 답 앞과, 그 줄 이후 이미 답한 member의 답 앞에는 round 번호를 단 구분선이 오므로 [settling](#settling)의 각 round가 눈에 보이게 나뉜다.
 
 ## Follow mode
 

@@ -684,6 +684,16 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
     const rows = conversationView(value.entries, roster.map((entry) => entry.id)).map((item) => {
       if (item.kind === "divider") return elText("div", tp("round", lang, { round: String(item.round) }), "st-round");
       if (item.kind === "system") return indexed(elText("div", item.text, "st-system"), item.index);
+      // The claims and reports of an open turn show under the name of their member until the answer of the turn takes them.
+      if (item.kind === "notes") {
+        const row = el("div", "st-row assistant");
+        if (item.color !== null) row.dataset.color = String(item.color % MEMBER_COLORS);
+        const who = el("div", "st-who");
+        who.append(elText("span", memberName(item.speaker), "st-who-name"));
+        row.append(who);
+        for (const note of item.notes) row.append(elText("div", `${note.kind} · ${note.text}`, `st-note st-note-${note.kind}`));
+        return indexed(row, item.index);
+      }
       const owner = item.side === "right";
       const row = el("div", `st-row ${owner ? "user" : "assistant"}`);
       if (item.color !== null) row.dataset.color = String(item.color % MEMBER_COLORS);

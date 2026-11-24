@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- C122: A claim or a report of an open turn shows at its place in the record under the name of its member until the answer of the turn arrives, and then under that answer; a release goes under the last answer of its member. Red: the two new `conversationView` tests failed, the claim and the report sat under the earlier answer. Green: all 547 tests of `npx vitest run` pass and `npm run typecheck` passes.
 - C121: The version is 0.0.25, which releases C119.
 - C119: The tab of a room shows the names of its checked members, or the plugin name without one.
 - C118: The version is 0.0.24, which releases C117.
