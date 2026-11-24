@@ -25,7 +25,7 @@ const fail = (text: string): void => { throw new Error(text); };
 
 describe("plugin.json lists the agents plugin in dependencies", () => {
   it("declares the package of agents, whose project data the room reads", () => {
-    expect(manifest.dependencies).toEqual({ "@soksak/plugin-agents": ">=0.0.1" });
+    expect(manifest.dependencies).toEqual({ "@soksak/plugin-agents": ">=0.0.5" });
   });
 });
 

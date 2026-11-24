@@ -18,7 +18,7 @@
     "invite": { "page": "ui/invite.html" }
   },
   "dependencies": {
-    "@soksak/plugin-agents": ">=0.0.1"
+    "@soksak/plugin-agents": ">=0.0.5"
   },
   "settings": {
     "kibitzDefault": {

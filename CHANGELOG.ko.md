@@ -2,6 +2,7 @@
 
 ## 미출시
 
+- C129: version은 0.0.26이고, agents 0.0.5를 요구해요.
 - C128: maker 정의의 member는 agents 목록의 `launch`로 시작한다. home 변수 뒤에 `launch.env`의 변수, 계정 인자 뒤에 `launch.args`를 두므로 Claude Code member는 `--plugin-dir`과 `--add-dir`로 maker folder를 읽는다. `launch` 없이 `maker`만 있거나 다른 형식의 launch를 가진 정의는 거부한다.
 - C126: room protocol의 answer 형식은 member의 shell이 한 줄에서 거부한 heredoc 대신, 모든 shell이 한 줄에서 실행하는 작은따옴표 `--text '<text>'`로 text를 감싼다.
 - C127: home이 있는 계정의 member는 `env <variable>=<folder> <cli> <args>`로 시작하므로 그 계정의 login을 쓴다(agents A36). `home`이 없는 계정은 거부한다.
