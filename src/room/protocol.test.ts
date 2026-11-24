@@ -1,5 +1,6 @@
 // The room protocol (docs/spec/room.md#room-protocol): one line per session, submitted when the session first reports idle, whose turn
 // ends before any relayed message; a failure is reported and refuses the member.
+import { execFileSync } from "node:child_process";
 import { describe, expect, it } from "vitest";
 import { agentLine, createProtocolInjector, roomProtocolLine } from "./protocol";
 import type { RelayPorts } from "./room-relay";
@@ -69,11 +70,26 @@ describe("roomProtocolLine", () => {
 
   it("states the answer command with the room surface and the turn token, the shell form first (docs/spec/room.md#answer)", () => {
     const line = roomProtocolLine("Claude", "room-1");
-    const shell = line.indexOf("sok soksak-plugin-agents-clubhouse.answer --surface room-1 --turn <token> --status <continue|settled> --text=\"$(cat <<'EOF' <text> EOF)\"");
+    const shell = line.indexOf("sok soksak-plugin-agents-clubhouse.answer --surface room-1 --turn <token> --status <continue|settled> --text '<text>', each ' in it as '\\''");
     const mcp = line.indexOf('MCP command_run {name: soksak-plugin-agents-clubhouse.answer, surface: room-1, params: {turn, status, text}}');
     expect(shell).toBeGreaterThan(0);
     expect(mcp).toBeGreaterThan(shell);
     expect(line).toContain("This protocol line takes no answer.");
+  });
+
+  // C126: a member ran the one-line heredoc form and its shell refused it, so the form is one that every shell runs as given.
+  it("gives an answer form without a heredoc, which a shell runs on one line (C126)", () => {
+    const line = roomProtocolLine("Claude", "room-1");
+    expect(line).not.toContain("<<");
+    expect(line).not.toContain("$(");
+  });
+
+  it("keeps a text with quotes, a dollar sign and line breaks unchanged in sh, bash and zsh when written by the rule of the form", () => {
+    const text = "@owner: it's done.\nCost: $5 and `x`; \"quoted\" \\ end";
+    const quoted = `'${text.replaceAll("'", "'\\''")}'`;
+    for (const shell of ["/bin/sh", "/bin/bash", "/bin/zsh"]) {
+      expect(execFileSync(shell, ["-c", `printf %s ${quoted}`], { encoding: "utf8" })).toBe(text);
+    }
   });
 });
 
@@ -229,7 +245,7 @@ describe("the work rules of the protocol (docs/spec/room.md#room-protocol)", () 
 describe("the room commands run alone (docs/spec/room.md#room-protocol)", () => {
   it("states that each room command runs alone in the foreground and that a timed-out command is reported, not claimed as sent", () => {
     const line = roomProtocolLine("Claude", "room-1");
-    expect(line).toContain("and each room command alone in the foreground, never chained with ;, && or |.");
+    expect(line).toContain("each alone in the foreground, never chained with ;, && or |.");
     expect(line).toContain("If one times out or goes to the background, report it and never call it sent.");
     expect(line).toContain("Run every other room command as sok soksak-plugin-agents-clubhouse.<command> --surface room-1 --params '<json>',");
   });

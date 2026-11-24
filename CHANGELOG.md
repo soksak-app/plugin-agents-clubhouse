@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- C126: The answer form of the room protocol quotes the text in single quotes, `--text '<text>'`, which every shell runs on one line, instead of a heredoc that a member's shell refused on one line.
 - C127: A member of an account with a home starts as `env <variable>=<folder> <cli> <args>`, so it uses the login of its account (agents A36); an account without `home` is refused.
 - C124-1: A member ends each turn with the single text `.`, because the agent CLI answers a turn without text by asking for a visible response, after which the member wrote a summary. Measured terminal text per member turn: 1 character, from 926 on average before C124.
 - C124: The turn rule tells a member to end every step with no terminal text, also while background work runs, and the reply of an accepted answer carries `next`, which tells the member that its turn ended and that nobody reads its terminal. Measured terminal texts per member turn: 1.85 before, 1.4 after; the remaining texts are summaries of the sent answer (C124-1).
