@@ -59,6 +59,7 @@
     }
   },
   "programs": {
+    "account-login": { "program": "/usr/bin/env", "args": [{ "pattern": "(CLAUDE_CONFIG_DIR|CODEX_HOME)=/.+/plugin-data/agents/accounts/[a-z][a-z0-9-]{0,39}" }, { "pattern": "[^\\s]{1,255}" }, { "pattern": "auth|login" }, "status"] },
     "agent-file": { "program": "cat", "args": [{ "pattern": "/.+\\.md" }] },
     "project-trust": { "program": "plugin:bin/team-worktree.mjs", "args": ["trust"] },
     "team-worktree": { "program": "plugin:bin/team-worktree.mjs", "args": [{ "pattern": "add|remove" }, { "pattern": "/.+" }, { "pattern": "[a-z0-9][a-z0-9._-]{0,99}" }] }
@@ -264,6 +265,20 @@
           "type": "object",
           "properties": { "id": { "type": "string" } },
           "required": ["id"]
+        }
+      },
+      {
+        "name": "soksak-plugin-agents-clubhouse.member.login",
+        "description": "Open the login of the account of member id, whose home has no login, as a session owned by the room in a tab of the current card. When the login session ends the room summons the members again. A member whose home has a login, or whose account has no home, is refused.",
+        "params": {
+          "type": "object",
+          "properties": { "id": { "type": "string" } },
+          "required": ["id"]
+        },
+        "result": {
+          "type": "object",
+          "properties": { "id": { "type": "string" }, "session": { "type": "string" } },
+          "required": ["id", "session"]
         }
       },
       {
@@ -599,6 +614,11 @@
       {
         "name": "soksak-plugin-agents-clubhouse.tab",
         "description": "Member card of the header: a press outside the role input runs member.set with the toggled state, a drag over another card runs member.move and a right click runs member.leave",
+        "many": true
+      },
+      {
+        "name": "soksak-plugin-agents-clubhouse.login",
+        "description": "Login button of a member card, shown while the home of the account of the member has no login: it runs member.login",
         "many": true
       },
       {

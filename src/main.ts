@@ -42,6 +42,7 @@ import { answerQuestion, questionChoices, readQuestion, showMember } from "./roo
 import { insertMention, mentionCandidates, mentionQuery } from "./room/mention-hint";
 import { reattachedChecks, rosterFrom, type RosterEntry } from "./room/roster";
 import { initialsOf, memberCount, memberState } from "./room/member-card";
+import { createLoginGate } from "./room/login";
 import { inviteParams } from "./room/invite";
 import { roomTitle } from "./room/title";
 import { measuredCardSize } from "./room/card-size";
@@ -261,6 +262,13 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   let definitions: AgentDefinition[] = [];
   // The open session of each member of the room and of each team member, read again after each change of core.sessions (C3).
   let memberSessions = new Map<string, string>();
+  // The members that wait for the login of their home and the login sessions of the room (docs/spec/room.md#login); the size of a login
+  // session is the measured card size of the summon.
+  const loginGate = createLoginGate({
+    run: async (args) => bridge!.runtime.program.run("account-login", args),
+    commands: room.commands,
+    size: () => trigger.size(),
+  });
   // The ids of the sessions that core.sessions lists as open, and the summons that run one after the other (C3, C4).
   const openSessionIds = new Set<string>();
   const runTrigger = serialRunner();
@@ -394,7 +402,23 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
         expose.bind(role, `${EXPOSE}.member.role`, () => ({ id: entry.id, role: role.value }), { event: "change", failed: failed("member.role") }),
         "member.role",
       );
-      sub.append(role, elText("span", "", "state"));
+      // The login button opens the login of the account while the home of the account has no login (docs/spec/room.md#login).
+      const login = elText("button", t("loginButton", lang), "st-login");
+      (login as HTMLButtonElement).type = "button";
+      login.dataset.expose = `${EXPOSE}.login`;
+      login.hidden = true;
+      login.addEventListener("pointerdown", (event) => event.stopPropagation());
+      bound(
+        expose.bind(login, `${EXPOSE}.member.login`, () => ({ id: entry.id }), {
+          when: (event: Event) => {
+            event.stopPropagation();
+            return true;
+          },
+          failed: failed("member.login"),
+        }),
+        "member.login",
+      );
+      sub.append(role, elText("span", "", "state"), login);
       // A press runs member.set with the toggled state; the click that ends a drag runs nothing (docs/spec/room.md#commands).
       bound(
         expose.bind(tab, `${EXPOSE}.member.set`, () => ({ id: entry.id, checked: !entry.checked }), {
@@ -444,9 +468,13 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
     const waited = waitedMembers();
     for (const tab of tabsEl.querySelectorAll<HTMLElement>(".st-tab")) {
       const id = tab.dataset.id!;
-      const state = memberState(memberSessions.has(id), waited.has(id));
-      tab.classList.toggle("none", state === "none");
-      tab.querySelector(".state")!.textContent = t(state === "answering" ? "stateAnswering" : state === "idle" ? "stateIdle" : "stateNone", lang);
+      const state = memberState(memberSessions.has(id), waited.has(id), loginGate.needs(id));
+      tab.classList.toggle("none", state === "none" || state === "login");
+      tab.querySelector(".state")!.textContent = t(
+        state === "answering" ? "stateAnswering" : state === "idle" ? "stateIdle" : state === "login" ? "stateLogin" : "stateNone",
+        lang,
+      );
+      tab.querySelector<HTMLElement>(".st-login")!.hidden = state !== "login";
     }
   }
 
@@ -556,6 +584,8 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
       done();
     }
     sessionsValue = value;
+    // A login session that ended summons the members again, which reads the login of their homes (docs/spec/room.md#login).
+    if (loginGate.sessionsChanged(openSessionIds)) summon();
     for (const listener of [...sessionListeners]) listener(value);
     refreshReported();
   })).catch((error: unknown) => report("core.sessions", `status watch: ${String((error as Error)?.message ?? error)}`));
@@ -612,11 +642,36 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
       // A Claude Code member starts with its session id and agent, and a later launch resumes the id (docs/spec/room.md#team).
       return [{ ...member, params: { ...member.params, args: [...(member.params.args as string[]), ...agentArgs(entry)] } }];
     });
+  // The definition of a member of the roster or of the team, a team member with its own id.
+  const memberDefinitionOf = (id: string): AgentDefinition | undefined => {
+    const entry = team.find((one) => one.id === id);
+    return definitions.find((one) => one.id === (entry === undefined ? id : entry.definition));
+  };
+  // member.login opens the login of the account of a member whose home has no login as an owned session, shown as a tab of the current
+  // card (docs/spec/room.md#login).
+  const loginMember = async (params: unknown): Promise<{ id: string; session: string }> => {
+    const id = (params as { id?: unknown } | null)?.id;
+    if (typeof id !== "string" || id === "") throw new Error("member.login id must be a non-empty text");
+    const definition = memberDefinitionOf(id);
+    if (definition === undefined) throw new Error(`member ${id} is not defined`);
+    return loginGate.open({ ...definition, id });
+  };
   const summonRun = (): Promise<void> => {
     // The members of the room and the team members have sessions; a member that is not checked keeps its session (docs/spec/room.md#roster).
-    const checked = [...roster.filter((entry) => entry.member).map((entry) => entry.id), ...team.map((entry) => entry.id)];
+    const members = [...roster.filter((entry) => entry.member).map((entry) => entry.id), ...team.map((entry) => entry.id)];
+    let checked = members;
     return runTrigger(async () => {
       await sessionsReady;
+      // A member without an open session starts only while the home of its account has a login; the others stay members with the state
+      // login (docs/spec/room.md#login).
+      const starting = members.flatMap((id) => {
+        if (memberSessions.has(id)) return [];
+        const definition = memberDefinitionOf(id);
+        return definition === undefined ? [] : [{ ...definition, id }];
+      });
+      await loginGate.startable(starting);
+      checked = members.filter((id) => !loginGate.needs(id));
+      showStates();
       // Before a checked Claude Code member of the roster starts in the project folder, the declared program project-trust trusts that
       // folder for Claude Code, so the member opens without the folder trust question (docs/spec/room.md#worktrees).
       if (definitions.some((definition) => checked.includes(definition.id) && isClaude(definition.id))) {
@@ -1045,6 +1100,8 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
       entry.worktree = created.worktree;
       persist();
       await summonRun();
+      // A team member of a home without a login opens no session, and the leader learns why (docs/spec/room.md#login).
+      if (loginGate.needs(entry.id)) throw new Error(`member ${entry.id}: the home of account ${memberDefinitionOf(entry.id)?.account} has no login`);
     } catch (error) {
       team.splice(team.indexOf(entry), 1);
       persist();
@@ -1218,6 +1275,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
     [`${EXPOSE}.tab`]: tabTargets,
     [`${EXPOSE}.invite`]: inviteButton,
     [`${EXPOSE}.role`]: () => [...tabsEl.querySelectorAll<HTMLElement>(".st-role")],
+    [`${EXPOSE}.login`]: () => [...tabsEl.querySelectorAll<HTMLElement>(".st-login")],
     [`${EXPOSE}.mode`]: kib,
     [`${EXPOSE}.question`]: () => [...msgs.querySelectorAll<HTMLElement>(".st-question-answer")],
     [`${EXPOSE}.question.choice`]: () => [...msgs.querySelectorAll<HTMLElement>(".st-question-choice")],
@@ -1229,6 +1287,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
       ...operations,
       [ANSWER_COMMAND]: async (params: unknown) => answers.deliver(params),
       [`${EXPOSE}.member.summon`]: async (params: unknown) => summonMember(params),
+      [`${EXPOSE}.member.login`]: async (params: unknown) => loginMember(params),
       // invite opens the invite dialog and joins the picked definitions in roster order (docs/spec/room.md#invite).
       [`${EXPOSE}.invite`]: async () => {
         const result = await bridge!.runtime.dialog("invite", inviteParams(roster, await agentData("groups")));

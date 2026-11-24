@@ -1,7 +1,7 @@
 // The member cards of the header (docs/spec/room.md#header): the initials of a member name, the state of a member and the count of the
 // checked members. The page draws the cards from these values.
 
-export type MemberState = "answering" | "idle" | "none";
+export type MemberState = "answering" | "idle" | "none" | "login";
 
 // The initials of a name: the first character of its first two words, or its first two characters for a name of one word, in upper
 // case. Characters are code points, so a name in Hangul or with an emoji keeps whole characters.
@@ -12,9 +12,10 @@ export function initialsOf(name: string): string {
   return chars.join("").toUpperCase();
 }
 
-// The state of a member: answering while the room waits for its answer, idle while its session is open, none without an open session.
-export function memberState(open: boolean, waited: boolean): MemberState {
-  if (!open) return "none";
+// The state of a member: answering while the room waits for its answer, idle while its session is open, login without an open session
+// while the home of its account has no login (docs/spec/room.md#login), and none without an open session otherwise.
+export function memberState(open: boolean, waited: boolean, loginNeeded: boolean): MemberState {
+  if (!open) return loginNeeded ? "login" : "none";
   return waited ? "answering" : "idle";
 }
 

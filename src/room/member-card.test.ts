@@ -16,10 +16,16 @@ describe("initialsOf", () => {
 
 describe("memberState", () => {
   it("is none without an open session, answering while an answer is awaited, and idle otherwise", () => {
-    expect(memberState(false, false)).toBe("none");
-    expect(memberState(false, true)).toBe("none");
-    expect(memberState(true, true)).toBe("answering");
-    expect(memberState(true, false)).toBe("idle");
+    expect(memberState(false, false, false)).toBe("none");
+    expect(memberState(false, true, false)).toBe("none");
+    expect(memberState(true, true, false)).toBe("answering");
+    expect(memberState(true, false, false)).toBe("idle");
+  });
+
+  it("is login while the member has no open session and the home of its account has no login (C130)", () => {
+    expect(memberState(false, false, true)).toBe("login");
+    expect(memberState(true, false, true)).toBe("idle");
+    expect(memberState(false, false, false)).toBe("none");
   });
 });
 

@@ -162,6 +162,14 @@ const strings = {
     en: "no session",
     ko: "세션 없음",
   },
+  stateLogin: {
+    en: "login needed",
+    ko: "로그인 필요",
+  },
+  loginButton: {
+    en: "Log in",
+    ko: "로그인",
+  },
   transportReady: {
     en: "Connected: messages go to the checked members with an open session.",
     ko: "연결됨: 메시지는 열린 세션이 있는 체크된 멤버에게 갑니다.",
