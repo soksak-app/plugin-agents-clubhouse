@@ -31,7 +31,7 @@ describe("the start of the room page (C96)", () => {
             data: { definitions: { schema: { type: "object" }, default: {} }, accounts: { schema: { type: "array" }, default: [] } },
             values: {
               definitions: { harness: { name: "harness", account: "claude-main", plugin: "terminal", role: "harness", cwd: "/work" } },
-              accounts: [{ id: "claude-main", cli: "claude", args: [], env: [] }],
+              accounts: [{ id: "claude-main", cli: "claude", args: [], env: [], home: null }],
             },
           },
         },

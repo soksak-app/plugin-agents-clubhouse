@@ -1,7 +1,7 @@
 // The agent definitions of the room, read from the stored project data of the agents plugin (agents docs/spec/definitions.md): the key
 // definitions holds each definition with {name, account, plugin, role, cwd}, and the key accounts holds each account with {id, cli, args,
-// env}. Program and args are not stored: they are the cli and args of the account of the definition, resolved here with the rule of the
-// agents plugin. The room names no plugin in its code; plugin comes from each definition. A stored value of another form is refused with
+// env, home}. Program and args are not stored: they are the cli and args of the account of the definition, resolved here with the rule of
+// the agents plugin, and an account with a home starts its cli through env in that home (agents docs/spec/definitions.md#resolution). The room names no plugin in its code; plugin comes from each definition. A stored value of another form is refused with
 // an explicit error that names the agents project data and the key.
 import { memberLaunch } from "./isolation";
 import type { MemberDefinition } from "./summon";
@@ -13,6 +13,8 @@ export interface AgentDefinition {
   plugin: string;
   program: string;
   args: string[];
+  // The configuration home of the account, {variable, folder}, or null for an account without one.
+  home: { variable: string; folder: string } | null;
   role: string;
   cwd: string;
 }
@@ -24,7 +26,7 @@ const WHERE = "agents project data";
 const DEFINITION_MEMBERS = ["account", "cwd", "name", "plugin", "role"];
 // The agents plugin stores maker on a definition that the listing of a maker group stored (agents docs/spec/definitions.md).
 const DEFINITION_OPTIONAL = ["maker"];
-const ACCOUNT_MEMBERS = ["args", "cli", "env", "id"];
+const ACCOUNT_MEMBERS = ["args", "cli", "env", "home", "id"];
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -48,7 +50,11 @@ export async function readAgentDefinitions(get: AgentDataGet, report: (text: str
   if (!Array.isArray(accounts)) throw new Error(`${WHERE} accounts: the value is not a list of accounts`);
   accounts.forEach((account, index) => {
     if (!isRecord(account) || !sameMembers(account, ACCOUNT_MEMBERS)) {
-      throw new Error(`${WHERE} accounts: account ${index} must have the members id, cli, args and env only`);
+      throw new Error(`${WHERE} accounts: account ${index} must have the members id, cli, args, env and home only`);
+    }
+    const home = account.home;
+    if (home !== null && !(isRecord(home) && sameMembers(home, ["folder", "variable"]) && typeof home.variable === "string" && typeof home.folder === "string")) {
+      throw new Error(`${WHERE} accounts: account ${index} home must be null or {variable, folder}`);
     }
   });
   const definitions = Object.keys(stored).sort().map((id) => {
@@ -67,6 +73,7 @@ export async function readAgentDefinitions(get: AgentDataGet, report: (text: str
       plugin: record.plugin as string,
       program: account.cli as string,
       args: [...(account.args as string[])],
+      home: account.home === null ? null : { ...(account.home as { variable: string; folder: string }) },
       role: record.role as string,
       cwd: record.cwd as string,
     };
@@ -94,6 +101,13 @@ export function acceptAllArgs(program: string, args: readonly string[]): string[
   return flag.same.some((one) => args.includes(one)) ? [] : [flag.add];
 }
 
+// The program and arguments that start the cli with args: through env in the home of the account, so the member uses its login, or the
+// cli itself for an account without a home (agents docs/spec/definitions.md#resolution).
+function homeLaunch(definition: AgentDefinition, args: string[]): { program: string; args: string[] } {
+  if (definition.home === null) return { program: definition.program, args };
+  return { program: "env", args: [`${definition.home.variable}=${definition.home.folder}`, definition.program, ...args] };
+}
+
 // The member of the room for a definition: the session opens with the terminal's start values of the definition (program, arguments,
 // the directory of the definition and its role), and the plugin that runs the session is the one of the definition. A Claude Code member
 // whose definition has an agent file starts with `--agent <agent>`, so it runs with the instructions and tools of that agent (C101).
@@ -104,7 +118,7 @@ export function toMemberDefinition(definition: AgentDefinition, agent: string | 
     id: definition.id,
     name: definition.name,
     plugin: definition.plugin,
-    params: { program: definition.program, args: agent === null ? args : [...args, "--agent", agent], directory: definition.cwd, role: definition.role },
+    params: { ...homeLaunch(definition, agent === null ? args : [...args, "--agent", agent]), directory: definition.cwd, role: definition.role },
     cwd: definition.cwd,
   };
 }

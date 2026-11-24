@@ -10,8 +10,8 @@ const DEFINITIONS = {
   reviewer: { name: "Reviewer", account: "claude-main", plugin: "terminal", role: "reviewer", cwd: "/work/project" },
 };
 const ACCOUNTS = [
-  { id: "claude-main", cli: "claude", args: ["--verbose"], env: ["ANTHROPIC_API_KEY"] },
-  { id: "codex-main", cli: "codex", args: [], env: [] },
+  { id: "claude-main", cli: "claude", args: ["--verbose"], env: ["ANTHROPIC_API_KEY"], home: { variable: "CLAUDE_CONFIG_DIR", folder: "/c/plugin-data/agents/accounts/claude-main" } },
+  { id: "codex-main", cli: "codex", args: [], env: [], home: null },
 ];
 
 // A stored value of the agents plugin per key; a missing key reads as null, as runtime.data.get answers the default of an absent key.
@@ -33,9 +33,16 @@ describe("readAgentDefinitions", () => {
   it("resolves each definition with the program and arguments of its account, in the code point order of its identifier", async () => {
     const store = storeOf({ definitions: DEFINITIONS, accounts: ACCOUNTS });
     expect(await readAgentDefinitions(store.get, fail)).toEqual([
-      { id: "reviewer", name: "Reviewer", account: "claude-main", plugin: "terminal", program: "claude", args: ["--verbose"], role: "reviewer", cwd: "/work/project" },
-      { id: "writer", name: "Writer", account: "codex-main", plugin: "terminal", program: "codex", args: [], role: "writer", cwd: "/work/docs" },
+      { id: "reviewer", name: "Reviewer", account: "claude-main", plugin: "terminal", program: "claude", args: ["--verbose"], home: { variable: "CLAUDE_CONFIG_DIR", folder: "/c/plugin-data/agents/accounts/claude-main" }, role: "reviewer", cwd: "/work/project" },
+      { id: "writer", name: "Writer", account: "codex-main", plugin: "terminal", program: "codex", args: [], home: null, role: "writer", cwd: "/work/docs" },
     ]);
+  });
+
+  it("refuses an account without home, the form before account homes, naming the account", async () => {
+    const old = [{ id: "claude-main", cli: "claude", args: [], env: [] }];
+    await expect(readAgentDefinitions(storeOf({ definitions: DEFINITIONS, accounts: old }).get, fail)).rejects.toThrow(
+      "agents project data accounts: account 0 must have the members id, cli, args, env and home only",
+    );
   });
 
   it("reads only the two keys of the agents project data, and an absent key gives no definitions", async () => {
@@ -73,19 +80,19 @@ describe("readAgentDefinitions", () => {
       "agents project data accounts: the value is not a list of accounts",
     );
     await expect(readAgentDefinitions(storeOf({ definitions: {}, accounts: [{ id: "a", cli: "claude", args: [] }] }).get, fail)).rejects.toThrow(
-      "agents project data accounts: account 0 must have the members id, cli, args and env only",
+      "agents project data accounts: account 0 must have the members id, cli, args, env and home only",
     );
   });
 });
 
 describe("toMemberDefinition", () => {
-  it("gives the name and the start values of the terminal session: program, arguments, directory and role", async () => {
+  it("starts the cli of an account with a home through env in that home, so the member uses the login of the account (A36)", async () => {
     const [definition] = await readAgentDefinitions(storeOf({ definitions: { reviewer: DEFINITIONS.reviewer }, accounts: ACCOUNTS }).get, fail);
     expect(toMemberDefinition(definition!)).toEqual({
       id: "reviewer",
       name: "Reviewer",
       plugin: "terminal",
-      params: { program: "claude", args: ["--verbose", "--setting-sources", "project,local", "--settings", '{"env":{"CLAUDE_CODE_SHELL":"/bin/bash"}}'], directory: "/work/project", role: "reviewer" },
+      params: { program: "env", args: ["CLAUDE_CONFIG_DIR=/c/plugin-data/agents/accounts/claude-main", "claude", "--verbose", "--setting-sources", "project,local", "--settings", '{"env":{"CLAUDE_CODE_SHELL":"/bin/bash"}}'], directory: "/work/project", role: "reviewer" },
       cwd: "/work/project",
     });
   });
@@ -93,14 +100,14 @@ describe("toMemberDefinition", () => {
   it("starts a member with the agent of its definition when one is given (C101, docs/spec/room.md#roster)", async () => {
     const [definition] = await readAgentDefinitions(storeOf({ definitions: { reviewer: DEFINITIONS.reviewer }, accounts: ACCOUNTS }).get, fail);
     expect(toMemberDefinition(definition!, "manager-lead").params.args).toEqual([
-      "--verbose", "--setting-sources", "project,local", "--settings", '{"env":{"CLAUDE_CODE_SHELL":"/bin/bash"}}', "--agent", "manager-lead",
+      "CLAUDE_CONFIG_DIR=/c/plugin-data/agents/accounts/claude-main", "claude", "--verbose", "--setting-sources", "project,local", "--settings", '{"env":{"CLAUDE_CODE_SHELL":"/bin/bash"}}', "--agent", "manager-lead",
     ]);
   });
 });
 
 // C111 (docs/spec/room.md#accept-all): the setting acceptAll starts each member with the flag of its program that accepts every request.
 describe("acceptAll", () => {
-  const base = { id: "w", name: "W", account: "a", plugin: "terminal", role: "", cwd: "/p" };
+  const base = { id: "w", name: "W", account: "a", plugin: "terminal", role: "", cwd: "/p", home: null };
   it("adds --dangerously-skip-permissions to Claude Code and --yolo to Codex", () => {
     expect(toMemberDefinition({ ...base, program: "claude", args: [] }, null, true).params.args).toContain("--dangerously-skip-permissions");
     expect(toMemberDefinition({ ...base, program: "/opt/homebrew/bin/codex", args: [] }, null, true).params.args).toEqual(["--yolo"]);
