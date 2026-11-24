@@ -458,7 +458,7 @@
       },
       {
         "name": "soksak-plugin-agents-clubhouse.answer",
-        "description": "Deliver the answer of a member for the turn whose token its relayed line carries as [@clubhouse] turn <token>, with status continue while an open question, a disagreement or work remains, or settled when its part is done and verified; run it with the surface of the room. Each token takes one answer while its turn is open.",
+        "description": "Deliver the answer of a member for the turn whose token its relayed line carries as [@clubhouse] turn <token>, with status continue while an open question, a disagreement or work remains, or settled when its part is done and verified; run it with the surface of the room. Each token takes one answer while its turn is open. Answers the turn and next, the sentence that tells the member to end its turn without terminal text.",
         "params": {
           "type": "object",
           "properties": {
@@ -470,8 +470,8 @@
         },
         "result": {
           "type": "object",
-          "properties": { "turn": { "type": "string" } },
-          "required": ["turn"]
+          "properties": { "turn": { "type": "string" }, "next": { "type": "string" } },
+          "required": ["turn", "next"]
         }
       },
       {

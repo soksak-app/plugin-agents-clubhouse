@@ -7,6 +7,9 @@
 // the reading. The open tokens are kept in the tab state, so a token opened before a restart is accepted after it.
 
 export const ANSWER_COMMAND = "soksak-plugin-agents-clubhouse.answer";
+// The reply of an accepted answer, which is the last text that the member reads in its turn: a member otherwise writes a summary of
+// the sent answer to the person, which costs tokens and which nobody reads (docs/spec/room.md#answer).
+export const ANSWER_NEXT = "The room has your answer and your turn ended. Stop now and write nothing in your terminal: nobody reads it.";
 
 // The state that an answer declares (docs/spec/room.md#settling): `continue` while an open question, a disagreement or work remains, and
 // `settled` when the member agrees and its work is done.
@@ -112,7 +115,7 @@ export function createAnswerChannel(options: AnswerChannelOptions): AnswerChanne
     deliver(params) {
       const { entry, reply } = take(params);
       settle(entry, reply);
-      return { turn: entry.turn };
+      return { turn: entry.turn, next: ANSWER_NEXT };
     },
     tokens: () => [...open.values()].map(tokenOf),
     turnOf(params) {

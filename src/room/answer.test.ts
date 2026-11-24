@@ -2,7 +2,7 @@
 // answer with the declared command soksak-plugin-agents-clubhouse.answer {turn, text}, and the room accepts each token once, only
 // while its turn is open.
 import { describe, expect, it } from "vitest";
-import { ANSWER_COMMAND, createAnswerChannel, type OpenToken } from "./answer";
+import { ANSWER_COMMAND, ANSWER_NEXT, createAnswerChannel, type OpenToken } from "./answer";
 
 const counter = () => {
   let next = 0;
@@ -15,7 +15,7 @@ describe("createAnswerChannel", () => {
     const turn = channel.open("s-1", "m", 0);
     expect(turn.turn).toBe("t-1");
     const text = Array.from({ length: 451 }, (_, index) => `row ${index}`).join("\n");
-    expect(channel.deliver({ status: "settled", turn: "t-1", text })).toEqual({ turn: "t-1" });
+    expect(channel.deliver({ status: "settled", turn: "t-1", text })).toEqual({ turn: "t-1", next: ANSWER_NEXT });
     await expect(turn.answer).resolves.toEqual({ text, status: "settled" });
   });
 
@@ -122,9 +122,17 @@ describe("an answer across a reload of the room page", () => {
       restoredAnswer: (token, text) => record.append(token.member, text),
       changed: () => {},
     });
-    expect(after.deliver({ turn: "t-1", status: "settled", text: "done" })).toEqual({ turn: "t-1" });
+    expect(after.deliver({ turn: "t-1", status: "settled", text: "done" })).toEqual({ turn: "t-1", next: ANSWER_NEXT });
     expect(record.delivered()).toEqual({ "s-1": 1 });
     expect(record.lines.at(-1)).toMatchObject({ speaker: "m", text: "done" });
     expect(after.tokens()).toEqual([]);
+  });
+});
+
+// The reply of an accepted answer is the last text that the member reads in its turn, so it tells the member to stop without
+// terminal text (C124).
+describe("the reply of an accepted answer", () => {
+  it("tells the member that the turn ended and that it writes nothing in its terminal", () => {
+    expect(ANSWER_NEXT).toBe("The room has your answer and your turn ended. Stop now and write nothing in your terminal: nobody reads it.");
   });
 });

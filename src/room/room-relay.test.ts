@@ -230,8 +230,8 @@ describe("relayInMode (docs/spec/room.md#modes)", () => {
     const core = fakeCore([IDLE("s-1"), IDLE("s-2")]);
     const answers = await relayInMode(core.ports, "turn", MEMBERS, "hello", roomRecord("hello"), OPEN);
     expect(core.submitted).toEqual([
-      { session: "s-1", text: "[@clubhouse] 네 차례야. 아래는 네가 아직 못 본 기록이야. | [@owner] hello | [@clubhouse] answer through the room only: reply to the speakers, put a message to the owner in @owner:, write nothing in your terminal | [@clubhouse] turn t-1" },
-      { session: "s-2", text: "[@clubhouse] 네 차례야. 아래는 네가 아직 못 본 기록이야. | [@owner] hello | [@Claude] answer of s-1 | [@clubhouse] answer through the room only: reply to the speakers, put a message to the owner in @owner:, write nothing in your terminal | [@clubhouse] turn t-2" },
+      { session: "s-1", text: "[@clubhouse] 네 차례야. 아래는 네가 아직 못 본 기록이야. | [@owner] hello | [@clubhouse] answer through the room only: reply to the speakers, put a message to the owner in @owner:, end every step with no terminal text, also while background work runs | [@clubhouse] turn t-1" },
+      { session: "s-2", text: "[@clubhouse] 네 차례야. 아래는 네가 아직 못 본 기록이야. | [@owner] hello | [@Claude] answer of s-1 | [@clubhouse] answer through the room only: reply to the speakers, put a message to the owner in @owner:, end every step with no terminal text, also while background work runs | [@clubhouse] turn t-2" },
     ]);
     expect(answers.map((answer) => answer.id)).toEqual(["reviewer", "writer"]);
   });
@@ -240,21 +240,21 @@ describe("relayInMode (docs/spec/room.md#modes)", () => {
     const core = fakeCore([IDLE("s-1"), IDLE("s-2")]);
     await relayInMode(core.ports, "turn", MEMBERS, "@codex first, then @claude", roomRecord("@codex first, then @claude"), OPEN);
     expect(core.submitted).toEqual([
-      { session: "s-2", text: "[@clubhouse] 네 차례야. 아래는 네가 아직 못 본 기록이야. | [@owner] @codex first, then @claude | [@clubhouse] answer through the room only: reply to the speakers, put a message to the owner in @owner:, write nothing in your terminal | [@clubhouse] turn t-1" },
-      { session: "s-1", text: "[@clubhouse] 네 차례야. 아래는 네가 아직 못 본 기록이야. | [@owner] @codex first, then @claude | [@Codex] answer of s-2 | [@clubhouse] answer through the room only: reply to the speakers, put a message to the owner in @owner:, write nothing in your terminal | [@clubhouse] turn t-2" },
+      { session: "s-2", text: "[@clubhouse] 네 차례야. 아래는 네가 아직 못 본 기록이야. | [@owner] @codex first, then @claude | [@clubhouse] answer through the room only: reply to the speakers, put a message to the owner in @owner:, end every step with no terminal text, also while background work runs | [@clubhouse] turn t-1" },
+      { session: "s-1", text: "[@clubhouse] 네 차례야. 아래는 네가 아직 못 본 기록이야. | [@owner] @codex first, then @claude | [@Codex] answer of s-2 | [@clubhouse] answer through the room only: reply to the speakers, put a message to the owner in @owner:, end every step with no terminal text, also while background work runs | [@clubhouse] turn t-2" },
     ]);
   });
 
   it("turn: an earlier answer of several lines reaches the next member as one line", async () => {
     const core = fakeCore([IDLE("s-1"), IDLE("s-2")], { replies: { "s-1": "one\ntwo" } });
     await relayInMode(core.ports, "turn", MEMBERS, "hello", roomRecord("hello"), OPEN);
-    expect(core.submitted[1]).toEqual({ session: "s-2", text: "[@clubhouse] 네 차례야. 아래는 네가 아직 못 본 기록이야. | [@owner] hello | [@Claude] one two | [@clubhouse] answer through the room only: reply to the speakers, put a message to the owner in @owner:, write nothing in your terminal | [@clubhouse] turn t-2" });
+    expect(core.submitted[1]).toEqual({ session: "s-2", text: "[@clubhouse] 네 차례야. 아래는 네가 아직 못 본 기록이야. | [@owner] hello | [@Claude] one two | [@clubhouse] answer through the room only: reply to the speakers, put a message to the owner in @owner:, end every step with no terminal text, also while background work runs | [@clubhouse] turn t-2" });
   });
 
   it("facil: relays to the first idle member in roster order only", async () => {
     const core = fakeCore([{ session: "s-1", program: { state: "working" } }, IDLE("s-2")]);
     const answers = await relayInMode(core.ports, "facil", MEMBERS, "who takes this", roomRecord("who takes this"), OPEN);
-    expect(core.submitted).toEqual([{ session: "s-2", text: "[@clubhouse] 네 차례야. 아래는 네가 아직 못 본 기록이야. | [@owner] who takes this | [@clubhouse] answer through the room only: reply to the speakers, put a message to the owner in @owner:, write nothing in your terminal | [@clubhouse] turn t-1" }]);
+    expect(core.submitted).toEqual([{ session: "s-2", text: "[@clubhouse] 네 차례야. 아래는 네가 아직 못 본 기록이야. | [@owner] who takes this | [@clubhouse] answer through the room only: reply to the speakers, put a message to the owner in @owner:, end every step with no terminal text, also while background work runs | [@clubhouse] turn t-1" }]);
     expect(answers.map((answer) => answer.id)).toEqual(["writer"]);
   });
 
@@ -279,7 +279,7 @@ describe("relayInMode (docs/spec/room.md#modes)", () => {
     core.finish("s-1");
     const answers = await relay;
     expect(answers.map((answer) => answer.id)).toEqual(["reviewer", "writer"]);
-    expect(core.submitted.map((entry) => entry.text)).toEqual(["[@clubhouse] 네 차례야. 아래는 네가 아직 못 본 기록이야. | [@owner] all at once | [@clubhouse] answer through the room only: reply to the speakers, put a message to the owner in @owner:, write nothing in your terminal | [@clubhouse] turn t-1", "[@clubhouse] 네 차례야. 아래는 네가 아직 못 본 기록이야. | [@owner] all at once | [@clubhouse] answer through the room only: reply to the speakers, put a message to the owner in @owner:, write nothing in your terminal | [@clubhouse] turn t-2"]);
+    expect(core.submitted.map((entry) => entry.text)).toEqual(["[@clubhouse] 네 차례야. 아래는 네가 아직 못 본 기록이야. | [@owner] all at once | [@clubhouse] answer through the room only: reply to the speakers, put a message to the owner in @owner:, end every step with no terminal text, also while background work runs | [@clubhouse] turn t-1", "[@clubhouse] 네 차례야. 아래는 네가 아직 못 본 기록이야. | [@owner] all at once | [@clubhouse] answer through the room only: reply to the speakers, put a message to the owner in @owner:, end every step with no terminal text, also while background work runs | [@clubhouse] turn t-2"]);
   });
 
   it("simul: lets the other turns end and rejects with the first failure in member order", async () => {
@@ -305,9 +305,9 @@ describe("the room record across turns (docs/spec/room.md#room-record)", () => {
     await send(core, "turn", THREE, record, "introduce yourselves");
     await send(core, "turn", THREE, record, "what did the others say");
     expect(core.submitted.slice(3)).toEqual([
-      { session: "s-1", text: "[@clubhouse] 네 차례야. 아래는 네가 아직 못 본 기록이야. | [@Codex] answer of s-2 | [@Tester] answer of s-3 | [@clubhouse] the conversation settled | [@owner] what did the others say | [@clubhouse] answer through the room only: reply to the speakers, put a message to the owner in @owner:, write nothing in your terminal | [@clubhouse] turn t-4" },
-      { session: "s-2", text: "[@clubhouse] 네 차례야. 아래는 네가 아직 못 본 기록이야. | [@Tester] answer of s-3 | [@clubhouse] the conversation settled | [@owner] what did the others say | [@Claude] answer of s-1 | [@clubhouse] answer through the room only: reply to the speakers, put a message to the owner in @owner:, write nothing in your terminal | [@clubhouse] turn t-5" },
-      { session: "s-3", text: "[@clubhouse] 네 차례야. 아래는 네가 아직 못 본 기록이야. | [@clubhouse] the conversation settled | [@owner] what did the others say | [@Claude] answer of s-1 | [@Codex] answer of s-2 | [@clubhouse] answer through the room only: reply to the speakers, put a message to the owner in @owner:, write nothing in your terminal | [@clubhouse] turn t-6" },
+      { session: "s-1", text: "[@clubhouse] 네 차례야. 아래는 네가 아직 못 본 기록이야. | [@Codex] answer of s-2 | [@Tester] answer of s-3 | [@clubhouse] the conversation settled | [@owner] what did the others say | [@clubhouse] answer through the room only: reply to the speakers, put a message to the owner in @owner:, end every step with no terminal text, also while background work runs | [@clubhouse] turn t-4" },
+      { session: "s-2", text: "[@clubhouse] 네 차례야. 아래는 네가 아직 못 본 기록이야. | [@Tester] answer of s-3 | [@clubhouse] the conversation settled | [@owner] what did the others say | [@Claude] answer of s-1 | [@clubhouse] answer through the room only: reply to the speakers, put a message to the owner in @owner:, end every step with no terminal text, also while background work runs | [@clubhouse] turn t-5" },
+      { session: "s-3", text: "[@clubhouse] 네 차례야. 아래는 네가 아직 못 본 기록이야. | [@clubhouse] the conversation settled | [@owner] what did the others say | [@Claude] answer of s-1 | [@Codex] answer of s-2 | [@clubhouse] answer through the room only: reply to the speakers, put a message to the owner in @owner:, end every step with no terminal text, also while background work runs | [@clubhouse] turn t-6" },
     ]);
     expect(record.delivered()).toEqual({ "s-1": 6, "s-2": 7, "s-3": 8 });
   });
@@ -318,8 +318,8 @@ describe("the room record across turns (docs/spec/room.md#room-record)", () => {
     await send(core, "simul", MEMBERS, record, "first");
     await send(core, "simul", MEMBERS, record, "second");
     expect(core.submitted.slice(2).map((entry) => entry.text)).toEqual([
-      "[@clubhouse] 네 차례야. 아래는 네가 아직 못 본 기록이야. | [@Codex] answer of s-2 | [@clubhouse] the conversation settled | [@owner] second | [@clubhouse] answer through the room only: reply to the speakers, put a message to the owner in @owner:, write nothing in your terminal | [@clubhouse] turn t-3",
-      "[@clubhouse] 네 차례야. 아래는 네가 아직 못 본 기록이야. | [@Claude] answer of s-1 | [@clubhouse] the conversation settled | [@owner] second | [@clubhouse] answer through the room only: reply to the speakers, put a message to the owner in @owner:, write nothing in your terminal | [@clubhouse] turn t-4",
+      "[@clubhouse] 네 차례야. 아래는 네가 아직 못 본 기록이야. | [@Codex] answer of s-2 | [@clubhouse] the conversation settled | [@owner] second | [@clubhouse] answer through the room only: reply to the speakers, put a message to the owner in @owner:, end every step with no terminal text, also while background work runs | [@clubhouse] turn t-3",
+      "[@clubhouse] 네 차례야. 아래는 네가 아직 못 본 기록이야. | [@Claude] answer of s-1 | [@clubhouse] the conversation settled | [@owner] second | [@clubhouse] answer through the room only: reply to the speakers, put a message to the owner in @owner:, end every step with no terminal text, also while background work runs | [@clubhouse] turn t-4",
     ]);
   });
 
@@ -328,7 +328,7 @@ describe("the room record across turns (docs/spec/room.md#room-record)", () => {
     const record = roomRecord();
     await send(core, "turn", THREE, record, "@Codex 정리해 줘. 나머지는 보태 줘.");
     expect(core.submitted.map((entry) => entry.session)).toEqual(["s-2", "s-1", "s-3"]);
-    expect(core.submitted[1].text).toBe("[@clubhouse] 네 차례야. 아래는 네가 아직 못 본 기록이야. | [@owner] @Codex 정리해 줘. 나머지는 보태 줘. | [@Codex] answer of s-2 | [@clubhouse] answer through the room only: reply to the speakers, put a message to the owner in @owner:, write nothing in your terminal | [@clubhouse] turn t-2");
+    expect(core.submitted[1].text).toBe("[@clubhouse] 네 차례야. 아래는 네가 아직 못 본 기록이야. | [@owner] @Codex 정리해 줘. 나머지는 보태 줘. | [@Codex] answer of s-2 | [@clubhouse] answer through the room only: reply to the speakers, put a message to the owner in @owner:, end every step with no terminal text, also while background work runs | [@clubhouse] turn t-2");
   });
 
   it("a send whose submit core refused leaves no owner line, so repeated refused sends leave none", async () => {
@@ -375,10 +375,10 @@ describe("the conversation of the members (docs/spec/room.md#conversation)", () 
       { id: "reviewer", text: "agreed", status: "settled" },
     ]);
     expect(core.submitted.map((entry) => entry.text)).toEqual([
-      "[@clubhouse] 네 차례야. 아래는 네가 아직 못 본 기록이야. | [@owner] @claude start | [@clubhouse] answer through the room only: reply to the speakers, put a message to the owner in @owner:, write nothing in your terminal | [@clubhouse] turn t-1",
-      "[@clubhouse] 네 차례야. 아래는 네가 아직 못 본 기록이야. | [@owner] @claude start | [@Claude] @Codex and @tester, your view? | [@clubhouse] answer through the room only: reply to the speakers, put a message to the owner in @owner:, write nothing in your terminal | [@clubhouse] turn t-2",
-      "[@clubhouse] 네 차례야. 아래는 네가 아직 못 본 기록이야. | [@owner] @claude start | [@Claude] @Codex and @tester, your view? | [@Codex] @Claude I disagree | [@clubhouse] answer through the room only: reply to the speakers, put a message to the owner in @owner:, write nothing in your terminal | [@clubhouse] turn t-3",
-      "[@clubhouse] 네 차례야. 아래는 네가 아직 못 본 기록이야. | [@Codex] @Claude I disagree | [@Tester] fine | [@clubhouse] answer through the room only: reply to the speakers, put a message to the owner in @owner:, write nothing in your terminal | [@clubhouse] turn t-4",
+      "[@clubhouse] 네 차례야. 아래는 네가 아직 못 본 기록이야. | [@owner] @claude start | [@clubhouse] answer through the room only: reply to the speakers, put a message to the owner in @owner:, end every step with no terminal text, also while background work runs | [@clubhouse] turn t-1",
+      "[@clubhouse] 네 차례야. 아래는 네가 아직 못 본 기록이야. | [@owner] @claude start | [@Claude] @Codex and @tester, your view? | [@clubhouse] answer through the room only: reply to the speakers, put a message to the owner in @owner:, end every step with no terminal text, also while background work runs | [@clubhouse] turn t-2",
+      "[@clubhouse] 네 차례야. 아래는 네가 아직 못 본 기록이야. | [@owner] @claude start | [@Claude] @Codex and @tester, your view? | [@Codex] @Claude I disagree | [@clubhouse] answer through the room only: reply to the speakers, put a message to the owner in @owner:, end every step with no terminal text, also while background work runs | [@clubhouse] turn t-3",
+      "[@clubhouse] 네 차례야. 아래는 네가 아직 못 본 기록이야. | [@Codex] @Claude I disagree | [@Tester] fine | [@clubhouse] answer through the room only: reply to the speakers, put a message to the owner in @owner:, end every step with no terminal text, also while background work runs | [@clubhouse] turn t-4",
     ]);
   });
 
@@ -455,14 +455,14 @@ describe("roles in the turn lines (docs/spec/room.md#roles)", () => {
     const core = fakeCore([IDLE("s-1"), IDLE("s-2"), IDLE("s-3")]);
     const roles = THREE.map((member, index) => ({ ...member, role: ["frontend", "server", "server"][index] }));
     await send(core, "turn", roles, roomRecord(), "build it");
-    expect(core.submitted[0].text).toBe("[@clubhouse] 네 차례야. 아래는 네가 아직 못 본 기록이야. | [@owner] build it | [@clubhouse] roles: you are frontend; Codex: server, Tester: server | [@clubhouse] answer through the room only: reply to the speakers, put a message to the owner in @owner:, write nothing in your terminal | [@clubhouse] turn t-1");
-    expect(core.submitted[1].text).toContain("[@clubhouse] roles: you are server; Claude: frontend, Tester: server | [@clubhouse] answer through the room only: reply to the speakers, put a message to the owner in @owner:, write nothing in your terminal | [@clubhouse] turn t-2");
+    expect(core.submitted[0].text).toBe("[@clubhouse] 네 차례야. 아래는 네가 아직 못 본 기록이야. | [@owner] build it | [@clubhouse] roles: you are frontend; Codex: server, Tester: server | [@clubhouse] answer through the room only: reply to the speakers, put a message to the owner in @owner:, end every step with no terminal text, also while background work runs | [@clubhouse] turn t-1");
+    expect(core.submitted[1].text).toContain("[@clubhouse] roles: you are server; Claude: frontend, Tester: server | [@clubhouse] answer through the room only: reply to the speakers, put a message to the owner in @owner:, end every step with no terminal text, also while background work runs | [@clubhouse] turn t-2");
   });
 
   it("states no roles when no member has one", async () => {
     const core = fakeCore([IDLE("s-1")]);
     await send(core, "turn", [MEMBERS[0]], roomRecord(), "hi");
-    expect(core.submitted[0].text).toBe("[@clubhouse] 네 차례야. 아래는 네가 아직 못 본 기록이야. | [@owner] hi | [@clubhouse] answer through the room only: reply to the speakers, put a message to the owner in @owner:, write nothing in your terminal | [@clubhouse] turn t-1");
+    expect(core.submitted[0].text).toBe("[@clubhouse] 네 차례야. 아래는 네가 아직 못 본 기록이야. | [@owner] hi | [@clubhouse] answer through the room only: reply to the speakers, put a message to the owner in @owner:, end every step with no terminal text, also while background work runs | [@clubhouse] turn t-1");
   });
 });
 
@@ -481,7 +481,7 @@ describe("the turn rule (docs/spec/room.md#room-protocol)", () => {
     const core = fakeCore([IDLE("s-1")]);
     await send(core, "turn", [MEMBERS[0]], roomRecord(), "hi");
     expect(core.submitted[0].text).toContain(`[@clubhouse] ${TURN_RULE} | [@clubhouse] turn t-1`);
-    expect(TURN_RULE).toBe("answer through the room only: reply to the speakers, put a message to the owner in @owner:, write nothing in your terminal");
+    expect(TURN_RULE).toBe("answer through the room only: reply to the speakers, put a message to the owner in @owner:, end every step with no terminal text, also while background work runs");
   });
 });
 

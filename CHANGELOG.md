@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- C124: The turn rule tells a member to end every step with no terminal text, also while background work runs, and the reply of an accepted answer carries `next`, which tells the member that its turn ended and that nobody reads its terminal. Measured terminal texts per member turn: 1.85 before, 1.4 after; the remaining texts are summaries of the sent answer (C124-1).
 - C125: The room has no control tower: the header button `AI 명령`, its modal, the `tower.*` commands, the element `tower` and the project data keys `tower-plans`, `tower-steps` and `macros` are removed.
 - C122: A claim or a report of an open turn shows at its place in the record under the name of its member until the answer of the turn arrives, and then under that answer; a release goes under the last answer of its member. Red: the two new `conversationView` tests failed, the claim and the report sat under the earlier answer. Green: all 547 tests of `npx vitest run` pass and `npm run typecheck` passes.
 - C121: The version is 0.0.25, which releases C119.

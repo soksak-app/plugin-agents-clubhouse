@@ -30,7 +30,9 @@ export interface NamedRelayMember extends RelayMember {
 // has received every record line, which still runs and takes an answer with a status (docs/spec/room.md#modes).
 export const TURN_TEXT = "네 차례야. 아래는 네가 아직 못 본 기록이야.";
 export const EMPTY_TURN_TEXT = "네 차례야. 네가 아직 못 본 기록은 없어.";
-export const TURN_RULE = "answer through the room only: reply to the speakers, put a message to the owner in @owner:, write nothing in your terminal";
+// A member that writes a note while its background agents run spends tokens on text that nobody reads, so the rule names that case
+// (docs/spec/room.md#room-protocol).
+export const TURN_RULE = "answer through the room only: reply to the speakers, put a message to the owner in @owner:, end every step with no terminal text, also while background work runs";
 
 export function rolesLine(member: NamedRelayMember, members: NamedRelayMember[]): string | null {
   if (!members.some((entry) => (entry.role ?? "") !== "")) return null;
