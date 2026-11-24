@@ -107,6 +107,6 @@ describe("startRoomPage", () => {
   });
 
   it("declares a project data key for every store the page creates", () => {
-    expect(Object.keys(manifest.data).sort()).toEqual(["macros", "member-sessions", "tower-plans", "tower-steps"]);
+    expect(Object.keys(manifest.data).sort()).toEqual(["member-sessions"]);
   });
 });

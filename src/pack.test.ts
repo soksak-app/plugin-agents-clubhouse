@@ -81,10 +81,3 @@ describe("the conversation bound (docs/spec/room.md#conversation)", () => {
     expect(manifest.exposes.element.map((e) => e.name)).toContain("soksak-plugin-agents-clubhouse.stop");
   });
 });
-
-describe("tower header action", () => {
-  it("is the room element tower, not a titlebar action", () => {
-    expect(manifest.exposes.element.map((e) => e.name)).toContain("soksak-plugin-agents-clubhouse.tower");
-    expect(read("src/tower/header.ts")).not.toContain("registerHeaderAction");
-  });
-});

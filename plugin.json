@@ -53,18 +53,6 @@
     "member-sessions": {
       "schema": { "type": "array", "items": { "type": "object" } },
       "default": []
-    },
-    "tower-plans": {
-      "schema": { "type": "array", "items": { "type": "object" } },
-      "default": []
-    },
-    "tower-steps": {
-      "schema": { "type": "array", "items": { "type": "object" } },
-      "default": []
-    },
-    "macros": {
-      "schema": { "type": "array", "items": { "type": "object" } },
-      "default": []
     }
   },
   "programs": {
@@ -527,120 +515,6 @@
           "properties": { "turn": { "type": "string" }, "paths": { "type": "array", "items": { "type": "string" } } },
           "required": ["turn", "paths"]
         }
-      },
-      {
-        "name": "soksak-plugin-agents-clubhouse.tower.set",
-        "description": "Open the control tower modal when open is true and close it when open is false. Setting the current state changes nothing.",
-        "params": {
-          "type": "object",
-          "properties": { "open": { "type": "boolean" } },
-          "required": ["open"]
-        },
-        "result": {
-          "type": "object",
-          "properties": { "open": { "type": "boolean" } },
-          "required": ["open"]
-        }
-      },
-      {
-        "name": "soksak-plugin-agents-clubhouse.tower.plan",
-        "description": "Turn a natural-language request into a validated command, DOM and status plan, returned as a dry run unless commit is true.",
-        "params": {
-          "type": "object",
-          "properties": {
-            "text": { "type": "string" },
-            "commit": { "type": "boolean" },
-            "plan": { "type": "array" },
-            "render": { "type": "boolean" },
-            "edit": { "type": "array" },
-            "distribute": { "type": "boolean" }
-          },
-          "required": ["text"]
-        },
-        "result": {
-          "type": "object",
-          "properties": { "ok": { "type": "boolean" } },
-          "required": ["ok"]
-        }
-      },
-      {
-        "name": "soksak-plugin-agents-clubhouse.tower.reflect",
-        "description": "Plan, dispatch and verify a natural-language request, re-planning on failure up to a cap, then escalate.",
-        "params": {
-          "type": "object",
-          "properties": {
-            "text": { "type": "string" },
-            "plans": { "type": "array" },
-            "goalCheck": { "type": "object" },
-            "failGoalCodes": { "type": "array" },
-            "maxReplans": { "type": "number" },
-            "maxSteps": { "type": "number" }
-          },
-          "required": ["text"]
-        },
-        "result": {
-          "type": "object",
-          "properties": {
-            "ok": { "type": "boolean" },
-            "outcome": { "type": "string" }
-          },
-          "required": ["ok"]
-        }
-      },
-      {
-        "name": "soksak-plugin-agents-clubhouse.tower.trace",
-        "description": "Return the persisted plan and step history of the control tower, newest first, or the steps of one plan.",
-        "params": {
-          "type": "object",
-          "properties": {
-            "plan": { "type": "string" },
-            "limit": { "type": "number" }
-          }
-        },
-        "result": {
-          "type": "object",
-          "properties": { "ok": { "type": "boolean" } },
-          "required": ["ok"]
-        }
-      },
-      {
-        "name": "soksak-plugin-agents-clubhouse.tower.scan",
-        "description": "Scan untrusted text and plan steps for injection signatures and report the verdict.",
-        "params": {
-          "type": "object",
-          "properties": {
-            "untrusted": { "type": "array" },
-            "steps": { "type": "array" }
-          }
-        },
-        "result": {
-          "type": "object",
-          "properties": { "ok": { "type": "boolean" } },
-          "required": ["ok"]
-        }
-      },
-      {
-        "name": "soksak-plugin-agents-clubhouse.tower.macro",
-        "description": "Save, run, list, forget or propose a named control-tower macro.",
-        "params": {
-          "type": "object",
-          "properties": {
-            "verb": { "type": "string", "enum": ["save", "run", "list", "forget", "propose"] },
-            "name": { "type": "string" },
-            "trigger": { "type": "string" },
-            "steps": { "type": "array" },
-            "tainted": { "type": "boolean" },
-            "scanVerdict": { "type": "string" },
-            "threshold": { "type": "number" },
-            "autoConfirm": { "type": "string", "enum": ["deny"] }
-          },
-          "required": ["verb"]
-        },
-        "result": {
-          "type": "object",
-          "properties": { "ok": { "type": "boolean" } },
-          "required": ["ok"]
-        }
       }
     ],
     "element": [
@@ -673,10 +547,6 @@
       {
         "name": "soksak-plugin-agents-clubhouse.mode",
         "description": "Conversation mode buttons (facilitator, sequential, simultaneous): each runs mode.set with its mode"
-      },
-      {
-        "name": "soksak-plugin-agents-clubhouse.tower",
-        "description": "Control tower button: runs tower.set with the state opposite to the current one, opening or closing the control tower modal (natural-language input, dry run, command templates, search, graph)"
       },
       {
         "name": "soksak-plugin-agents-clubhouse.question",

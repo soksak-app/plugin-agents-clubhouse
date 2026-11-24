@@ -38,26 +38,26 @@ describe("createProjectCollections", () => {
   it("stores a document under its declared key and returns its id", async () => {
     const data = fakeData();
     const collections = createProjectCollections(data);
-    const id = await collections.put("tower_plans", { sessionId: "p", nl: "close the left panel" }, { id: "plan-1" });
-    expect(id).toBe("plan-1");
-    expect(data.keys).toEqual(["tower-plans"]);
-    expect(await collections.get("tower_plans", "plan-1")).toEqual({ sessionId: "p", nl: "close the left panel", id: "plan-1" });
+    const id = await collections.put("room_member_sessions", { sessionId: "p", member: "a" }, { id: "session-1" });
+    expect(id).toBe("session-1");
+    expect(data.keys).toEqual(["member-sessions"]);
+    expect(await collections.get("room_member_sessions", "session-1")).toEqual({ sessionId: "p", member: "a", id: "session-1" });
   });
 
   it("replaces a document with the same id instead of appending a second one", async () => {
     const data = fakeData();
     const collections = createProjectCollections(data);
-    await collections.put("tower_plans", { sessionId: "p", outcome: "running" }, { id: "plan-1" });
-    await collections.put("tower_plans", { sessionId: "p", outcome: "done" }, { id: "plan-1" });
-    expect(data.values.get("tower-plans")).toEqual([{ sessionId: "p", outcome: "done", id: "plan-1" }]);
+    await collections.put("room_member_sessions", { sessionId: "p", member: "a", outcome: "running" }, { id: "session-1" });
+    await collections.put("room_member_sessions", { sessionId: "p", member: "a", outcome: "done" }, { id: "session-1" });
+    expect(data.values.get("member-sessions")).toEqual([{ sessionId: "p", member: "a", outcome: "done", id: "session-1" }]);
   });
 
   it("answers a query with the where filter, the order and the limit", async () => {
     const collections = createProjectCollections(fakeData());
-    await collections.put("tower_steps", { sessionId: "p", planId: "a", seq: 2 }, { id: "s2" });
-    await collections.put("tower_steps", { sessionId: "p", planId: "a", seq: 1 }, { id: "s1" });
-    await collections.put("tower_steps", { sessionId: "p", planId: "b", seq: 0 }, { id: "s0" });
-    const rows = await collections.query("tower_steps", { where: { sessionId: "p", planId: "a" }, order: "seq", desc: false, limit: 1 });
+    await collections.put("room_member_sessions", { sessionId: "p", member: "a", seq: 2 }, { id: "s2" });
+    await collections.put("room_member_sessions", { sessionId: "p", member: "a", seq: 1 }, { id: "s1" });
+    await collections.put("room_member_sessions", { sessionId: "p", member: "b", seq: 0 }, { id: "s0" });
+    const rows = await collections.query("room_member_sessions", { where: { sessionId: "p", member: "a" }, order: "seq", desc: false, limit: 1 });
     expect(rows.map((r) => r.id)).toEqual(["s1"]);
   });
 
@@ -67,7 +67,7 @@ describe("createProjectCollections", () => {
   });
 
   it("maps each collection to a key of plugin.json whose schema is an array of objects with an empty default", () => {
-    const keys = ["tower-plans", "tower-steps", "macros", "member-sessions"];
+    const keys = ["member-sessions"];
     for (const key of keys) {
       expect(manifest.data[key], key).toBeDefined();
       expect(manifest.data[key].schema, key).toEqual({ type: "array", items: { type: "object" } });

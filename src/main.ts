@@ -1,7 +1,7 @@
 // soksak-plugin-agents-clubhouse — the room page (ui/clubhouse.html, the view surface of plugin.json).
 //
 // The page starts through the view bridge of @soksak/plugin-api/view (core docs/spec/native-surfaces.md#view-surfaces): it
-// reads the settings and the project data, builds the room (roster tabs, conversation mode, control tower button), and then
+// reads the settings and the project data, builds the room (roster tabs, conversation mode), and then
 // registers the commands, elements and status that plugin.json declares (src/room/page.ts). The room has no member transport
 // yet: the transport status is unavailable and the composer stays disabled until the member sessions (C3) and the terminal
 // relay (C5) exist.
@@ -14,7 +14,6 @@ import { createRoomCommands, type RoomMode, type RoomState } from "./room/comman
 import type { ElementTarget, RoomHandlers } from "./room/exposure";
 import { startRoomPage, type RoomContext } from "./room/page";
 import type { RoomPort } from "./room/port";
-import { createTrace } from "./tower/trace";
 import { createRoomReport } from "./room/report";
 import { createArrangementStatus } from "./room/arrangement";
 import { HEADER_CSS, createRoomHeader } from "./room/header";
@@ -46,9 +45,6 @@ import { roomTitle } from "./room/title";
 import { measuredCardSize } from "./room/card-size";
 import { createRoomOperations } from "./room/operations";
 import { ANSWER_COMMAND, createAnswerChannel } from "./room/answer";
-import { createMacroStore } from "./tower/macro";
-import { setupTower } from "./tower/header";
-import { TOWER_LIVE_TOPIC } from "./tower/modal";
 
 const MODES: { id: RoomMode; key: "modeFacil" | "modeTurn" | "modeSimul" }[] = [
   { id: "facil", key: "modeFacil" },
@@ -166,31 +162,8 @@ roomReport.attach(bridge);
 addEventListener("error", (event) => report("page", String(event.error?.message ?? event.message)));
 addEventListener("unhandledrejection", (event) => report("rejection", String(event.reason?.message ?? event.reason)));
 
-const live = new Map<string, Set<(payload: unknown) => void>>();
 const room: RoomPort = {
   commands: { execute: (name, params) => bridge!.calls.request(name, params) },
-  report,
-  declaredCommands: () => manifest.exposes.commands.map((c) => ({ name: c.name, description: c.description })),
-  live: {
-    on(topic, listener) {
-      if (!live.has(topic)) live.set(topic, new Set());
-      live.get(topic)!.add(listener);
-      return { dispose: () => void live.get(topic)?.delete(listener) };
-    },
-    emit(topic, payload) {
-      for (const listener of [...(live.get(topic) ?? [])]) listener(payload);
-    },
-  },
-  onTheme(listener) {
-    const theme = bridge!.runtime.theme(() => listener());
-    return {
-      dispose: () =>
-        void theme.dispose.then(
-          (off) => off(),
-          (error: unknown) => report("theme listener", String((error as Error)?.message ?? error)),
-        ),
-    };
-  },
 };
 
 const expose = createExpose(
@@ -211,7 +184,7 @@ const expose = createExpose(
   () => window.sokSurface?.declarations,
 );
 
-// The room of the page: the roster tabs, the conversation mode, the control tower button and the composer. Its elements and
+// The room of the page: the roster tabs, the conversation mode and the composer. Its elements and
 // status are the handlers that startRoomPage registers.
 async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHandlers> {
   const lang = navigator.language.startsWith("ko") ? "ko" : "en";
@@ -300,8 +273,8 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   const style = document.createElement("style");
   style.textContent = HEADER_CSS + CSS;
   const root = el("div", "st");
-  const header = createRoomHeader(manifest.name, t("towerTitle", lang), transport.reason);
-  const { bar, tabs: tabsEl, kib, tower: towerButton } = header;
+  const header = createRoomHeader(manifest.name, transport.reason);
+  const { bar, tabs: tabsEl, kib } = header;
   const msgs = el("div", "st-msgs");
   // The view follows new entries only at the bottom; in reading mode the pill counts the unseen entries (docs/spec/room.md#follow-mode).
   const msgsBox = el("div", "st-msgs-box");
@@ -1174,14 +1147,6 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
     "message.send",
   );
 
-  // The trace and the macros of the tower are project data of the room, kept per project root.
-  const trace = createTrace(collections, { sessionId: sessionIdOf(), report });
-  const macros = createMacroStore(collections, { sessionId: sessionIdOf() });
-  const tower = setupTower(room, towerButton, t("towerTitle", lang), () => lang, trace, macros);
-  addEventListener("pagehide", () => tower.dispose());
-  // A click on the tower button runs tower.set with the state opposite to the current one (docs/spec/room.md#commands).
-  bound(expose.bind(towerButton, `${EXPOSE}.tower.set`, () => ({ open: !tower.isOpen() }), { failed: failed("tower.set") }), "tower.set");
-
   const tabTargets = (): object[] => [...tabsEl.querySelectorAll<HTMLElement>(".st-tab")];
   const elements: Record<string, ElementTarget> = {
     [`${EXPOSE}.send`]: send,
@@ -1191,14 +1156,13 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
     [`${EXPOSE}.tab`]: tabTargets,
     [`${EXPOSE}.role`]: () => [...tabsEl.querySelectorAll<HTMLElement>(".st-role")],
     [`${EXPOSE}.mode`]: kib,
-    [`${EXPOSE}.tower`]: towerButton,
     [`${EXPOSE}.question`]: () => [...msgs.querySelectorAll<HTMLElement>(".st-question-answer")],
     [`${EXPOSE}.question.choice`]: () => [...msgs.querySelectorAll<HTMLElement>(".st-question-choice")],
     [`${EXPOSE}.mention`]: () => [...mentionBox.querySelectorAll<HTMLElement>(".st-mention-item")],
   };
   return {
     commands: {
-      ...createRoomCommands({ tower, trace, mode: () => mode, state }),
+      ...createRoomCommands({ state }),
       ...operations,
       [ANSWER_COMMAND]: async (params: unknown) => answers.deliver(params),
       [`${EXPOSE}.member.summon`]: async (params: unknown) => summonMember(params),
@@ -1258,11 +1222,6 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
       },
     },
   };
-}
-
-function sessionIdOf(): string {
-  const root = window.sokSurface?.project?.root;
-  return typeof root === "string" && root !== "" ? root : "default";
 }
 
 function el(tag: string, cls: string): HTMLElement {

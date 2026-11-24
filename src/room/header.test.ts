@@ -8,7 +8,7 @@ import { HEADER_CSS, createRoomHeader } from "./header";
 const STATUS = "연결됨: 메시지는 열린 member session에 전달된다";
 
 function header() {
-  const h = createRoomHeader("에이전트 클럽하우스", "AI 명령", STATUS);
+  const h = createRoomHeader("에이전트 클럽하우스", STATUS);
   const button = document.createElement("button");
   button.textContent = "진행";
   h.kib.append(button);
@@ -36,10 +36,8 @@ describe("room header", () => {
     expect(tabs.minWidth).toBe("120px");
   });
 
-  it("keeps each button on one line", () => {
+  it("keeps each mode button on one line", () => {
     const h = header();
-    expect(getComputedStyle(h.tower).whiteSpace).toBe("nowrap");
-    expect(getComputedStyle(h.tower).flexShrink).toBe("0");
     expect(getComputedStyle(h.mode).whiteSpace).toBe("nowrap");
   });
 

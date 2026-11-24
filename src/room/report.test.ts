@@ -29,9 +29,9 @@ describe("createRoomReport — each failure is shown by the window through tab.e
     const { api, requests, errors } = bridge();
     const report = createRoomReport();
     report.attach(api);
-    report.report("tower run", "SNAPSHOT_FAILED: rollback snapshot cannot be captured");
+    report.report("room run", "SNAPSHOT_FAILED: rollback snapshot cannot be captured");
     await Promise.resolve();
-    expect(requests).toEqual([{ command: "tab.error", params: "tower run: SNAPSHOT_FAILED: rollback snapshot cannot be captured" }]);
+    expect(requests).toEqual([{ command: "tab.error", params: "room run: SNAPSHOT_FAILED: rollback snapshot cannot be captured" }]);
     expect(errors).toEqual([]);
   });
 
@@ -51,12 +51,12 @@ describe("createRoomReport — each failure is shown by the window through tab.e
     });
     const report = createRoomReport();
     report.attach(api);
-    report.report("tower plan", "PLAN_PARSE_FAILED: line one\nline two");
+    report.report("room plan", "PLAN_PARSE_FAILED: line one\nline two");
     for (let i = 0; i < 5; i += 1) await Promise.resolve(); // flush the chained rejection of the call
     expect(errors).toEqual([
       [
         "room report",
-        "tab.error refused (view call tab.error requires a text without control characters): tower plan: PLAN_PARSE_FAILED: line one\nline two",
+        "tab.error refused (view call tab.error requires a text without control characters): room plan: PLAN_PARSE_FAILED: line one\nline two",
       ],
     ]);
   });

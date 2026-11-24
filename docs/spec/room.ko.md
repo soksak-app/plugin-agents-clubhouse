@@ -14,7 +14,7 @@
 
 ## Header
 
-방의 header는 plugin 이름, roster tab, mode button, tower button, transport status로 된 한 줄이며, card가 그 부분들보다 좁으면 다음 줄로 줄바꿈한다. Roster tab은 최소 120 point를 차지하고 자기 부분 안에서 가로로 scroll하므로, 좁은 card도 member를 보인다. 각 button은 text를 한 줄로 유지한다. Transport status는 남은 폭으로 줄고, 잘리면 ellipsis로 끝나며, 전체 text를 tooltip으로 보인다.
+방의 header는 plugin 이름, roster tab, mode button, transport status로 된 한 줄이며, card가 그 부분들보다 좁으면 다음 줄로 줄바꿈한다. Roster tab은 최소 120 point를 차지하고 자기 부분 안에서 가로로 scroll하므로, 좁은 card도 member를 보인다. 각 button은 text를 한 줄로 유지한다. Transport status는 남은 폭으로 줄고, 잘리면 ellipsis로 끝나며, 전체 text를 tooltip으로 보인다.
 
 방의 tab은 체크된 멤버의 이름을 roster 순서로 ` · `로 이어 보이고, 체크된 멤버가 없으면 plugin 이름을 보인다. 방은 roster가 바뀔 때마다 그것을 `tab.title`로 보고하므로 두 방이 구별되고 core는 기본 제목을 보이지 않는다. 이름의 control character는 지우고, 256자보다 긴 제목은 256자에서 말줄임표로 끝난다. `tab.title`이 1자에서 256자를 받기 때문이다.
 
@@ -38,7 +38,6 @@ Summon 뒤 방은 방 card와 member card로 된 이름 `Room`의 group card를 
 - `soksak-plugin-agents-clubhouse.message.send {text}`: `text`(trim한 뒤 비어 있지 않음)를 mode와 mention에 따라 member에게 전달하고, 그것과 각 답을 대화에 보이며, 전체 [대화](#conversation) 뒤에 turn 순서의 `{answers: [{id, text}]}`로 끝난다. 앞 메시지를 전달하는 동안의 send는 그 대화에 [owner follow-up](#owner-follow-up)으로 더해지고 바로 `{answers: []}`로 끝난다. 열린 member session이 없으면 `no member session is open: check a member of the roster`로 거부한다. Send button(`soksak-plugin-agents-clubhouse.send`)과 input(`soksak-plugin-agents-clubhouse.input`)에서 Shift 없는 Enter가 input의 text로 실행하고, command가 text를 받아들이면 input을 비운다. Command는 element가 시작했든 command 호출이 시작했든 각 거부와 실패한 relay를 window의 error display로 `error: room relay: <reason>`(실패한 turn은 `error: room relay: member <id>: <reason>`)으로 보고하고, 같은 이유로 reject한다.
 - `soksak-plugin-agents-clubhouse.conversation.stop {}`: 현재 메시지의 relay를 끝낸다([대화](#conversation)). 더 이상 turn이 시작되지 않고, 방이 답을 기다리는 turn은 답 없이 끝난다([turn end](#turn-end)). Restart 전부터 남은 각 token의 기다림도 끝낸다([restart](#restart)). Relay가 진행되는 동안 idempotent하다: 두 번째 호출은 아무것도 바꾸지 않는다. Relay도 남은 token도 없으면 `the room is relaying no message`로 거부한다. Team이 있으면 모든 team member의 session도 끝내고 team을 비우며 `the team was released`를 기록한다. 결과는 `{stopped: true}`다. 중지 button(`soksak-plugin-agents-clubhouse.stop`)이 실행하며, 이 button은 메시지를 전달하거나 남은 token이 열려 있는 동안에만 enabled이고, 그 밖에는 disabled이며 disabled로 그려진다. View status `soksak-plugin-agents-clubhouse.view`는 `stopEnabled`를 가진다.
 - `soksak-plugin-agents-clubhouse.answer {turn, text}`: token이 `turn`인 turn에 대한 member의 답 `text`를 전한다([답](#answer)). 결과는 `{turn}`이다.
-- `soksak-plugin-agents-clubhouse.tower.set {open}`: `open`이 `true`이면 control tower modal을 열고 `false`이면 닫는다. Idempotent하다: 현재 상태를 다시 설정하면 아무것도 바뀌지 않는다. 결과는 `{open}`이다. Tower button(`soksak-plugin-agents-clubhouse.tower`)이 현재와 반대 상태로 실행하고, 열린 상태를 `aria-pressed`로 보인다.
 
 ## 화자 label
 
