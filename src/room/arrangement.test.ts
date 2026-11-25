@@ -1,7 +1,7 @@
 // The arrangement of the room and its members (C4) against the declared shapes of core.layout.plan, core.layout.apply and
 // core.layout.open (core docs/spec/cli.md#layout). The port double answers with those shapes; no module is mocked.
 import { describe, expect, it, vi } from "vitest";
-import { ROOM_PLUGIN, arrangeMembers, arrangementTree, createArrangementStatus, type Member } from "./arrangement";
+import { ROOM_PLUGIN, arrangeMembers, arrangementTree, closeEndedTabs, createArrangementStatus, type Member } from "./arrangement";
 
 // Each member is the owned session of C3: its card shows the session, so no member starts a process of its own.
 // The plugin of each member is a fixture id that this test declares; the room receives it from its caller.
@@ -200,29 +200,27 @@ describe("the other tabs of the plane", () => {
   });
 });
 
-describe("arrangeMembers after a restart (docs/spec/room.md#restart)", () => {
-  it("reuses the member tabs through the tree and closes the tabs of the room's ended member sessions", async () => {
-    const plan = {
-      feasible: true,
-      reason: null,
+describe("closeEndedTabs after a restart (docs/spec/room.md#restart, C145)", () => {
+  it("closes every tab of the grid whose session the room opened and that ended, also a tab that no plan names, and keeps the others", async () => {
+    const grid = {
       cards: [
-        {
-          card: "card-1",
-          tabs: [
-            { tab: "tab-room", plugin: ROOM_PLUGIN, params: null },
-            { tab: "tab-dead", plugin: FIXTURE_PLUGIN, params: { session: "owned-old" } },
-            { tab: "tab-person", plugin: FIXTURE_PLUGIN, params: { session: "owned-person" } },
-            { tab: "tab-shell", plugin: FIXTURE_PLUGIN, params: null },
-          ],
-        },
-        { card: "card-2", tabs: [{ tab: "tab-claude", plugin: FIXTURE_PLUGIN, params: { session: "s-claude" } }] },
+        { id: "card-1", tabs: [
+          { tab: "tab-room", plugin: ROOM_PLUGIN, params: null },
+          { tab: "tab-dead", plugin: FIXTURE_PLUGIN, params: { session: "owned-old", title: "manager-lead" } },
+          { tab: "tab-person", plugin: FIXTURE_PLUGIN, params: { session: "owned-person" } },
+          { tab: "tab-shell", plugin: FIXTURE_PLUGIN, params: null },
+        ] },
+        { id: "card-3", tabs: [{ tab: "tab-other-dead", plugin: FIXTURE_PLUGIN, params: { session: "owned-gone" } }] },
       ],
     };
-    const double = port(plan);
-    const ended = (session: string) => session === "owned-old";
-    expect(await arrangeMembers(double.port, members, createArrangementStatus(), ended)).toEqual({ state: "group" });
-    expect(double.calls.map(([name]) => name)).toEqual(["core.layout.plan", "core.layout.apply", "core.layout.close"]);
-    expect(double.calls[2]).toEqual(["core.layout.close", { tab: "tab-dead" }]);
-    expect(double.reports).toEqual([]);
+    const double = port({ feasible: true, cards: [] });
+    const ended = (session: string) => session === "owned-old" || session === "owned-gone";
+    expect(await closeEndedTabs(double.port.commands, grid, ended)).toEqual(["tab-dead", "tab-other-dead"]);
+    expect(double.calls).toEqual([["core.layout.close", { tab: "tab-dead" }], ["core.layout.close", { tab: "tab-other-dead" }]]);
+  });
+
+  it("refuses a grid without its cards list", async () => {
+    const double = port({ feasible: true, cards: [] });
+    await expect(closeEndedTabs(double.port.commands, { size: 1 }, () => true)).rejects.toThrow("core.grid has no cards list");
   });
 });

@@ -66,12 +66,35 @@ export function arrangementTree(members: Member[]): Record<string, unknown> {
   };
 }
 
+/**
+ * Closes each tab of the grid, the value of core.grid, whose params name a session for which ended is true: a member session that this
+ * room opened and that core.sessions no longer lists (docs/spec/room.md#restart). It reads every card of the grid, so a tab that no plan
+ * names is closed too, and it keeps every other tab. It resolves with the closed tabs in grid order.
+ */
+export async function closeEndedTabs(
+  commands: ArrangementPort["commands"],
+  grid: unknown,
+  ended: (session: string) => boolean,
+): Promise<string[]> {
+  const cards = (grid as { cards?: unknown } | null)?.cards;
+  if (!Array.isArray(cards)) throw new Error("core.grid has no cards list");
+  const closed: string[] = [];
+  for (const card of cards) {
+    for (const entry of (card?.tabs ?? []) as { tab?: unknown; params?: { session?: unknown } | null }[]) {
+      const session = entry.params?.session;
+      if (typeof entry.tab === "string" && typeof session === "string" && ended(session)) {
+        await commands.execute("core.layout.close", { tab: entry.tab });
+        closed.push(entry.tab);
+      }
+    }
+  }
+  return closed;
+}
+
 export async function arrangeMembers(
   port: ArrangementPort,
   members: Member[],
   status: ArrangementStatus,
-  // Whether a session is a member session that this room opened and that has ended (docs/spec/room.md#restart).
-  ended: (session: string) => boolean = () => false,
 ): Promise<ArrangementState> {
   const tree = arrangementTree(members);
   try {
@@ -92,14 +115,6 @@ export async function arrangeMembers(
     if (replaced) plan = await port.commands.execute("core.layout.plan", { tree });
     if (plan.feasible === true) {
       await port.commands.execute("core.layout.apply", { tree });
-      // The apply reuses each tab whose plugin and params an entry of the tree names; a tab of an ended member session of this room
-      // names no entry and stays as an inactive tab, so the room closes it. Tabs of the person are kept.
-      for (const entry of plannedTabs(plan)) {
-        const session = entry.params?.session;
-        if (typeof entry.tab === "string" && typeof session === "string" && ended(session)) {
-          await port.commands.execute("core.layout.close", { tab: entry.tab });
-        }
-      }
       status.set({ state: "group" });
       return { state: "group" };
     }

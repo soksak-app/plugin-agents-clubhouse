@@ -15,7 +15,7 @@ import type { ElementTarget, RoomHandlers } from "./room/exposure";
 import { startRoomPage, type RoomContext } from "./room/page";
 import type { RoomPort } from "./room/port";
 import { createRoomReport } from "./room/report";
-import { createArrangementStatus } from "./room/arrangement";
+import { closeEndedTabs, createArrangementStatus } from "./room/arrangement";
 import { HEADER_CSS, createRoomHeader } from "./room/header";
 import { memberLaunch } from "./room/isolation";
 import { conversationView, elapsedLabel, nextLabelChange } from "./room/bubbles";
@@ -577,8 +577,23 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
           return () => removeEventListener("resize", listener);
         },
       }),
-    ended: (session) => roomSessions.has(session) && !openSessionIds.has(session),
   };
+  // Whether a session is a member session that this room opened and that core.sessions no longer lists (docs/spec/room.md#restart).
+  const ended = (session: string): boolean => roomSessions.has(session) && !openSessionIds.has(session);
+  // The first value of core.grid, whose cards list every tab with its params; the watch ends with that value.
+  const readGrid = (): Promise<unknown> => new Promise((resolve, reject) => {
+    let stop: (() => void) | null = null;
+    let read = false;
+    Promise.resolve(bridge!.runtime.status.watch("core.grid", (value: unknown) => {
+      if (read) return;
+      read = true;
+      resolve(value);
+      stop?.();
+    })).then((end) => {
+      stop = end;
+      if (read) end();
+    }).catch(reject);
+  });
   // Whether the program of a definition is Claude Code, which takes --session-id, --resume and --agent.
   const isClaude = (id: string): boolean => (definitions.find((one) => one.id === id)?.program.split("/").at(-1) ?? "") === "claude";
   // The agent name of a definition: the frontmatter name of the agent file of its role in core.roles, read with the declared program
@@ -643,7 +658,9 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
         ),
       );
       await summonAndArrange(trigger, rosterDefinitions, checked);
-      // The arrangement closed the tabs of the ended sessions; the room keeps the sessions that are open.
+      // The room forgets an ended session only after it closed every tab of the grid that shows it, also a tab that no plan names, so
+      // no member tab of the room stays without its session (docs/spec/room.md#restart, C145).
+      await closeEndedTabs(room.commands, await readGrid(), ended);
       for (const session of [...roomSessions]) if (!openSessionIds.has(session)) roomSessions.delete(session);
     })
       .then(refreshMembers)
@@ -656,6 +673,14 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   const summon = (): void => {
     summonRun().catch((error: unknown) => report("room summon", String((error as Error)?.message ?? error)));
   };
+  // At start, after the first value of core.sessions, the room closes the tabs of its member sessions that ended while the application was
+  // closed and forgets those sessions, whether or not a summon runs (docs/spec/room.md#restart, C145).
+  runTrigger(async () => {
+    await sessionsReady;
+    await closeEndedTabs(room.commands, await readGrid(), ended);
+    for (const session of [...roomSessions]) if (!openSessionIds.has(session)) roomSessions.delete(session);
+    persist();
+  }).catch((error: unknown) => report("room restart", String((error as Error)?.message ?? error)));
 
   // A message goes to the checked members whose session is open, by the mode of the room and the mentions of the message
   // (docs/spec/room.md). Each member delivers its answer with the answer command, and the conversation shows it as text.

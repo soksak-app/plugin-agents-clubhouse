@@ -2,6 +2,7 @@
 
 ## 미출시
 
+- C145: 방은 애플리케이션이 닫혀 있는 동안 session이 끝난 모든 member tab을 `core.grid`에서 읽어, session을 잊기 전에 닫는다.
 - C143-1: 각 답이 index 문장을 갖는다. answer command는 trim 후 비어 있지 않은 한 줄인 `index`를 요구하고, 다른 값은 `index must be one non-empty line, got <value>`로 거부한다. 기록, conversation status, tab state가 그것을 담고 owner와 방의 줄에서는 `null`이며, tab state format 3이 그것을 담아서 release에는 format 2 다음의 형식이 하나뿐이다. protocol 줄은 command의 두 형식 모두에 규칙을 적는다.
 - C144: leader는 받는 줄만 다른 member와 다르다. 모든 줄을 받고, owner 메시지의 첫 turn을 메시지가 mention한 member들 다음에 받는다. `member.summon`, `definitions`, `member.release`, `member.merged`, `member.retask` command, team, 그 view, 그 worktree, 설정 `maxMembers`, 선언된 program `team-worktree`를 없앴다. 첫 시작 program은 `trust`와 `start`를 받는 `bin/first-start.mjs`다. 모든 답의 status를 세므로, leader가 있는 relay는 모든 member의 마지막 답이 `settled`일 때 settle되고 하나라도 continue이면 owner를 기다린다. tab state는 `team`이 없는 format 3이고, `team`이 있는 상태는 `room tab state: unknown field team`으로 거부한다. 이름 40자의 leader protocol 줄은 2801자이고, 전에는 3666자였다.
 - C139: version은 0.0.28이며 release run이 C138를 게시한다.

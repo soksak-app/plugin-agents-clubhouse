@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- C145: The room closes every member tab whose session ended while the application was closed, read from `core.grid`, before it forgets the session.
 - C143-1: Each answer carries an index sentence: the answer command requires `index`, one line that is not empty after trimming, and refuses another value with `index must be one non-empty line, got <value>`. The record, the conversation status and the tab state keep it, `null` on lines of the owner and of the room, and the tab state format 3 holds it, so the release has one form after format 2. The protocol line states the rule in both forms of the command.
 - C144: The leader differs from the other members only in the lines it receives: every line, and the first turn of an owner message after the members that the message mentions. The commands `member.summon`, `definitions`, `member.release`, `member.merged` and `member.retask`, the team, its view, its worktrees, the setting `maxMembers` and the declared program `team-worktree` are removed; the program of the first start is `bin/first-start.mjs` with `trust` and `start`. Every answer status counts, so a relay with a leader settles when the last answer of every member is `settled` and waits for the owner while one continues. The tab state is format 3 without `team`, and a state with `team` is refused with `room tab state: unknown field team`. The protocol line of the leader holds 2801 characters with names of 40 characters, 3666 before.
 - C139: The version is 0.0.28, so the release run publishes C138.

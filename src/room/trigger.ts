@@ -10,8 +10,6 @@ export interface TriggerDeps {
   // The measured card size of the room for the sessions that open (core docs/spec/plugins.md#owned-sessions); it waits for a
   // positive size.
   size: () => Promise<SessionSize>;
-  // Whether a session is a member session that this room opened and that has ended.
-  ended: (session: string) => boolean;
 }
 
 // Summons the checked members and arranges the opened ones. A refused summon rejects with its text and arranges nothing.
@@ -30,7 +28,7 @@ export async function summonAndArrange(
     deps.status.set({ state: "idle" });
     return { state: "idle" };
   }
-  return arrangeMembers(deps.arrange, members, deps.status, deps.ended);
+  return arrangeMembers(deps.arrange, members, deps.status);
 }
 
 // Runs each task after the previous one has settled, so two checks of the roster never interleave their summons and arrangements.
