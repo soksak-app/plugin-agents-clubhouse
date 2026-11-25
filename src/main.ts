@@ -15,7 +15,7 @@ import type { ElementTarget, RoomHandlers } from "./room/exposure";
 import { startRoomPage, type RoomContext } from "./room/page";
 import type { RoomPort } from "./room/port";
 import { createRoomReport } from "./room/report";
-import { closeEndedTabs, createArrangementStatus } from "./room/arrangement";
+import { closeEndedTabs, createArrangementStatus, endedRoomSession } from "./room/arrangement";
 import { HEADER_CSS, createRoomHeader } from "./room/header";
 import { memberLaunch } from "./room/isolation";
 import { conversationView, elapsedLabel, nextLabelChange } from "./room/bubbles";
@@ -578,8 +578,8 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
         },
       }),
   };
-  // Whether a session is a member session that this room opened and that core.sessions no longer lists (docs/spec/room.md#restart).
-  const ended = (session: string): boolean => roomSessions.has(session) && !openSessionIds.has(session);
+  // Whether a session is a member session of this room that core.sessions no longer lists (docs/spec/room.md#restart, C146).
+  const ended = (session: string): boolean => endedRoomSession(session, roomSessions, taughtSessions, openSessionIds);
   // The first value of core.grid, whose cards list every tab with its params; the watch ends with that value.
   const readGrid = (): Promise<unknown> => new Promise((resolve, reject) => {
     let stop: (() => void) | null = null;

@@ -67,6 +67,15 @@ export function arrangementTree(members: Member[]): Record<string, unknown> {
 }
 
 /**
+ * Whether a session is a member session of this room that ended: a session of `sessions`, which the room opened, or of
+ * `protocolSessions`, which received the room protocol and so was opened by the room, that core.sessions no longer lists
+ * (docs/spec/room.md#restart). A session that received the protocol counts even when an earlier start removed it from `sessions`.
+ */
+export function endedRoomSession(session: string, sessions: ReadonlySet<string>, protocolSessions: ReadonlySet<string>, open: ReadonlySet<string>): boolean {
+  return (sessions.has(session) || protocolSessions.has(session)) && !open.has(session);
+}
+
+/**
  * Closes each tab of the grid, the value of core.grid, whose params name a session for which ended is true: a member session that this
  * room opened and that core.sessions no longer lists (docs/spec/room.md#restart). It reads every card of the grid, so a tab that no plan
  * names is closed too, and it keeps every other tab. It resolves with the closed tabs in grid order.

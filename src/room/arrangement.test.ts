@@ -1,7 +1,7 @@
 // The arrangement of the room and its members (C4) against the declared shapes of core.layout.plan, core.layout.apply and
 // core.layout.open (core docs/spec/cli.md#layout). The port double answers with those shapes; no module is mocked.
 import { describe, expect, it, vi } from "vitest";
-import { ROOM_PLUGIN, arrangeMembers, arrangementTree, closeEndedTabs, createArrangementStatus, type Member } from "./arrangement";
+import { ROOM_PLUGIN, arrangeMembers, arrangementTree, closeEndedTabs, endedRoomSession, createArrangementStatus, type Member } from "./arrangement";
 
 // Each member is the owned session of C3: its card shows the session, so no member starts a process of its own.
 // The plugin of each member is a fixture id that this test declares; the room receives it from its caller.
@@ -222,5 +222,18 @@ describe("closeEndedTabs after a restart (docs/spec/room.md#restart, C145)", () 
   it("refuses a grid without its cards list", async () => {
     const double = port({ feasible: true, cards: [] });
     await expect(closeEndedTabs(double.port.commands, { size: 1 }, () => true)).rejects.toThrow("core.grid has no cards list");
+  });
+});
+
+describe("endedRoomSession (docs/spec/room.md#restart, C146)", () => {
+  const open = new Set(["owned-open"]);
+  it("counts a session of sessions or of protocolSessions that core.sessions no longer lists as an ended session of the room", () => {
+    expect(endedRoomSession("owned-gone", new Set(["owned-gone"]), new Set(), open)).toBe(true);
+    expect(endedRoomSession("owned-taught", new Set(), new Set(["owned-taught"]), open)).toBe(true);
+  });
+
+  it("keeps an open session and a session that the room never opened", () => {
+    expect(endedRoomSession("owned-open", new Set(["owned-open"]), new Set(["owned-open"]), open)).toBe(false);
+    expect(endedRoomSession("owned-person", new Set(), new Set(), open)).toBe(false);
   });
 });
