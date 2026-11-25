@@ -33,7 +33,8 @@ import { agentFileText, agentNameOf, roleFileOf } from "./room/agent-file";
 import { createConversationStatus, waitLabel } from "./room/conversation-status";
 import { createRoomCheck, type RoomCheckValue } from "./room/check";
 import { createMemberOpen, relayGroup } from "./room/member-open";
-import { MEMORY_INDEX_LIMIT, createProtocolInjector, type AgentPlace, type MemberWorktree } from "./room/protocol";
+import { MEMORY_INDEX_LIMIT, createProtocolInjector, type AgentPlace, type MemberWorktree, type ProtocolOutcome } from "./room/protocol";
+import { failedResume, resumeStart, type ConversationRecord } from "./room/resume";
 import { parseRoomState, serializedRoomState, type RoomState as RoomTabState } from "./room/room-state";
 import { ownedSessionIds, sessionProgram, shownByOf } from "./room/session-channel";
 import { answerQuestion, questionChoices, readQuestion, showMember } from "./room/question";
@@ -193,6 +194,10 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   let folded = saved?.folded ?? false;
   // The worktree of each member that has one (docs/spec/room.md#worktrees).
   const worktrees = new Map<string, MemberWorktree>(Object.entries(saved?.worktrees ?? {}));
+  // The conversation of each member whose session opened, and the conversation that each opening member resumes, which the report of a
+  // failed resume names (docs/spec/room.md#conversation-resume).
+  const conversations = new Map<string, ConversationRecord>(Object.entries(saved?.conversations ?? {}));
+  const resuming = new Map<string, string>();
   // The memory folder of the project of each started member, which its memory line names (docs/spec/room.md#memory).
   const memories = new Map<string, string>();
   // The assigned group of the agents plugin; a room tab without a state has none (docs/spec/room.md#group).
@@ -229,6 +234,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
       sent: record.sent(),
       turns: answers.tokens(),
       worktrees: Object.fromEntries(worktrees),
+      conversations: Object.fromEntries(conversations),
     };
     let json: string;
     try {
@@ -674,6 +680,22 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
         if (place === null) memberAgents.delete(definition.id);
         else memberAgents.set(definition.id, place);
       }
+      // A member whose session opens continues the conversation of its CLI from the same home and folder (docs/spec/room.md#conversation-resume).
+      const resumeArgs = new Map<string, string[]>();
+      for (const definition of definitions) {
+        if (!starting.includes(definition.id) || memberSessions.has(definition.id)) continue;
+        const folder = folders.get(definition.id) ?? definition.cwd;
+        const start = resumeStart(
+          { program: definition.program, home: definition.home?.folder ?? null, folder, ownWorktree: worktrees.get(definition.id)?.worktree === folder },
+          conversations.get(definition.id),
+          crypto.randomUUID(),
+        );
+        resumeArgs.set(definition.id, start.args);
+        if (start.record === null) conversations.delete(definition.id);
+        else conversations.set(definition.id, start.record);
+        if (start.resuming === null) resuming.delete(definition.id);
+        else resuming.set(definition.id, start.resuming);
+      }
       // A starting Claude Code member starts with the agent of its definition (C101).
       const memberDefinitions = await Promise.all(
         definitions.map(async (definition) =>
@@ -681,6 +703,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
             { ...definition, cwd: folders.get(definition.id) ?? definition.cwd },
             starting.includes(definition.id) && isClaude(definition.id) ? await agentOf(definition.id) : null,
             acceptAll,
+            resumeArgs.get(definition.id) ?? [],
           ),
         ),
       );
@@ -1000,11 +1023,22 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   // Resolves with the members whose protocol turn has ended; a refused member receives no relayed message.
   const protocolOutcomes = (members: OpenMember[]) =>
     Promise.all(
-      members.map(async (member) => ({
-        member,
-        result: await protocol.ensure({ ...member, place: placeOf(member), agent: memberAgents.get(member.id) ?? null, worktree: worktrees.get(member.id) ?? null, memory: memories.get(member.id) ?? null }),
-      })),
+      members.map(async (member) => {
+        const result = await protocol.ensure({ ...member, place: placeOf(member), agent: memberAgents.get(member.id) ?? null, worktree: worktrees.get(member.id) ?? null, memory: memories.get(member.id) ?? null });
+        resumeEnded(member.id, result);
+        return { member, result };
+      }),
     );
+  // A resume whose session ended before its protocol turn removes the record, so the next open starts a new conversation
+  // (docs/spec/room.md#conversation-resume).
+  const resumeEnded = (id: string, result: ProtocolOutcome): void => {
+    const failure = failedResume(id, resuming.get(id), result);
+    resuming.delete(id);
+    if (failure === null) return;
+    conversations.delete(id);
+    report("room resume", failure);
+    persist();
+  };
   const taughtMembers = async (members: OpenMember[]): Promise<OpenMember[]> =>
     (await protocolOutcomes(members)).filter((one) => one.result.ok).map((one) => one.member);
   // The place of a member in a room with a leader, which its protocol line states (docs/spec/room.md#leader).

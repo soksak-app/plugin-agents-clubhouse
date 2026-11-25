@@ -19,6 +19,7 @@ const state: RoomState = {
   sent: { "owned-1": 2 },
   turns: [{ turn: "t-1", session: "owned-1", member: "harness-harness", count: 2 }],
   worktrees: { "harness-harness": { root: "/work/game", worktree: "/home/p/soksak/worktrees/game-1a2b3c4d/tab-1/harness-harness", branch: "clubhouse/tab-1/harness-harness", integration: "main" } },
+  conversations: { "harness-harness": { home: "/home/p/accounts/a", folder: "/home/p/soksak/worktrees/game-1a2b3c4d/tab-1/harness-harness", id: "6f1c2b9e-1d2a-4c3b-9e8f-0a1b2c3d4e5f" } },
 };
 
 describe("parseRoomState", () => {
@@ -79,6 +80,19 @@ describe("parseRoomState", () => {
     );
   });
 
+  // C131 (docs/spec/room.md#conversation-resume): the conversation of each member whose session opened.
+  it("refuses a conversation that is not {home, folder, id} with absolute paths and a UUID or null", () => {
+    const { conversations: _c, ...without } = state;
+    expect(() => parseRoomState(without)).toThrow("room tab state: conversations must be an object of member identifier to conversation, got undefined");
+    expect(parseRoomState({ ...state, conversations: { a: { home: null, folder: "/w", id: null } } })?.conversations).toEqual({ a: { home: null, folder: "/w", id: null } });
+    expect(() => parseRoomState({ ...state, conversations: { a: { home: "h", folder: "/w", id: null } } })).toThrow(
+      'room tab state: conversation a must be {home, folder, id} with an absolute home or null, an absolute folder and a UUID or null, got {"home":"h","folder":"/w","id":null}',
+    );
+    expect(() => parseRoomState({ ...state, conversations: { a: { home: null, folder: "/w", id: "x" } } })).toThrow(
+      'room tab state: conversation a must be {home, folder, id} with an absolute home or null, an absolute folder and a UUID or null, got {"home":null,"folder":"/w","id":"x"}',
+    );
+  });
+
   it("reads back the state that the room wrote, with an answer of several lines", () => {
     expect(parseRoomState(JSON.parse(JSON.stringify(state)))).toEqual(state);
   });
@@ -122,7 +136,7 @@ describe("parseRoomState", () => {
     }
   });
 
-  it("is declared as the tab state format 3, the form with the index of each entry (docs/spec/room.md#restart)", () => {
-    expect(manifest.surface.unload).toEqual({ format: 3, maxBytes: 1048576 });
+  it("is declared as the tab state format 4, the form with the conversation of each member (docs/spec/room.md#restart)", () => {
+    expect(manifest.surface.unload).toEqual({ format: 4, maxBytes: 1048576 });
   });
 });

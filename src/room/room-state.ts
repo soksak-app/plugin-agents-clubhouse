@@ -4,6 +4,7 @@
 import type { RoomMode } from "./room-relay";
 import { isIndexSentence, type OpenToken } from "./answer";
 import type { MemberWorktree } from "./protocol";
+import type { ConversationRecord } from "./resume";
 
 export interface RoomState {
   // The identifier of the assigned group of the agents plugin, or null without one (docs/spec/room.md#group).
@@ -29,6 +30,8 @@ export interface RoomState {
   turns: OpenToken[];
   // The worktree of each member that has one, by member identifier (docs/spec/room.md#worktrees).
   worktrees: Record<string, MemberWorktree>;
+  // The conversation of each member whose session opened, by member identifier (docs/spec/room.md#conversation-resume).
+  conversations: Record<string, ConversationRecord>;
 }
 
 // The largest tab state that surface.unload of plugin.json declares.
@@ -43,7 +46,9 @@ export function serializedRoomState(state: RoomState): string {
 }
 
 const MODES: readonly string[] = ["turn", "simul"];
-const FIELDS: readonly string[] = ["group", "mode", "folded", "conversation", "sessions", "protocolSessions", "addressed", "delivered", "sent", "turns", "worktrees"];
+const FIELDS: readonly string[] = ["group", "mode", "folded", "conversation", "sessions", "protocolSessions", "addressed", "delivered", "sent", "turns", "worktrees", "conversations"];
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 const isText = (value: unknown): value is string => typeof value === "string" && value !== "";
 
@@ -127,6 +132,22 @@ export function parseRoomState(value: unknown): RoomState | null {
       isText(one.branch) && isText(one.integration);
     if (!valid) throw new Error(`room tab state: worktree ${member} must be {root, worktree, branch, integration} with absolute paths, got ${JSON.stringify(tree)}`);
   }
+  const conversations = state.conversations;
+  if (typeof conversations !== "object" || conversations === null || Array.isArray(conversations)) {
+    throw new Error(`room tab state: conversations must be an object of member identifier to conversation, got ${JSON.stringify(conversations)}`);
+  }
+  const absolute = (value: unknown): boolean => typeof value === "string" && value.startsWith("/");
+  for (const [member, entry] of Object.entries(conversations as Record<string, unknown>)) {
+    const one = entry as Record<string, unknown> | null;
+    const valid =
+      typeof one === "object" && one !== null && !Array.isArray(one) && Object.keys(one).sort().join() === "folder,home,id" &&
+      (one.home === null || absolute(one.home)) && absolute(one.folder) && (one.id === null || (typeof one.id === "string" && UUID.test(one.id)));
+    if (!valid) {
+      throw new Error(
+        `room tab state: conversation ${member} must be {home, folder, id} with an absolute home or null, an absolute folder and a UUID or null, got ${JSON.stringify(entry)}`,
+      );
+    }
+  }
   return {
     group,
     mode: state.mode as RoomMode,
@@ -139,5 +160,6 @@ export function parseRoomState(value: unknown): RoomState | null {
     sent: { ...(sent as Record<string, number>) },
     turns: turns.map((token) => ({ turn: token.turn, session: token.session, member: token.member, count: token.count })),
     worktrees: Object.fromEntries(Object.entries(worktrees as Record<string, MemberWorktree>).map(([member, tree]) => [member, { ...tree }])),
+    conversations: Object.fromEntries(Object.entries(conversations as Record<string, ConversationRecord>).map(([member, entry]) => [member, { ...entry }])),
   };
 }

@@ -9,7 +9,7 @@
       "kind": "view",
       "page": "ui/clubhouse.html"
     },
-    "unload": { "format": 3, "maxBytes": 1048576 }
+    "unload": { "format": 4, "maxBytes": 1048576 }
   },
   "preview": {
     "ink": "--fg"

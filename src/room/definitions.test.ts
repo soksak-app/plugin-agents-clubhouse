@@ -117,6 +117,13 @@ describe("toMemberDefinition", () => {
     expect(toMemberDefinition(bare!).params.program).toBe("env");
   });
 
+  it("starts a member with its resume arguments after every other argument (C131, docs/spec/room.md#conversation-resume)", async () => {
+    const [definition] = await readAgentDefinitions(storeOf({ definitions: { reviewer: DEFINITIONS.reviewer }, accounts: ACCOUNTS }).get, fail);
+    expect((toMemberDefinition(definition!, "manager-lead", false, ["--resume", "6f1c2b9e-1d2a-4c3b-9e8f-0a1b2c3d4e5f"]).params.args as string[]).slice(-4)).toEqual([
+      "--agent", "manager-lead", "--resume", "6f1c2b9e-1d2a-4c3b-9e8f-0a1b2c3d4e5f",
+    ]);
+  });
+
   it("starts a member with the agent of its definition when one is given (C101, docs/spec/room.md#group)", async () => {
     const [definition] = await readAgentDefinitions(storeOf({ definitions: { reviewer: DEFINITIONS.reviewer }, accounts: ACCOUNTS }).get, fail);
     expect(toMemberDefinition(definition!, "manager-lead").params.args).toEqual([

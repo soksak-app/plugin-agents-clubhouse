@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- C131, C132, C133: A member session that opens again continues the conversation of its CLI from the same account home and folder, with `--session-id` and `--resume` of Claude Code and `resume --last` of Codex in the own worktree; the tab state is format 4 with `conversations`; the specification states the first-start questions that the person answers in the member tab.
 - C163: The version is 0.0.30, which releases C162.
 - C162: The refusal of a member without a login names the settings of the agents plugin as the place of its login.
 - C161: The refusal of a member without a login names the account and the agent definitions, where the person logs in to it.

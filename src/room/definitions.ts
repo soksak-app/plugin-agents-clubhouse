@@ -130,8 +130,9 @@ function homeLaunch(definition: AgentDefinition, args: string[]): { program: str
 
 // The member of the room for a definition: the session opens with the terminal's start values of the definition (program, arguments,
 // the directory of the definition and its role), and the plugin that runs the session is the one of the definition. A Claude Code member
-// whose definition has an agent file starts with `--agent <agent>`, so it runs with the instructions and tools of that agent (C101).
-export function toMemberDefinition(definition: AgentDefinition, agent: string | null = null, acceptAll = false): MemberDefinition {
+// whose definition has an agent file starts with `--agent <agent>`, so it runs with the instructions and tools of that agent (C101). The
+// resume arguments come last, so `resume --last` of Codex follows every option (docs/spec/room.md#conversation-resume).
+export function toMemberDefinition(definition: AgentDefinition, agent: string | null = null, acceptAll = false, resume: readonly string[] = []): MemberDefinition {
   // The arguments of the launch of a maker definition follow those of the account (agents docs/spec/definitions.md#resolution).
   const launched = memberLaunch(definition.program, [...definition.args, ...(definition.launch?.args ?? [])]).args;
   const args = acceptAll ? [...launched, ...acceptAllArgs(definition.program, launched)] : launched;
@@ -139,7 +140,7 @@ export function toMemberDefinition(definition: AgentDefinition, agent: string | 
     id: definition.id,
     name: definition.name,
     plugin: definition.plugin,
-    params: { ...homeLaunch(definition, agent === null ? args : [...args, "--agent", agent]), directory: definition.cwd, role: definition.role },
+    params: { ...homeLaunch(definition, [...(agent === null ? args : [...args, "--agent", agent]), ...resume]), directory: definition.cwd, role: definition.role },
     cwd: definition.cwd,
   };
 }

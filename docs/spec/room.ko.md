@@ -160,6 +160,20 @@ room protocol 뒤에, worktree가 있는 member에게는 worktree 줄 뒤에, �
 
 Claude Code는 첫 시작에서 세 종류의 질문을 하고, 각 질문은 configuration file `$CLAUDE_CONFIG_DIR/.claude.json`(없으면 `<home>/.claude.json`)의 서로 다른 member로 건너뛴다. 첫 시작 단계인 text style과 security notes는 `hasCompletedOnboarding`으로, 시작 folder와 `--add-dir`이 가리키는 각 folder의 trust는 `projects[<folder>].hasTrustDialogAccepted`로 건너뛴다. Chrome extension이 설치된 상태에서 login한 뒤 그 extension을 session의 기본 browser로 쓸지 묻는 질문은 `claudeInChromeDefaultEnabled`로 건너뛴다. Trust key는 git repository 안의 folder면 main checkout의 root이고(worktree도 이것을 따른다), 아니면 folder 자체다(Claude Code permissions documentation, "What runs before you trust a folder"). Home에는 이 중 어느 것이든 없을 수 있으므로 질문은 어느 하나든, 어떤 조합으로든 나올 수 있다. 방의 member는 terminal 질문에 답하지 않으므로, Claude Code member가 시작하기 전에 방이 없는 member를 쓴다. Member의 각 folder, 즉 시작 folder와 account와 launch의 인자에 있는 각 `--add-dir` folder에 대해 선언된 program `member-start`(`first-start start <home> <folder>`)를 실행한다. 이 program은 account home의 configuration file에 `hasCompletedOnboarding` `true`, `claudeInChromeDefaultEnabled` `false`, 그리고 그 folder의 trust를 쓴다. `false`는 질문이 선택 없이 주는 답이며, member는 soksak의 browser tab을 쓰기 때문이다. Home이 없는 definition에는 `project-trust`(`first-start trust <folder>`)를 실행해 사람의 configuration file에 trust를 쓴다. Member는 summon될 때 definition의 folder로 준비한다. 절대 경로가 아닌 `--add-dir` folder는 `definition <id>: --add-dir <folder> is not an absolute path`로 거부한다. Program은 없는 member만 쓰고, file을 읽고 쓰는 동안 proper-lockfile의 lock을 잡고 file 전체를 바꿔 쓴다. Claude Code가 실행 중에 같은 file을 다시 쓰기 때문이다. File의 다른 member는 모두 유지한다. Program이 실패하면 summon이 그 오류로 실패한다.
 
+Claude Code가 아닌 CLI는 방이 미리 쓰지 않는 질문을 첫 시작에서 할 수 있다. 모든 요청을 받는 flag 없이 시작한 Codex member의 folder trust가 그 예다([accept all](#accept-all)). program이 사람을 기다린다고 알리는 event가 없으므로, member는 terminal tab에서 그 질문에 머물고 사람이 거기서 답한다. 그동안 card는 `대기`를 보이고, 방은 답하려고 화면을 읽지 않는다. Claude Code의 permission을 건너뛰는 mode의 경고는 이런 질문이 아니다. agents plugin이 home에 복사하는 설정이 그것에 답한다(agents A40-1).
+
+## Conversation resume
+
+다시 열리는 member session은 같은 account home과 같은 folder로 시작할 때 member가 전에 하던 CLI 대화를 이어 간다. CLI의 새 session은 member가 방과 함께 정리한 내용을 잃기 때문이다. 방은 session이 열린 member마다 대화 `{home, folder, id}`를 [tab state](#restart)에 기록한다. `home`은 account home folder이거나 home 없는 account면 `null`이고, `folder`는 member가 시작하는 folder(worktree, 없으면 정의의 folder)이며, `id`는 대화 식별자이거나 folder가 대화를 가리키는 CLI면 `null`이다.
+
+- Claude Code: 맞는 기록이 없는 member에는 방이 새 UUID를 만들고 CLI를 `--session-id <uuid>`로 시작한다. 기록의 home과 folder가 같은 member는 `--resume <id>`로 시작하고, 이것은 같은 식별자로 그 대화를 이어 간다(Claude Code CLI reference, `--session-id`와 `--resume`).
+- Codex: 자기 [worktree](#worktrees)에서 시작하고 home과 folder가 같은 기록이 있는 member는 다른 argument 뒤에 `resume --last`를 붙여 시작하고, 이것은 그 home에서 그 folder의 가장 최근 대화를 이어 간다(`codex resume --help`: `--last`, 그리고 `--all`이 끄는 folder filter). Codex는 시작할 때 대화 식별자를 정하지 않으므로, 다른 member와 folder를 같이 쓸 수 있는 자기 worktree 밖의 member는 매번 새 대화를 시작한다.
+- 다른 CLI는 매번 새 대화를 시작한다.
+
+방은 CLI의 hook에서 식별자를 읽지 않는다. Codex hook은 사람이 CLI에서 신뢰하거나 Codex 문서가 dangerous라고 하는 flag를 붙였을 때만 실행되고, 방이 정한 Claude Code 대화 식별자는 resume해도 같다. 그래서 사람이 member tab에서 `/clear`로 비운 대화는 따라가지 않고, 다음 resume은 clear 전의 대화를 이어 간다.
+
+정의의 account가 바뀐 경우처럼 home이나 folder가 member 시작과 다른 기록은 새 시작이 대체한다. 그래서 다른 account는 새 대화를 시작하고 같은 account는 자기 대화를 이어 간다. 방은 실행 중인 session을 끝내지 않으므로, 이 변경은 member session이 다시 열릴 때 적용된다. protocol turn 전에 session이 끝난 resume은 `error: room resume: member <id>: the session ended while it resumed <the conversation <id>|the last conversation of <folder>>; the next open starts a new conversation`으로 보고하고, 방은 그 기록을 지운다. 방은 화면을 읽지 않고 끝난 session의 화면은 사라지므로 CLI의 message를 보여 줄 수 없다. session이 실행되는 동안 member의 terminal tab이 그것을 보여 주었다.
+
 ## Addressed views
 
 각 member session은 addressed list, 곧 그 session에 가는 줄의 record index를 record 순서로 가지며 tab state의 `addressed`로 남는다. Leader가 없으면 모든 줄이 모든 session에 간다. Leader가 있으면 leader는 모든 줄을 받고, 그 밖의 모든 member인 worker는 owner의 줄, [mention 규칙](#mention)으로 자기나 `@all`을 mention한 줄, 자기를 mention한 방의 줄을 받는다. Worker에게는 자기 brief와 자기에게 온 질문이 필요하고, 전체 record는 다른 member의 작업으로 그 context를 채우기 때문이다. 방은 새 줄을 덧붙일 때 그 줄이 가는 각 session의 list에 index를 더하고, list가 없는 session은 처음 쓰일 때 자기에게 가는 모든 줄의 index를 받는다. `sent`와 `delivered`는 session의 addressed list 안의 위치이고, turn 줄은 `sent`부터 끝까지의 addressed 줄을 member 자신의 줄 없이 담는다.
@@ -265,7 +279,7 @@ Member는 화면이 아니라 선언된 command `soksak-plugin-agents-clubhouse.
 
 ## Restart
 
-Application의 restart, 방 tab의 unload, view의 restart 뒤에도 방은 입력 없이 이전과 같은 상태를 보여 준다. 방은 `surface.unload` `{format: 3, maxBytes: 1048576}`을 선언하고, 바뀔 때마다 view의 tab state(`tab.state.write`)로 tab의 상태를 쓴다. Core는 이를 tab마다 restart 너머로 보관한다(core `docs/spec/plugins.md#memory-saver`). 방은 turn 줄을 그 token이 든 tab state의 쓰기가 끝난 뒤에만 submit하므로, page의 reload가 다음 page가 복원할 수 없는 token을 member에게 남기지 않는다. 쓰기가 실패하면 turn은 그 이유로 실패한다. 상태는 `{group, mode, folded, conversation, sessions, protocolSessions, addressed, delivered, sent, turns, worktrees}`다.
+Application의 restart, 방 tab의 unload, view의 restart 뒤에도 방은 입력 없이 이전과 같은 상태를 보여 준다. 방은 `surface.unload` `{format: 4, maxBytes: 1048576}`을 선언하고, 바뀔 때마다 view의 tab state(`tab.state.write`)로 tab의 상태를 쓴다. Core는 이를 tab마다 restart 너머로 보관한다(core `docs/spec/plugins.md#memory-saver`). 방은 turn 줄을 그 token이 든 tab state의 쓰기가 끝난 뒤에만 submit하므로, page의 reload가 다음 page가 복원할 수 없는 token을 member에게 남기지 않는다. 쓰기가 실패하면 turn은 그 이유로 실패한다. 상태는 `{group, mode, folded, conversation, sessions, protocolSessions, addressed, delivered, sent, turns, worktrees, conversations}`다.
 
 - `group`: 지정된 [group](#group)의 identifier이며, 없으면 `null`이다. agents plugin이 더 이상 저장하지 않는 group이면 사람이 group을 지정할 때까지 방에는 member가 없다.
 - `mode`: 대화 [mode](#modes), `turn` 또는 `simul`.
@@ -277,6 +291,7 @@ Application의 restart, 방 tab의 unload, view의 restart 뒤에도 방은 입�
 - `delivered`와 `sent`: member session을 그 addressed list 안의 delivered 위치와 sent 위치로 잇는 object. 0부터 list 길이까지의 정수이며 `delivered`는 `sent`를 넘지 않는다.
 - `turns`: 열린 turn token `{turn, session, member, count}`. `member`는 그 member의 식별자, `count`는 줄을 만들 때의 record 길이로 0부터 `conversation` 길이까지의 정수다. Restart 뒤에도 방은 그 답을 받는다. 답은 session의 delivered number를 `count`로 올리고, restart로 relay가 끝난 turn의 답은 `member`의 답으로 record에 덧붙인다. Restart 전부터 남은 token의 기다림은 그 답이나 `conversation.stop`으로만 끝난다.
 - `worktrees`: worktree가 있는 각 member의 worktree. member identifier마다 program `member-worktree`가 답한 `{root, worktree, branch, integration}`이다([worktrees](#worktrees)).
+- `conversations`: session이 열린 각 member의 대화, member 식별자별 `{home, folder, id}`([conversation resume](#conversation-resume)). `home`은 절대 경로나 `null`, `folder`는 절대 경로, `id`는 UUID나 `null`이다.
 
 Reader는 이 형식만 받으며, 다른 값은 field와 찾은 것을 밝히는 `room tab state: <field> ...`로, 이전 `taught`처럼 이 형식 밖의 field는 `room tab state: unknown field <field>`로 거부한다. 상태가 없는 tab은 `null`을 읽는다. JSON이 `surface.unload`의 1048576 byte보다 큰 상태는 쓰지 않고 `error: room tab state: the state is <n> bytes, over the limit of 1048576 bytes`로 보고한다. 거부된 쓰기는 `error: room tab state: <reason>`으로 보고된다.
 
