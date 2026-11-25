@@ -3,7 +3,7 @@
 // the agents plugin. Reads of the other plugin go through F1075 (runtime.data.get with plugin agents); the reader gets the reads.
 import { describe, expect, it } from "vitest";
 import manifest from "../../plugin.json";
-import { readAgentDefinitions, toMemberDefinition } from "./definitions";
+import { readAgentDefinitions, startFolders, toMemberDefinition } from "./definitions";
 
 const DEFINITIONS = {
   writer: { name: "Writer", account: "codex-main", plugin: "terminal", role: "writer", cwd: "/work/docs" },
@@ -158,5 +158,20 @@ describe("reserved names (C95, docs/spec/room.md#mentions)", () => {
       "agents project data definitions: definition all uses the reserved name all",
       "agents project data definitions: definition x-1 uses the reserved name Owner",
     ]);
+  });
+});
+
+describe("startFolders", () => {
+  const definition = { id: "d", name: "D", account: "a", plugin: "terminal", program: "claude", args: [] as string[], home: null, launch: null, role: "r", cwd: "/work" };
+
+  it("lists the start folder and each folder of --add-dir in the arguments of the account and of the launch, once", () => {
+    expect(startFolders(definition, "/work")).toEqual(["/work"]);
+    expect(startFolders({ ...definition, args: ["--add-dir", "/a", "/b", "--verbose"], launch: { args: ["--plugin-dir", "/m", "--add-dir", "/m"], env: {} } }, "/tree"))
+      .toEqual(["/tree", "/a", "/b", "/m"]);
+    expect(startFolders({ ...definition, args: ["--add-dir=/a", "--add-dir", "/work"] }, "/work")).toEqual(["/work", "/a"]);
+  });
+
+  it("refuses a folder of --add-dir that is not an absolute path, because its trust would name another folder", () => {
+    expect(() => startFolders({ ...definition, args: ["--add-dir", "rel"] }, "/work")).toThrow("definition d: --add-dir rel is not an absolute path");
   });
 });

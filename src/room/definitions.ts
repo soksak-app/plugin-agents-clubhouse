@@ -143,3 +143,24 @@ export function toMemberDefinition(definition: AgentDefinition, agent: string | 
     cwd: definition.cwd,
   };
 }
+
+// The folders that a Claude Code member works in, each once: the folder it starts in and each folder that --add-dir names in the arguments
+// of its account and of its launch, whose trust Claude Code asks at the first start (docs/spec/room.md#first-start). --add-dir takes the
+// arguments after it up to the next option, and --add-dir=<folder> one folder.
+export function startFolders(definition: AgentDefinition, folder: string): string[] {
+  const args = [...definition.args, ...(definition.launch?.args ?? [])];
+  const folders = [folder];
+  let adding = false;
+  for (const arg of args) {
+    if (arg.startsWith("--add-dir=")) {
+      folders.push(arg.slice("--add-dir=".length));
+      adding = false;
+    } else if (arg === "--add-dir") adding = true;
+    else if (arg.startsWith("-")) adding = false;
+    else if (adding) folders.push(arg);
+  }
+  for (const one of folders) {
+    if (!one.startsWith("/")) throw new Error(`definition ${definition.id}: --add-dir ${one} is not an absolute path`);
+  }
+  return [...new Set(folders)];
+}

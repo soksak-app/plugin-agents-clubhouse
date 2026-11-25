@@ -21,7 +21,7 @@ import { memberLaunch } from "./room/isolation";
 import { conversationView, elapsedLabel, nextLabelChange } from "./room/bubbles";
 import { createFollow, type FollowState } from "./room/follow";
 import { createStopState } from "./room/stop-state";
-import { readAgentDefinitions, toMemberDefinition, type AgentDataGet, type AgentDefinition } from "./room/definitions";
+import { readAgentDefinitions, startFolders, toMemberDefinition, type AgentDataGet, type AgentDefinition } from "./room/definitions";
 import { createMemberSessionStore } from "./room/session-store";
 import { serialRunner, summonAndArrange, type TriggerDeps } from "./room/trigger";
 import { createOpenedSessions } from "./room/summon";
@@ -616,8 +616,8 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   const programOf = (id: string): string => definitions.find((one) => one.id === id)?.program.split("/").at(-1) ?? "";
   // The agents of the open members whose program takes no --agent, by member id, which their agent line states (docs/spec/room.md#agent-line).
   const memberAgents = new Map<string, AgentPlace>();
-  // The declared program team-worktree creates and removes the worktree of a team member and trusts its repository for Claude Code
-  // (docs/spec/room.md#worktrees); its reply is one JSON object.
+  // The declared program team-worktree creates and removes the worktree of a team member (docs/spec/room.md#worktrees); its reply is one
+  // JSON object.
   const teamWorktree = async (args: string[]): Promise<Record<string, unknown>> => {
     const reply = await bridge!.runtime.program.run("team-worktree", args);
     if (reply.code !== 0) throw new Error(`team-worktree ${args.join(" ")} exited with ${reply.code}: ${reply.stderr.trim()}`);
@@ -625,6 +625,18 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
     const value = JSON.parse(reply.stdout) as unknown;
     if (value === null || typeof value !== "object" || Array.isArray(value)) throw new Error(`team-worktree ${args.join(" ")}: reply is not a JSON object, got ${reply.stdout}`);
     return value as Record<string, unknown>;
+  };
+  // Before a Claude Code member starts in folder, its configuration file holds the answers of the questions of a first start: member-start
+  // ends the first-start steps and trusts each folder of the member in the home of its account, and project-trust trusts each folder in the
+  // configuration file of the person for a definition without a home (docs/spec/room.md#first-start).
+  const prepareStart = async (id: string, folder: string): Promise<void> => {
+    const definition = definitions.find((one) => one.id === id);
+    if (definition === undefined || !isClaude(id)) return;
+    for (const one of startFolders(definition, folder)) {
+      const [name, args] = definition.home === null ? ["project-trust", ["trust", one]] : ["member-start", ["start", definition.home.folder, one]];
+      const reply = await bridge!.runtime.program.run(name, args);
+      if (reply.code !== 0) throw new Error(`${name} ${args.join(" ")} exited with ${reply.code}: ${reply.stderr.trim()}`);
+    }
   };
   // The member definitions of the summon: the roster definitions and the team members, each team member with its own id, name, role
   // and directory, so its relation is stored under its summon id (docs/spec/room.md#team).
@@ -663,12 +675,8 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
       await loginGate.startable(starting);
       checked = members.filter((id) => !loginGate.needs(id));
       showStates();
-      // Before a checked Claude Code member of the roster starts in the project folder, the declared program project-trust trusts that
-      // folder for Claude Code, so the member opens without the folder trust question (docs/spec/room.md#worktrees).
-      if (definitions.some((definition) => checked.includes(definition.id) && isClaude(definition.id))) {
-        const reply = await bridge!.runtime.program.run("project-trust", ["trust"]);
-        if (reply.code !== 0) throw new Error(`project-trust exited with ${reply.code}: ${reply.stderr.trim()}`);
-      }
+      // A checked member of the roster starts in the folder of its definition without a question of a first start.
+      for (const definition of definitions) if (checked.includes(definition.id)) await prepareStart(definition.id, definition.cwd);
       // A checked roster member whose program takes no --agent learns the agent of its definition from the agent line (C110).
       for (const definition of definitions) {
         if (!checked.includes(definition.id) || isClaude(definition.id)) continue;
@@ -1090,6 +1098,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
       if (typeof created.worktree !== "string") throw new Error(`team-worktree add: reply has no worktree, got ${JSON.stringify(created)}`);
       entry.worktree = created.worktree;
       persist();
+      await prepareStart(entry.definition, created.worktree);
       await summonRun();
       // A team member of a home without a login opens no session, and the leader learns why (docs/spec/room.md#login).
       if (loginGate.needs(entry.id)) throw new Error(`member ${entry.id}: the home of account ${memberDefinitionOf(entry.id)?.account} has no login`);
