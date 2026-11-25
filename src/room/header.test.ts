@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
-// The header of the room (C37, C138, C140, docs/spec/room.md#header): the first line holds the plugin name and the group select;
-// the member cards stand in a grid of equal columns that uses the whole width, and a grid of three rows or more folds to its first two
-// rows. The status bar above the composer holds the transport status, which shrinks with an ellipsis and shows its
+// The header of the room (C37, C138, C140, C149, docs/spec/room.md#header): the tab shows the plugin name, so the header has no line
+// of it; the member cards stand in a grid of equal columns that uses the whole width, and a grid of three rows or more folds to its first two
+// rows. The status bar above the composer holds the group select and the transport status, which shrinks with an ellipsis and shows its
 // whole text as its tooltip. jsdom computes the cascade of the style sheet and lays out nothing, so the tests read the declared
 // properties and pass the width of the grid.
 import { beforeEach, describe, expect, it } from "vitest";
@@ -11,7 +11,7 @@ const STATUS = "연결됨: 메시지는 열린 member session에 전달된다";
 const LABELS = { fold: "접기", unfold: "펼치기" };
 
 function header() {
-  const h = createRoomHeader("에이전트 클럽하우스", STATUS, LABELS);
+  const h = createRoomHeader(STATUS, LABELS);
   document.body.append(h.bar, h.statusBar);
   return h;
 }
@@ -73,13 +73,12 @@ describe("grid of the member cards", () => {
 });
 
 describe("first line and status bar", () => {
-  it("puts the plugin name on the left and the group select on the right of the first line (C140)", () => {
+  it("has no line of the plugin name, because the tab shows it, and puts the group select at the left of the status bar (C149)", () => {
     const h = header();
-    expect(h.top.firstElementChild?.textContent).toBe("에이전트 클럽하우스");
-    expect(h.top.lastElementChild).toBe(h.actions);
-    expect(h.actions.firstElementChild).toBe(h.group);
+    expect([...h.bar.children]).toEqual([h.grid, h.fold]);
+    expect(h.bar.textContent).not.toContain("에이전트 클럽하우스");
+    expect(h.statusBar.firstElementChild).toBe(h.group);
     expect(h.group.tagName).toBe("SELECT");
-    expect(getComputedStyle(h.actions).marginLeft).toBe("auto");
   });
 
   it("lists the groups by identifier with their names, selects the assigned group and shows the placeholder without one (C140)", () => {
@@ -92,9 +91,9 @@ describe("first line and status bar", () => {
     expect(h.group.value).toBe("g2");
   });
 
-  it("holds only the transport status in the status bar, because the room has no conversation mode (C141)", () => {
+  it("holds the group select and the transport status in the status bar, because the room has no conversation mode (C141, C149)", () => {
     const h = header();
-    expect([...h.statusBar.children]).toEqual([h.status]);
+    expect([...h.statusBar.children]).toEqual([h.group, h.status]);
   });
 
   it("shrinks the transport status with an ellipsis and shows its whole text as its tooltip", () => {

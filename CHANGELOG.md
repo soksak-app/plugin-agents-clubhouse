@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- C149: The tab of the room shows the plugin name and the name of its group; the header has no line of the plugin name, and the group select stands in the status bar above the composer.
 - C143-3: The memory of a project is the folder `.memory`, tracked by git with union merges for its index and monthly logs, so it is shared with every clone; a memory line tells each member how to keep it, and the room states an index over 200 lines.
 - C143-2: A turn line carries at most 100,000 characters of record lines and names the left-out lines by their entry positions and times in the conversation status; the times are formatted with date-fns.
 - C148: A member whose definition folder is in a git repository works in its own worktree `<home>/soksak/worktrees/<repository>-<hash>/<room>/<member>` on the branch `clubhouse/<room>/<member>`, created when its session opens; a worktree line after the room protocol states the merge order; `member.end` and the card button `끝내기` remove the worktree, refusing changes that are not committed and an unmerged branch, and end the session; the tab state keeps `worktrees`.

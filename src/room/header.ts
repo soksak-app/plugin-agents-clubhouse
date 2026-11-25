@@ -1,6 +1,6 @@
-// The header of the room (docs/spec/room.md#header): the first line holds the plugin name on the left and the group select on the
-// right; the member cards stand below in a grid of equal columns that uses the whole width, and a grid of three rows or more folds
-// to its first two rows. The status bar, which the page puts directly above the composer, holds the transport status.
+// The header of the room (docs/spec/room.md#header): the tab shows the plugin name, so the header holds only the member cards in a grid
+// of equal columns that uses the whole width, and a grid of three rows or more folds to its first two rows. The status bar, which the
+// page puts directly above the composer, holds the group select and the transport status.
 
 // The smallest width of a member card and the gap between the cards, in points.
 const CARD_MIN = 150;
@@ -11,10 +11,8 @@ const FOLD_ROWS = 3;
 
 export const HEADER_CSS = `
 .st-bar{display:flex;flex-direction:column;gap:4px;box-sizing:border-box;padding:3px var(--toolbar-pad-x,8px);border-bottom:1px solid rgba(127,127,127,.2);flex:0 0 auto;min-width:0}
-.st-top{display:flex;align-items:center;gap:8px;min-height:var(--toolbar-h,28px);min-width:0}
-.st-top b{font-weight:700;letter-spacing:.02em;flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.st-actions{margin-left:auto;display:flex;align-items:center;gap:6px;flex:0 0 auto}
-.st-group{font:inherit;font-size:11px;max-width:180px;color:inherit;background:transparent;border:1px solid rgba(127,127,127,.28);border-radius:6px;padding:1px 4px}
+.st-bar:has(.st-grid:empty){display:none}
+.st-group{flex:0 0 auto;font:inherit;font-size:11px;max-width:180px;color:inherit;background:transparent;border:1px solid rgba(127,127,127,.28);border-radius:6px;padding:1px 4px}
 .st-grid{display:grid;grid-template-columns:repeat(var(--cols),minmax(0,1fr));grid-auto-rows:1fr;gap:${GAP}px;min-width:0}
 .st-grid:empty{display:none}
 .st-grid>[hidden]{display:none!important}
@@ -36,13 +34,11 @@ export function gridRows(cards: number, columns: number): number {
 
 export interface RoomHeader {
   bar: HTMLElement;
-  top: HTMLElement;
-  // The right end of the first line, which holds the group select (C140).
-  actions: HTMLElement;
+  // The group select at the left of the status bar (C140, C149).
   group: HTMLSelectElement;
   grid: HTMLElement;
   fold: HTMLButtonElement;
-  // The line above the composer, which holds the transport status.
+  // The line above the composer, which holds the group select and the transport status.
   statusBar: HTMLElement;
   status: HTMLElement;
   // Shows the transport status.
@@ -51,23 +47,17 @@ export interface RoomHeader {
   layout(width: number, folded: boolean): void;
 }
 
-export function createRoomHeader(name: string, status: string, labels: { fold: string; unfold: string }): RoomHeader {
+export function createRoomHeader(status: string, labels: { fold: string; unfold: string }): RoomHeader {
   const bar = part("div", "st-bar");
-  const top = part("div", "st-top");
-  const title = part("b", "");
-  title.textContent = name;
-  const actions = part("div", "st-actions");
   const group = part("select", "st-group") as HTMLSelectElement;
-  actions.append(group);
-  top.append(title, actions);
   const grid = part("div", "st-grid");
   const fold = part("button", "st-fold") as HTMLButtonElement;
   fold.type = "button";
   fold.hidden = true;
-  bar.append(top, grid, fold);
+  bar.append(grid, fold);
   const statusBar = part("div", "st-statusbar");
   const statusEl = part("span", "st-status");
-  statusBar.append(statusEl);
+  statusBar.append(group, statusEl);
   const setStatus = (text: string): void => {
     statusEl.textContent = text;
     statusEl.title = text;
@@ -82,7 +72,7 @@ export function createRoomHeader(name: string, status: string, labels: { fold: s
     fold.textContent = folded ? labels.unfold : labels.fold;
     for (const [index, card] of cards.entries()) card.hidden = foldable && folded && index >= FOLDED_ROWS * columns;
   };
-  return { bar, top, actions, group, grid, fold, statusBar, status: statusEl, setStatus, layout };
+  return { bar, group, grid, fold, statusBar, status: statusEl, setStatus, layout };
 }
 
 function part(tag: string, cls: string): HTMLElement {

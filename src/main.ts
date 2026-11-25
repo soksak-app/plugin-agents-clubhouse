@@ -198,10 +198,10 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   const taughtSessions = new Set<string>(saved?.protocolSessions ?? []);
   // The last write of the tab state, which a turn line waits for (docs/spec/room.md#restart).
   let lastWrite: Promise<void> = Promise.resolve();
-  // The tab title of the room follows its members (C119, C123); a refused title is reported through the room error path.
+  // The tab title of the room follows its assigned group (C149); a refused title is reported through the room error path.
   let shownTitle: string | null = null;
   const showTitle = (): void => {
-    const title = roomTitle(members.map((entry) => entry.name), manifest.name);
+    const title = roomTitle(group === null ? null : (groups[group]?.name ?? null), manifest.name);
     if (title === shownTitle) return;
     shownTitle = title;
     void bridge!.calls.request("tab.title", title).catch((error: unknown) => report("tab title", String((error as Error)?.message ?? error)));
@@ -261,7 +261,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   const style = document.createElement("style");
   style.textContent = HEADER_CSS + CSS;
   const root = el("div", "st");
-  const header = createRoomHeader(manifest.name, transport.reason, { fold: t("foldButton", lang), unfold: t("unfoldButton", lang) });
+  const header = createRoomHeader(transport.reason, { fold: t("foldButton", lang), unfold: t("unfoldButton", lang) });
   const { bar, grid: tabsEl, statusBar } = header;
   const msgs = el("div", "st-msgs");
   // The view follows new entries only at the bottom; in reading mode the pill counts the unseen entries (docs/spec/room.md#follow-mode).
