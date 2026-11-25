@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- C151-1: A stop during the summon of a member ends its open, so no second protocol wait holds the conversation.
 - C151: `conversation.stop` ends a protocol turn that waits for the first idle of a session, so a member whose program never reports idle holds no conversation.
 - C149: The tab of the room shows the plugin name and the name of its group; the header has no line of the plugin name, and the group select stands in the status bar above the composer.
 - C143-3: The memory of a project is the folder `.memory`, tracked by git with union merges for its index and monthly logs, so it is shared with every clone; a memory line tells each member how to keep it, and the room states an index over 200 lines.

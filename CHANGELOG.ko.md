@@ -2,6 +2,7 @@
 
 ## 미출시
 
+- C151-1: member의 summon 중 stop은 그 open을 끝내므로, 두 번째 protocol 대기가 대화를 붙잡지 않는다.
 - C151: `conversation.stop`은 session의 첫 idle을 기다리는 protocol turn을 끝내므로, program이 idle을 보고하지 않는 member도 대화를 붙잡지 않는다.
 - C149: 방의 tab은 plugin 이름과 그 group의 이름을 보인다. header에는 plugin 이름의 줄이 없고, group select는 composer 위 status bar에 있다.
 - C143-3: 프로젝트의 memory는 index와 달마다의 log에 union merge를 건, git이 추적하는 folder `.memory`이므로 모든 clone과 공유된다. memory 줄이 각 member에게 관리 방법을 말하고, 방은 200줄이 넘는 index를 알린다.

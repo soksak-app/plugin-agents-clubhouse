@@ -23,13 +23,14 @@ import { readAgentDefinitions, startFolders, toMemberDefinition, type AgentDataG
 import { createMemberSessionStore } from "./room/session-store";
 import { serialRunner, summonAndArrange, type TriggerDeps } from "./room/trigger";
 import { createOpenedSessions } from "./room/summon";
-import { TurnStopped, conversationTurnsOf, relayMessage as relayToReceivers, type RelayPorts } from "./room/room-relay";
+import { conversationTurnsOf, relayMessage as relayToReceivers, type RelayPorts } from "./room/room-relay";
 import { createSubmitQueue } from "./room/submit-queue";
 import { CLAIM_COMMAND, RELEASE_COMMAND, REPORT_COMMAND, createWorkReports, type WorkReports } from "./room/work-reports";
 import { answerSections } from "./room/sections";
 import { createRoomRecord, leaderRoute, settledRelay } from "./room/room-record";
 import { agentFileText, agentNameOf, roleFileOf } from "./room/agent-file";
 import { createConversationStatus, waitLabel } from "./room/conversation-status";
+import { createMemberOpen } from "./room/member-open";
 import { MEMORY_INDEX_LIMIT, createProtocolInjector, type AgentPlace, type MemberWorktree } from "./room/protocol";
 import { parseRoomState, serializedRoomState, type RoomState as RoomTabState } from "./room/room-state";
 import { ownedSessionIds, shownByOf } from "./room/session-channel";
@@ -692,16 +693,15 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
     },
     // The first turn of a member without a session summons it, which arranges its tab, and submits the room protocol before the turn line
     // (docs/spec/room.md#receivers).
-    open: async (member) => {
-      await summonRun([member.id]);
-      if (loginGate.needs(member.id)) throw new Error(`member ${member.id}: the home of its account has no login`);
-      const [outcome] = await protocolOutcomes(openMembers().filter((entry) => entry.id === member.id));
-      if (outcome === undefined) throw new Error(`member ${member.id}: its session did not open`);
-      if (!outcome.result.ok && "stopped" in outcome.result) throw new TurnStopped();
-      if (!outcome.result.ok) throw new Error(outcome.result.reason);
-      const session = outcome.member.session;
-      return session;
-    },
+    open: createMemberOpen({
+      summon: (id) => summonRun([id]),
+      needsLogin: (id) => loginGate.needs(id),
+      protocol: async (id) => {
+        const [outcome] = await protocolOutcomes(openMembers().filter((entry) => entry.id === id));
+        return outcome === undefined ? undefined : { session: outcome.member.session, result: outcome.result };
+      },
+      stops: () => stopCount,
+    }),
   };
   // The conversation shows the room record: it names the owner or a member by its identifier and shows the name of the member.
   const memberName = (speaker: string): string => {
@@ -951,6 +951,8 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   // (docs/spec/room.md#room-record).
   // conversation.stop ends each turn that waits for a blocked session or for its answer (docs/spec/room.md#turn-end).
   const stopListeners = new Set<() => void>();
+  // The number of stops of the owner, which the open of a member compares (C151).
+  let stopCount = 0;
   const stopping = (listener: () => void): (() => void) => {
     stopListeners.add(listener);
     return () => void stopListeners.delete(listener);
@@ -999,6 +1001,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
     relay: relayMessage,
     followUp: () => work?.followUp(),
     stopWaits: () => {
+      stopCount += 1;
       for (const listener of [...stopListeners]) listener();
       return answers.closeWaits().length;
     },
