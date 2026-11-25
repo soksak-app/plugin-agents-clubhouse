@@ -2,6 +2,7 @@
 
 ## 미출시
 
+- C163: 버전은 0.0.30이고, C162를 release한다.
 - C162: login이 없는 member의 거부가 agents plugin의 설정을 login 장소로 지정한다.
 - C161: login이 없는 member의 거절이 account와, 사람이 login하는 agent definitions를 말한다.
 - C160: page start test가 언어를 한국어로 고정해 모든 locale에서 통과한다.

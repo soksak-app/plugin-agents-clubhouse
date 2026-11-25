@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- C163: The version is 0.0.30, which releases C162.
 - C162: The refusal of a member without a login names the settings of the agents plugin as the place of its login.
 - C161: The refusal of a member without a login names the account and the agent definitions, where the person logs in to it.
 - C160: The page start test fixes the language to Korean, so it passes in every locale.
