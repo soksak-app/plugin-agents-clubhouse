@@ -6,7 +6,7 @@
 
 ## Manifest
 
-`sok plugin install`이 같은 text로 manifest를 거부하므로, `plugin.json`은 plugin이 설치되는 core version의 release인 `@soksak/plugin-api`의 `validateManifest`를 통과한다. Test `src/manifest-validation.test.ts`가 이를 호출한다. Status와 command schema는 core exposure schema subset의 keyword `type`, `properties`, `required`, `items`, `enum`만 쓰고, `minimum` 같은 범위는 description에 적는다.
+`sok plugin install`이 같은 text로 manifest를 거부하므로, `plugin.json`은 plugin이 설치되는 core version의 release인 `@soksak/plugin-api`의 `validateManifest`를 통과한다. Test `src/manifest-validation.test.ts`가 이를 호출한다. Status와 command schema는 core exposure schema subset의 keyword `type`, `properties`, `required`, `items`, `enum`만 쓰고, `minimum` 같은 범위는 description에 적는다. Manifest는 `@soksak/plugin-agents` `>=0.0.10`에 의존한다. 저장된 group이 leader를 가지는 첫 release이므로([group](#group)), 설치가 leader 없는 group과 방을 함께 두지 않는다.
 
 ## Group
 

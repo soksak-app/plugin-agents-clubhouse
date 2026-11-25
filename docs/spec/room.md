@@ -6,7 +6,7 @@ The room relays each message of the composer to the members of its [group](#grou
 
 ## Manifest
 
-`plugin.json` passes `validateManifest` of `@soksak/plugin-api`, the release of the core version into which the plugin installs, because `sok plugin install` refuses a manifest that it refuses with the same text. The test `src/manifest-validation.test.ts` calls it. A status or command schema uses only the keywords of the schema subset of core exposures: `type`, `properties`, `required`, `items` and `enum`; a bound such as `minimum` is stated in the description.
+`plugin.json` passes `validateManifest` of `@soksak/plugin-api`, the release of the core version into which the plugin installs, because `sok plugin install` refuses a manifest that it refuses with the same text. The test `src/manifest-validation.test.ts` calls it. A status or command schema uses only the keywords of the schema subset of core exposures: `type`, `properties`, `required`, `items` and `enum`; a bound such as `minimum` is stated in the description. The manifest depends on `@soksak/plugin-agents` `>=0.0.10`, the first release whose stored groups hold a leader ([group](#group)), so an installation never pairs the room with groups without a leader.
 
 ## Group
 

@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- C157: The manifest requires `@soksak/plugin-agents` `>=0.0.10`, whose stored groups hold a leader.
 - C156: The version is 0.0.29, which releases C140 to C155.
 - C150: The composer has an optional mood choice whose emoji goes before the text of the message, so the members read the feeling of the owner.
 - C155: The member cards have no button `끝내기`; the person asks the leader to clean up a member, and the leader merges, removes its worktree and branch and ends its session.
