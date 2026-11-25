@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- C155: The member cards have no button `끝내기`; the person asks the leader to clean up a member, and the leader merges, removes its worktree and branch and ends its session.
 - C154: The buttons `순차` and `동시` right of the group select set whether the members that one message or answer starts take their turns one after another or at the same time; the leader follows them.
 - C153: A message waits only for the protocol turn of the members that take a turn, so a member whose program reports no state holds no other message.
 - C152-1: The pattern of `member-check` uses a repeat count that the RE2 regexp of the hosts compiles, and a test refuses a count above 1000.

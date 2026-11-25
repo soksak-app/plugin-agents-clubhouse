@@ -126,19 +126,11 @@ describe("first-start worktree and remove", () => {
     await expect(run(["worktree", repo, "tab-1", "../x"], home, {})).rejects.toThrow("member must match");
   });
 
-  it("removes a merged worktree with its branch and its empty folders, and refuses changes and an unmerged branch", async () => {
-    const { home, repo, git } = setup();
-    const { worktree } = (await run(["worktree", repo, "tab-1", "dev-1"], home, {})) as { worktree: string };
-    writeFileSync(join(worktree, "new.txt"), "work");
-    await expect(run(["remove", repo, "tab-1", "dev-1", "main"], home, {})).rejects.toThrow(`worktree ${worktree} has changes that are not committed`);
-    execFileSync("git", ["-C", worktree, "add", "new.txt"]);
-    execFileSync("git", ["-C", worktree, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "work"]);
-    await expect(run(["remove", repo, "tab-1", "dev-1", "main"], home, {})).rejects.toThrow(`branch ${branch} is not merged into main`);
-    git("merge", "-q", "--ff-only", branch);
-    expect(await run(["remove", repo, "tab-1", "dev-1", "main"], home, {})).toEqual({ root: repo, worktree, branch, removed: true });
-    expect(git("branch", "--list", branch)).toBe("");
-    expect(existsSync(join(home, "soksak", "worktrees"))).toBe(false);
+  it("has no remove command, because the leader cleans up a member through the conversation (C155)", async () => {
+    const { repo, home } = setup();
+    await expect(run(["remove", repo, "tab-1", "dev-1", "main"], home, {})).rejects.toThrow('command must be trust, start, worktree, root, memory or check, got "remove"');
   });
+
 });
 
 describe("first-start root (C148)", () => {
@@ -221,6 +213,6 @@ describe("first-start check", () => {
 describe("first-start commands", () => {
   it("refuses another command", async () => {
     const { home, repo } = setup();
-    await expect(run(["add", repo, "dev-1"], home, {})).rejects.toThrow('command must be trust, start, worktree, root, memory, check or remove, got "add"');
+    await expect(run(["add", repo, "dev-1"], home, {})).rejects.toThrow('command must be trust, start, worktree, root, memory or check, got "add"');
   });
 });

@@ -2,6 +2,7 @@
 
 ## 미출시
 
+- C155: member card에 버튼 `끝내기`가 없다. 사람은 leader에게 member 정리를 부탁하고, leader가 merge하고 worktree와 branch를 지우고 session을 끝낸다.
 - C154: group select 오른쪽의 `순차`와 `동시` button이 메시지나 답 하나가 시작하는 member가 차례로 받을지 동시에 받을지 정하고, leader는 그 뒤에 받는다.
 - C153: 메시지는 turn을 받는 member의 protocol turn만 기다리므로, 상태를 보고하지 않는 member가 다른 메시지를 붙잡지 않는다.
 - C152-1: `member-check`의 pattern은 host의 RE2 regexp가 compile하는 반복 수를 쓰고, 테스트가 1000보다 큰 수를 거부한다.

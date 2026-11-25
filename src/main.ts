@@ -57,7 +57,6 @@ const CSS = `
 .st-tab{min-width:0;box-sizing:border-box}
 .st-tab{display:inline-flex;align-items:center;gap:7px;padding:4px 9px 4px 5px;border-radius:9px;border:1px solid rgba(127,127,127,.28);background:rgba(127,127,127,.06);font-size:12px}
 .st-tab.none{border-style:dashed}
-.st-tab .end{appearance:none;margin-left:auto;border:1px solid rgba(127,127,127,.28);border-radius:6px;background:transparent;color:inherit;font:inherit;font-size:11px;padding:1px 6px;cursor:pointer;white-space:nowrap;flex:0 0 auto}
 .st-tab .ini{width:24px;height:24px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;background:rgba(127,127,127,.22);flex:0 0 auto}
 .st-tab .txt{display:flex;flex-direction:column;min-width:0;line-height:1.25}
 .st-tab .nm{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -422,14 +421,6 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
       // The leader shows the star U+2B50 before its name (docs/spec/room.md#header).
       text.append(elText("span", entry.leader ? `\u2B50 ${entry.name}` : entry.name, "nm"), sub);
       tab.append(elText("span", initialsOf(entry.name), "ini"), text);
-      // The button 끝내기 ends a member with a session and its worktree (docs/spec/room.md#worktrees).
-      const end = document.createElement("button");
-      end.type = "button";
-      end.className = "end";
-      end.textContent = t("endMember", lang);
-      end.dataset.expose = `${EXPOSE}.member.end`;
-      bound(expose.bind(end, `${EXPOSE}.member.end`, { member: entry.id }, { failed: failed("member.end") }), "member.end");
-      tab.append(end);
       sub.append(elText("span", "", "state"));
       tabsEl.append(tab);
     }
@@ -443,7 +434,6 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
       const id = tab.dataset.id!;
       const state = memberState(memberSessions.has(id), waited.has(id));
       tab.classList.toggle("none", state === "none");
-      tab.querySelector<HTMLButtonElement>(".end")!.hidden = !memberSessions.has(id);
       // A member with a problem of the last check shows it in its state line (docs/spec/room.md#check).
       const problem = roomCheck.problemOf(id);
       tab.querySelector(".state")!.textContent = problem ?? t(state === "answering" ? "stateAnswering" : state === "idle" ? "stateIdle" : "stateNone", lang);
@@ -584,17 +574,6 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
     const reply = await bridge!.runtime.program.run(name, args);
     if (reply.code !== 0) throw new Error(`member ${id}: ${reply.stderr.trim()}`);
     return JSON.parse(reply.stdout) as Record<string, unknown>;
-  };
-  // Ends a member that the person chooses: the program removes its worktree, refusing changes that are not committed and a branch that
-  // is not merged, and then the room ends its session and forgets the worktree (docs/spec/room.md#worktrees).
-  const endMember = async (id: string): Promise<void> => {
-    const session = memberSessions.get(id);
-    if (session === undefined) throw new Error(`member ${id} has no session`);
-    const tree = worktrees.get(id);
-    if (tree !== undefined) await firstStart("member-worktree-remove", ["remove", tree.root, surface, id, tree.integration], id);
-    worktrees.delete(id);
-    persist();
-    await room.commands.execute("core.session.end", { session });
   };
   const prepareStart = async (definition: AgentDefinition, folder: string): Promise<void> => {
     if (!isClaude(definition.id)) return;
@@ -1047,7 +1026,6 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
       return answers.map((answer) => ({ id: answer.id, text: answer.text }));
     });
   const operations = createRoomOperations({
-    endMember,
     group: () => group,
     setGroup: (next) => {
       group = next;
@@ -1184,7 +1162,6 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
     [`${EXPOSE}.group`]: header.group,
     [`${EXPOSE}.mode`]: header.modes,
     [`${EXPOSE}.fold`]: header.fold,
-    [`${EXPOSE}.member.end`]: () => [...tabsEl.querySelectorAll<HTMLElement>(".st-tab .end")],
     [`${EXPOSE}.question`]: () => [...msgs.querySelectorAll<HTMLElement>(".st-question-answer")],
     [`${EXPOSE}.question.choice`]: () => [...msgs.querySelectorAll<HTMLElement>(".st-question-choice")],
     [`${EXPOSE}.mention`]: () => [...mentionBox.querySelectorAll<HTMLElement>(".st-mention-item")],

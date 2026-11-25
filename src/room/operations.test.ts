@@ -27,7 +27,6 @@ function room(overrides: Partial<OperationDeps> = {}) {
     stopWaits: () => 0,
     followUp: () => void log.push("follow-up"),
     failed: (reason) => void log.push(`failed ${reason}`),
-    endMember: async (member) => void log.push(`end ${member}`),
     mode: () => mode,
     setMode: (next) => {
       mode = next;
@@ -69,18 +68,9 @@ describe("mode.set (C154, docs/spec/room.md#modes)", () => {
   });
 });
 
-describe("member.end (C148, docs/spec/room.md#worktrees)", () => {
-  it("ends the member through the room and refuses a value that is not a member identifier", async () => {
-    const r = room();
-    expect(await r.commands[`${P}.member.end`]({ member: "b" })).toEqual({ member: "b", ended: true });
-    expect(r.log).toEqual(["end b", "changed"]);
-    await expect(r.commands[`${P}.member.end`]({ member: "" })).rejects.toThrow('member must be a member identifier, got ""');
-  });
-
-  it("rejects with the refusal of the removal and redraws nothing", async () => {
-    const r = room({ endMember: async () => { throw new Error("member b: worktree /w has changes that are not committed"); } });
-    await expect(r.commands[`${P}.member.end`]({ member: "b" })).rejects.toThrow("member b: worktree /w has changes that are not committed");
-    expect(r.log).toEqual([]);
+describe("member.end (C155, docs/spec/room.md#worktrees)", () => {
+  it("is no command, because the leader cleans up a member through the conversation", () => {
+    expect(Object.keys(room().commands).some((name) => name.endsWith(".member.end"))).toBe(false);
   });
 });
 

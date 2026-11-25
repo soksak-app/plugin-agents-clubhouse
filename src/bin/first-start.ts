@@ -3,7 +3,6 @@
 //   first-start trust <folder>          trusts the folder for Claude Code in the configuration file of the person
 //   first-start start <home> <folder>   ends the first-start steps and trusts the folder in the configuration file of an account home
 //   first-start worktree <folder> <room> <member>                creates the worktree of a member of a room (docs/spec/room.md#worktrees)
-//   first-start remove <root> <room> <member> <integration>      removes that worktree and its merged branch
 //   first-start memory <folder>                                   creates the memory of the project in the folder (docs/spec/room.md#memory)
 //   first-start check <folder> <cli>                              names why a member cannot start there (docs/spec/room.md#check)
 //   first-start root <folder>                                     names the root of the main checkout of the folder, or null outside git
@@ -18,7 +17,7 @@
 // file while it runs.
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmdirSync, statSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import which from "which";
@@ -130,25 +129,6 @@ function addWorktree(home: string, folder: string, room: string, member: string)
   return { root, worktree: path, branch, integration };
 }
 
-function removeWorktree(home: string, root: string, room: string, member: string, integration: string): Record<string, unknown> {
-  const branch = `clubhouse/${room}/${member}`;
-  const path = worktreePath(home, root, room, member);
-  if (git(path, ["status", "--porcelain"]) !== "") throw new Error(`worktree ${path} has changes that are not committed`);
-  try {
-    git(root, ["merge-base", "--is-ancestor", branch, integration]);
-  } catch {
-    throw new Error(`branch ${branch} is not merged into ${integration}`);
-  }
-  git(root, ["worktree", "remove", path]);
-  git(root, ["branch", "-d", branch]);
-  // Each folder that the removal leaves empty goes with it, up to the folder soksak of the home.
-  for (let folder = dirname(path); folder.startsWith(join(home, "soksak")); folder = dirname(folder)) {
-    if (readdirSync(folder).length > 0) break;
-    rmdirSync(folder);
-  }
-  return { root, worktree: path, branch, removed: true };
-}
-
 // The memory of a project in the folder .memory of the folder that a member works in, tracked by git (docs/spec/room.md#memory). The
 // union merge driver keeps the lines of both branches of the appended index and monthly logs, so their merges do not conflict. The
 // program commits the files that it creates or changes, so two members that start the memory in two branches at once merge: the index
@@ -223,10 +203,7 @@ export async function run(args: string[], home: string, env: NodeJS.ProcessEnv):
     const folder = absolute("folder", args[1]);
     return { root: insideGit(folder) ? repositoryRoot(folder) : null };
   }
-  if (command === "remove" && args.length === 5) {
-    return removeWorktree(home, absolute("root", args[1]), segment("room", args[2]), segment("member", args[3]), args[4]);
-  }
-  throw new Error(`command must be trust, start, worktree, root, memory, check or remove, got ${JSON.stringify(command)}`);
+  throw new Error(`command must be trust, start, worktree, root, memory or check, got ${JSON.stringify(command)}`);
 }
 
 if (process.argv[1] !== undefined && /first-start(\.mjs)?$/.test(process.argv[1])) {

@@ -50,10 +50,6 @@ const strings = {
     en: "Choose a group",
     ko: "그룹 선택",
   },
-  endMember: {
-    en: "End",
-    ko: "끝내기",
-  },
   foldButton: {
     en: "Fold",
     ko: "접기",
