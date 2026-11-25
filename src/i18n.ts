@@ -6,6 +6,14 @@ const strings = {
     en: "Message… (Enter to send, Shift+Enter for newline, @ to mention a model, @all for everyone)",
     ko: "메시지… (Enter 전송, Shift+Enter 줄바꿈, @로 모델 지목, @all은 모두)",
   },
+  moodNone: {
+    en: "Mood",
+    ko: "기분",
+  },
+  moodTitle: {
+    en: "Mood of the message: its emoji goes before the text for the members",
+    ko: "메시지의 기분: 고른 emoji가 member에게 보내는 글 앞에 붙는다",
+  },
   sendBtn: {
     en: "Send",
     ko: "전송",

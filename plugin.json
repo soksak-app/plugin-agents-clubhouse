@@ -266,7 +266,10 @@
         },
         "result": {
           "type": "object",
-          "properties": { "text": { "type": "string" } },
+          "properties": {
+            "text": { "type": "string" },
+            "mood": { "type": "string", "enum": ["", "glad", "fine", "worried", "upset", "thankful", "excited"] }
+          },
           "required": ["text"]
         }
       },
@@ -314,7 +317,7 @@
       },
       {
         "name": "soksak-plugin-agents-clubhouse.message.send",
-        "description": "Relay a message to the members that it mentions and then to the leader of the group, or to the leader alone without a mention, refuse it when one of them has no open session, let the members that answers mention take further turns up to the setting conversationTurns, and answer after the whole conversation with the answer of each member in turn order.",
+        "description": "Relay a message to the members that it mentions and then to the leader of the group, or to the leader alone without a mention, put the emoji of an optional mood before the text, refuse it when one of them has no open session, let the members that answers mention take further turns up to the setting conversationTurns, and answer after the whole conversation with the answer of each member in turn order.",
         "params": {
           "type": "object",
           "properties": { "text": { "type": "string" } },
@@ -439,6 +442,10 @@
       {
         "name": "soksak-plugin-agents-clubhouse.pill",
         "description": "New-entry pill: shown in reading mode while entries below the viewport are unseen, with their number; a click runs conversation.scroll.bottom."
+      },
+      {
+        "name": "soksak-plugin-agents-clubhouse.mood",
+        "description": "Mood choice left of the message input: no mood or one emoji (glad, fine, worried, upset, thankful, excited); message.send carries its value and puts the emoji before the text, and the send resets it to no mood. Disabled while the transport status is unavailable."
       },
       {
         "name": "soksak-plugin-agents-clubhouse.input",

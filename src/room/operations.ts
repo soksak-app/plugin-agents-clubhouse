@@ -1,5 +1,6 @@
 // The operations of the room as declared commands (C35, docs/spec/room.md#commands). The elements of the page are bound to these
 // commands, so a click and a command call run the same path. Each command refuses an invalid parameter with an explicit error.
+import { moodText } from "./mood";
 import type { RoomMode } from "./room-relay";
 
 const P = "soksak-plugin-agents-clubhouse";
@@ -92,6 +93,9 @@ export function createRoomOperations(deps: OperationDeps): Record<string, (param
     const raw = params?.text;
     const text = typeof raw === "string" ? raw.trim() : "";
     if (text === "") throw new Error(`text must be a non-empty string, got ${JSON.stringify(raw)}`);
+    return relayText(moodText(params?.mood, text));
+  }
+  async function relayText(text: string): Promise<{ answers: { id: string; text: string }[] }> {
     if (relaying) {
       // The running relay takes the owner line: a working member receives it injected, an idle member in its next turn (docs/spec/room.md#owner-follow-up).
       deps.accept(text);

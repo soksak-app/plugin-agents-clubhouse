@@ -102,6 +102,10 @@ Turn은 program이 `idle`이든 `working`이든 session의 submit queue로 줄�
 
 방의 mode `turn` 또는 `simul`은 owner의 메시지 하나나 답 하나가 시작하는 member가 turn을 받는 방식을 정한다. `turn`에서는 mention 순서로 차례로 받고, 각 turn은 앞의 turn이 끝난 뒤 시작한다. `simul`에서는 동시에 받는다. 방은 그 turn 중 어느 것도 끝나기 전에 각 member에게 turn 줄을 submit하고, 답은 mention 순서를 지킨다. 두 mode 모두 leader는 owner의 메시지가 시작한 member 뒤에 turn을 받으므로 그 답을 읽는다. 상태가 없는 방 tab은 plugin setting `kibitzDefault`(`turn` 또는 `simul`, 기본값 `turn`)를 따르고, [tab state](#restart)가 mode를 보관한다. 결정: leader가 있어도 방은 두 mode를 유지한다. 여러 member를 mention한 메시지나 답에도, member가 자기 turn 전에 다른 member의 답을 읽을지(`turn`) 모두 동시에 일할지(`simul`)의 선택이 남기 때문이다.
 
+## Mood
+
+composer에는 메시지 입력 왼쪽에 고르지 않아도 되는 기분 선택이 있다. 선택지는 기분 없음, 또는 `glad` 😊, `fine` 🙂, `worried` 😟, `upset` 😠, `thankful` 🙏, `excited` 🤩 중 하나다. `message.send`는 그 선택을 `mood`로 받아 그 emoji와 공백 하나를 글 앞에 붙인다. 그래서 방 기록, turn 줄, 각 member가 메시지와 함께 owner의 감정을 받는다. `mood`가 없거나 비어 있으면 글만 보내고, 다른 값은 그 값을 밝혀 거절한다. 전송하면 선택은 기분 없음으로 돌아간다. Decision: 방은 기분을 별도 field가 아니라 글 속 emoji로 전한다. 모든 member CLI가 turn 줄의 글을 읽고, emoji는 room protocol에 규칙을 더할 필요가 없기 때문이다.
+
 ## Conversation
 
 한 메시지의 member들은 그 relay 안에서 대화한다. 방이 답을 record에 덧붙일 때, relay의 member, 즉 열린 session과 room protocol이 있는 member 사이에서 [mention 규칙](#mention)으로 그 답의 mention을 읽는다. 화자 자신의 mention과 다른 이름의 mention은 text다. 이 relay의 turn을 아직 기다리지 않는 각 mention된 member는 이미 기다리는 turn 뒤에 처음 mention된 순서로 turn을 받고, 받지 않은 record 줄을 받으므로([room record](#room-record)) 자기를 mention한 답을 읽는다. 그 답이 다시 다른 member를 mention할 수 있고, 대화는 같은 방식으로 이어진다. worker의 답이 시작하는 turn은 차례로 진행되고, leader의 답 하나가 mention한 worker들은 함께 시작한다([leader](#leader)).

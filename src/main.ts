@@ -8,6 +8,7 @@ import { createExpose } from "@soksak/plugin-api";
 import { createViewBridge, type ViewBridge } from "@soksak/plugin-api/view";
 import manifest from "../plugin.json";
 import { t, tp } from "./i18n";
+import { MOODS } from "./room/mood";
 import { createRoomCommands, type RoomState } from "./room/commands";
 import type { ElementTarget, RoomHandlers } from "./room/exposure";
 import { startRoomPage, type RoomContext } from "./room/page";
@@ -115,6 +116,7 @@ const CSS = `
 .st-mention-at{opacity:.6}
 .st-mention-nm{font-weight:600;color:var(--fg,#ddd)}
 .st-in textarea{flex:1;resize:none;background:rgba(127,127,127,.1);color:inherit;border:1px solid rgba(127,127,127,.25);border-radius:7px;padding:7px 9px;font:inherit;min-height:20px;max-height:120px}
+.st-in select.st-mood{background:rgba(127,127,127,.1);color:inherit;border:1px solid rgba(127,127,127,.25);border-radius:7px;padding:0 6px;font:inherit}
 .st-in button{background:var(--acc,#2d6cdf);color:#fff;border:0;border-radius:7px;padding:0 14px;cursor:pointer;font:inherit;font-weight:600}
 .st-in button:disabled{opacity:.4;cursor:default}
 .st-cut{font-weight:400;opacity:.7;font-size:9px;font-style:italic} /* 참견으로 중단된 부분응답 표식 */
@@ -357,7 +359,14 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   stop.type = "button";
   stop.textContent = t("stopBtn", lang);
   stop.disabled = true;
-  composer.append(input, send, stop);
+  // The mood choice of the composer: an optional emoji that the room puts before the text of the next message (C150,
+  // docs/spec/room.md#mood). The send resets it to no mood.
+  const mood = document.createElement("select");
+  mood.className = "st-mood";
+  mood.title = t("moodTitle", lang);
+  mood.disabled = true;
+  mood.append(new Option(t("moodNone", lang), ""), ...MOODS.map((one) => new Option(one.emoji, one.id)));
+  composer.append(mood, input, send, stop);
   const stopState = createStopState(stop, () => publishView());
   let busy = false;
   // Sets the transport state and the composer. A status subscriber receives each new value.
@@ -369,6 +378,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
       (transport.notIsolated.length > 0 ? ` ${tp("notIsolated", lang, { members: transport.notIsolated.join(", ") })}` : "");
     header.setStatus(transport.reason);
     input.disabled = !ready;
+    mood.disabled = !ready;
     input.title = transport.reason;
     send.disabled = !ready || busy;
     send.title = transport.reason;
@@ -1049,6 +1059,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
     summon,
     accept: (text) => {
       input.value = "";
+      mood.value = "";
       record.append("owner", text);
     },
     busy: (value) => {
@@ -1070,7 +1081,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   // message.send has shown each of its refusals and failures through the error display before it rejects, so the bindings show none
   // a second time; without failed, the binder would pass the rejection to unhandledrejection of the document.
   const shownBySend = (): void => {};
-  bound(expose.bind(send, `${EXPOSE}.message.send`, () => ({ text: input.value }), { failed: shownBySend }), "message.send");
+  bound(expose.bind(send, `${EXPOSE}.message.send`, () => ({ text: input.value, mood: mood.value }), { failed: shownBySend }), "message.send");
   bound(expose.bind(pill, `${EXPOSE}.conversation.scroll.bottom`, {}, { failed: failed("conversation.scroll.bottom") }), "conversation.scroll.bottom");
   bound(expose.bind(stop, `${EXPOSE}.conversation.stop`, {}, { failed: failed("conversation.stop") }), "conversation.stop");
   // The mention hint (C102, docs/spec/room.md#mention-hint): while the word before the caret starts with @, the list above the composer
@@ -1144,7 +1155,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
     if (sendKey(event)) event.preventDefault();
   });
   bound(
-    expose.bind(input, `${EXPOSE}.message.send`, () => ({ text: input.value }), {
+    expose.bind(input, `${EXPOSE}.message.send`, () => ({ text: input.value, mood: mood.value }), {
       event: "keydown",
       when: (event: Event) => sendKey(event as KeyboardEvent),
       failed: shownBySend,
@@ -1157,6 +1168,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
     [`${EXPOSE}.send`]: send,
     [`${EXPOSE}.stop`]: stop,
     [`${EXPOSE}.pill`]: pill,
+    [`${EXPOSE}.mood`]: mood,
     [`${EXPOSE}.input`]: input,
     [`${EXPOSE}.tab`]: tabTargets,
     [`${EXPOSE}.group`]: header.group,

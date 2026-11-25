@@ -94,6 +94,14 @@ describe("message.send", () => {
     expect(r.log).toEqual(["busy true", "accept hello", "busy false"]);
   });
 
+  it("puts the emoji of a chosen mood before the text, and sends the text alone without a mood (C150, docs/spec/room.md#mood)", async () => {
+    const r = room();
+    expect(await r.commands[`${P}.message.send`]({ text: " hello ", mood: "worried" })).toEqual({ answers: [{ id: "b", text: "answer to \u{1F61F} hello" }] });
+    expect(r.log).toEqual(["busy true", "accept \u{1F61F} hello", "busy false"]);
+    expect(await r.commands[`${P}.message.send`]({ text: "hi", mood: "" })).toEqual({ answers: [{ id: "b", text: "answer to hi" }] });
+    await expect(r.commands[`${P}.message.send`]({ text: "hi", mood: "sleepy" })).rejects.toThrow('mood must be one of glad, fine, worried, upset, thankful, excited or empty, got "sleepy"');
+  });
+
   it("relays a message while no member session is open, because each member opens its session at its first turn (C142)", async () => {
     const r = room();
     expect(await r.commands[`${P}.message.send`]({ text: "hello" })).toEqual({ answers: [{ id: "b", text: "answer to hello" }] });
