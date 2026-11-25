@@ -2,7 +2,7 @@
 // docs/spec/plugins.md#memory-saver, `surface.unload`), which core stores per tab and gives back after a restart, so the room shows
 // the same roster checks, mode and conversation without input. The reader accepts only this form and names what it found otherwise.
 import type { RoomMode } from "./commands";
-import type { OpenToken } from "./answer";
+import { isIndexSentence, type OpenToken } from "./answer";
 
 export interface RoomState {
   // The roster order, the membership, the checked state, the role of each entry and the leader, at most one (docs/spec/room.md#leader).
@@ -11,7 +11,7 @@ export interface RoomState {
   // Whether the member grid of the header is folded to its first two rows (docs/spec/room.md#header).
   folded: boolean;
   // The conversation as the room shows it: the owner or the member identifier, and the text.
-  conversation: { speaker: string; text: string; at: number | null; elapsedMs: number | null }[];
+  conversation: { speaker: string; text: string; at: number | null; elapsedMs: number | null; index: string | null }[];
   // The member sessions that this room opened; a tab of one of them whose session has ended is a tab of the room to close.
   sessions: string[];
   // The sessions that received the room protocol with the answer command (docs/spec/room.md#room-protocol).
@@ -66,9 +66,9 @@ export function parseRoomState(value: unknown): RoomState | null {
   const timeOrNull = (value: unknown): boolean => value === null || (typeof value === "number" && Number.isFinite(value) && value >= 0);
   if (
     !Array.isArray(conversation) ||
-    !conversation.every((entry) => isText(entry?.speaker) && typeof entry?.text === "string" && timeOrNull(entry?.at) && timeOrNull(entry?.elapsedMs))
+    !conversation.every((entry) => isText(entry?.speaker) && typeof entry?.text === "string" && timeOrNull(entry?.at) && timeOrNull(entry?.elapsedMs) && (entry?.index === null || isIndexSentence(entry?.index)))
   ) {
-    throw new Error("room tab state: conversation must be an array of {speaker, text, at, elapsedMs}");
+    throw new Error("room tab state: conversation must be an array of {speaker, text, at, elapsedMs, index}");
   }
   for (const field of ["sessions", "protocolSessions"] as const) {
     const list = state[field];
@@ -125,7 +125,7 @@ export function parseRoomState(value: unknown): RoomState | null {
     roster: roster.map((entry) => ({ id: entry.id, member: entry.member, checked: entry.checked, role: entry.role, leader: entry.leader })),
     mode: state.mode as RoomMode,
     folded: state.folded,
-    conversation: conversation.map((entry) => ({ speaker: entry.speaker, text: entry.text, at: entry.at, elapsedMs: entry.elapsedMs })),
+    conversation: conversation.map((entry) => ({ speaker: entry.speaker, text: entry.text, at: entry.at, elapsedMs: entry.elapsedMs, index: entry.index })),
     sessions: [...(state.sessions as string[])],
     protocolSessions: [...(state.protocolSessions as string[])],
     addressed: Object.fromEntries(Object.entries(addressed as Record<string, number[]>).map(([session, list]) => [session, [...list]])),

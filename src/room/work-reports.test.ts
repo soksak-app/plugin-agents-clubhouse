@@ -68,7 +68,7 @@ describe("path claims", () => {
     const r = room({ "s-a": "working" });
     const a = r.answers.open("s-a", "a", 0);
     r.work.claim({ turn: a.turn, paths: ["web/app.ts"] });
-    r.answers.deliver({ turn: a.turn, text: "done", status: "settled" });
+    r.answers.deliver({ turn: a.turn, text: "done", status: "settled", index: "done" });
     expect(r.work.claims()).toEqual([]);
     expect(r.record.lines.at(-1)).toMatchObject({ speaker: "a", text: "(release) web/app.ts" });
   });
@@ -103,7 +103,7 @@ describe("the paths of a report (docs/spec/room.md#work-reports)", () => {
     const r = room({ "s-a": "working", "s-b": "working" });
     const earlier = r.answers.open("s-a", "a", 0);
     r.work.claim({ turn: earlier.turn, paths: ["src"] });
-    r.answers.deliver({ turn: earlier.turn, text: "done", status: "continue" });
+    r.answers.deliver({ turn: earlier.turn, text: "done", status: "continue", index: "done" });
     const a = r.answers.open("s-a", "a", 0);
     expect(() => r.work.reportCommand({ turn: a.turn, text: "changed", paths: ["src/ws.js", "package.json"] })).toThrow(
       "paths src/ws.js, package.json are not claimed by a",

@@ -13,7 +13,7 @@ describe("conversation status", () => {
     expect(status?.schema).toMatchObject({
       type: "object",
       properties: {
-        entries: { type: "array", items: { required: ["speaker", "text", "at", "elapsedMs", "sections"] } },
+        entries: { type: "array", items: { required: ["speaker", "text", "at", "elapsedMs", "index", "sections"] } },
         waiting: { type: "array", items: { required: ["member", "session", "step", "program"], properties: { step: { enum: ["protocol", "turn", "answer"] } } } },
         delivery: { type: "array", items: { required: ["member", "name", "role", "session", "sent", "delivered", "length", "unreceived"] } },
         questions: { type: "array", items: { required: ["member", "session", "rows", "choices"] } },
@@ -31,14 +31,14 @@ describe("conversation status", () => {
     expect(status.read()).toEqual({ entries: [], waiting: [], delivery: [], questions: [] });
     record.append("owner", "hello");
     record.append("reviewer", "hi");
-    expect(status.read()).toEqual({ entries: [{ speaker: "owner", text: "hello", at: 1000, elapsedMs: null, sections: [] }, { speaker: "reviewer", text: "hi", at: 1000, elapsedMs: null, sections: [] }], waiting: [], delivery: [], questions: [] });
+    expect(status.read()).toEqual({ entries: [{ speaker: "owner", text: "hello", at: 1000, elapsedMs: null, index: null, sections: [] }, { speaker: "reviewer", text: "hi", at: 1000, elapsedMs: null, index: null, sections: [] }], waiting: [], delivery: [], questions: [] });
     record.append("owner", "again");
     record.withdrawLast(2);
     expect(values).toEqual([
-      { entries: [{ speaker: "owner", text: "hello", at: 1000, elapsedMs: null, sections: [] }], waiting: [], delivery: [], questions: [] },
-      { entries: [{ speaker: "owner", text: "hello", at: 1000, elapsedMs: null, sections: [] }, { speaker: "reviewer", text: "hi", at: 1000, elapsedMs: null, sections: [] }], waiting: [], delivery: [], questions: [] },
-      { entries: [{ speaker: "owner", text: "hello", at: 1000, elapsedMs: null, sections: [] }, { speaker: "reviewer", text: "hi", at: 1000, elapsedMs: null, sections: [] }, { speaker: "owner", text: "again", at: 1000, elapsedMs: null, sections: [] }], waiting: [], delivery: [], questions: [] },
-      { entries: [{ speaker: "owner", text: "hello", at: 1000, elapsedMs: null, sections: [] }, { speaker: "reviewer", text: "hi", at: 1000, elapsedMs: null, sections: [] }], waiting: [], delivery: [], questions: [] },
+      { entries: [{ speaker: "owner", text: "hello", at: 1000, elapsedMs: null, index: null, sections: [] }], waiting: [], delivery: [], questions: [] },
+      { entries: [{ speaker: "owner", text: "hello", at: 1000, elapsedMs: null, index: null, sections: [] }, { speaker: "reviewer", text: "hi", at: 1000, elapsedMs: null, index: null, sections: [] }], waiting: [], delivery: [], questions: [] },
+      { entries: [{ speaker: "owner", text: "hello", at: 1000, elapsedMs: null, index: null, sections: [] }, { speaker: "reviewer", text: "hi", at: 1000, elapsedMs: null, index: null, sections: [] }, { speaker: "owner", text: "again", at: 1000, elapsedMs: null, index: null, sections: [] }], waiting: [], delivery: [], questions: [] },
+      { entries: [{ speaker: "owner", text: "hello", at: 1000, elapsedMs: null, index: null, sections: [] }, { speaker: "reviewer", text: "hi", at: 1000, elapsedMs: null, index: null, sections: [] }], waiting: [], delivery: [], questions: [] },
     ]);
     stop();
     record.append("owner", "after");
@@ -52,7 +52,7 @@ describe("conversation status", () => {
   });
 
   it("gives copies, so a reader cannot change the record", () => {
-    const lines = [{ speaker: "owner", text: "hello", at: null, elapsedMs: null }];
+    const lines = [{ speaker: "owner", text: "hello", at: null, elapsedMs: null, index: null }];
     const status = createConversationStatus(lines, () => [], () => []);
     const value = status.read() as { entries: { text: string }[] };
     value.entries[0].text = "changed";

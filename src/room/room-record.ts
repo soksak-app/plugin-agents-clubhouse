@@ -14,6 +14,14 @@ export interface RecordLine {
   at: number | null;
   // For an answer of a member, the milliseconds from the submit of its turn line to the arrival of the answer; null otherwise.
   elapsedMs: number | null;
+  // For an answer of a member, its index sentence (docs/spec/room.md#index-sentence); null otherwise.
+  index: string | null;
+}
+
+// The parts of an answer line beside its speaker and text: the time of its turn, null for an answer after a restart, and its index sentence.
+export interface AnswerLine {
+  elapsedMs: number | null;
+  index: string;
 }
 
 export interface PendingLines {
@@ -37,8 +45,8 @@ export interface RoomRecord {
   // Raises the sent position of the session to count after core accepted a submit of its addressed lines up to count.
   markSent(session: string, count: number): void;
   // Appends a line at the time of the clock of the record and adds its index to the addressed list of each session that it is addressed
-  // to; `elapsedMs` is the time of the turn of an answer.
-  append(speaker: string, text: string, elapsedMs?: number | null): void;
+  // to; `answer` holds the time of the turn and the index sentence of an answer of a member.
+  append(speaker: string, text: string, answer?: AnswerLine): void;
   // The clock of the record in epoch milliseconds.
   now(): number;
   // The addressed lines of `session` of the member `self` from its sent position to the end, without its own lines; null when there is
@@ -123,8 +131,8 @@ export function createRoomRecord(
       changed();
     },
     now,
-    append(speaker, text, elapsedMs = null) {
-      const line = { speaker, text, at: now(), elapsedMs };
+    append(speaker, text, answer) {
+      const line = { speaker, text, at: now(), elapsedMs: answer?.elapsedMs ?? null, index: answer?.index ?? null };
       lines.push(line);
       for (const [session, list] of lists) if (addressedTo(line, session)) list.push(lines.length - 1);
       changed();

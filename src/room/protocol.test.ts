@@ -70,11 +70,16 @@ describe("roomProtocolLine", () => {
 
   it("states the answer command with the room surface and the turn token, the shell form first (docs/spec/room.md#answer)", () => {
     const line = roomProtocolLine("Claude", "room-1");
-    const shell = line.indexOf("sok soksak-plugin-agents-clubhouse.answer --surface room-1 --turn <token> --status <continue|settled> --text '<text>', each ' in it as '\\''");
-    const mcp = line.indexOf('MCP command_run {name: soksak-plugin-agents-clubhouse.answer, surface: room-1, params: {turn, status, text}}');
+    const shell = line.indexOf("sok soksak-plugin-agents-clubhouse.answer --surface room-1 --turn <token> --status <continue|settled> --index '<sentence>' --text '<text>', each ' in it as '\\''");
+    const mcp = line.indexOf('MCP command_run {name: soksak-plugin-agents-clubhouse.answer, surface: room-1, params: {turn, status, index, text}}');
     expect(shell).toBeGreaterThan(0);
     expect(mcp).toBeGreaterThan(shell);
     expect(line).toContain("This protocol line takes no answer.");
+  });
+
+  it("states the rule of the index sentence (docs/spec/room.md#index-sentence)", () => {
+    expect(roomProtocolLine("Claude", "room-1")).toContain("`--index` is one short sentence that states the main point of your answer, such as its conclusion or the fact it gives; it never restates the question or describes the act of answering.");
+    expect(roomProtocolLine("Claude", "room-1", false)).toContain("--index '<sentence>'");
   });
 
   // C126: a member ran the one-line heredoc form and its shell refused it, so the form is one that every shell runs as given.

@@ -1,5 +1,5 @@
 // The token channel of the room (docs/spec/room.md#answer). A member delivers its answer with the declared command
-// soksak-plugin-agents-clubhouse.answer {turn, text}, not through its screen: a program on the alternate screen writes only the rows of
+// soksak-plugin-agents-clubhouse.answer {turn, status, index, text}, not through its screen: a program on the alternate screen writes only the rows of
 // its visible viewport to the terminal, so no read of the screen or of the retained rows holds an answer taller than the member tab. Each
 // turn line carries the token of its turn, and the room accepts each token once, only while it is open, because core gives the handler of
 // a command no caller and answers the owner surface for every process of an owned session. The answer of a token raises the delivered
@@ -20,6 +20,8 @@ const STATUSES: readonly string[] = ["continue", "settled"];
 export interface Reply {
   text: string;
   status: AnswerStatus;
+  // The index sentence of the answer, one line (docs/spec/room.md#index-sentence).
+  index: string;
 }
 
 // An open token as the tab state keeps it.
@@ -64,7 +66,7 @@ export interface AnswerChannelOptions {
   // Raises the delivered number of the session to count.
   delivered: (session: string, count: number) => void;
   // The answer of a restored turn token, whose relay ended with the restart.
-  restoredAnswer: (token: OpenToken, text: string) => void;
+  restoredAnswer: (token: OpenToken, reply: Reply) => void;
   // Runs after each change of the open tokens.
   changed: () => void;
   // Runs when a token closes, by its answer or its close.
@@ -89,19 +91,20 @@ export function createAnswerChannel(options: AnswerChannelOptions): AnswerChanne
     for (const listener of [...settleListeners]) listener();
   };
   const take = (params: unknown): { entry: Entry; reply: Reply } => {
-    const { turn, text, status } = (params ?? {}) as { turn?: unknown; text?: unknown; status?: unknown };
+    const { turn, text, status, index } = (params ?? {}) as { turn?: unknown; text?: unknown; status?: unknown; index?: unknown };
     if (typeof turn !== "string" || turn === "") throw new Error(`turn must be a non-empty string, got ${JSON.stringify(turn)}`);
     if (typeof text !== "string" || text.trim() === "") throw new Error(`text must be a non-empty string, got ${JSON.stringify(text)}`);
     if (!STATUSES.includes(status as string)) throw new Error(`status must be continue or settled, got ${JSON.stringify(status)}`);
+    if (!isIndexSentence(index)) throw new Error(`index must be one non-empty line, got ${JSON.stringify(index)}`);
     const entry = open.get(turn);
     if (!entry) throw new Error(`turn ${turn} is not an open turn of this room`);
-    return { entry, reply: { text, status: status as AnswerStatus } };
+    return { entry, reply: { text, status: status as AnswerStatus, index } };
   };
   const settle = (entry: Entry, reply: Reply): void => {
     options.delivered(entry.session, entry.count);
     removed(entry.turn);
     if (entry.resolve) entry.resolve(reply);
-    else options.restoredAnswer(tokenOf(entry), reply.text);
+    else options.restoredAnswer(tokenOf(entry), reply);
   };
   return {
     open(session, member, count) {
@@ -144,6 +147,11 @@ export function createAnswerChannel(options: AnswerChannelOptions): AnswerChanne
       return closed;
     },
   };
+}
+
+// Whether the value is an index sentence: one line that is not empty after trimming (docs/spec/room.md#index-sentence).
+export function isIndexSentence(value: unknown): value is string {
+  return typeof value === "string" && value.trim() !== "" && !/[\r\n]/.test(value);
 }
 
 function tokenOf(entry: Entry): OpenToken {

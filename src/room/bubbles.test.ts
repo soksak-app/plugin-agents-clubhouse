@@ -10,6 +10,7 @@ const entry = (speaker: string, text: string, elapsedMs: number | null = null, s
   text,
   at: 1000,
   elapsedMs,
+  index: null,
   sections,
 });
 

@@ -9,8 +9,8 @@ const state: RoomState = {
   mode: "turn",
   folded: false,
   conversation: [
-    { speaker: "owner", text: "한 문장씩만", at: null, elapsedMs: null },
-    { speaker: "harness-harness", text: "여러분들, 저는 harness고\n커밋하는 일을 잘해요.", at: null, elapsedMs: null },
+    { speaker: "owner", text: "한 문장씩만", at: 1700000000000, elapsedMs: null, index: null },
+    { speaker: "harness-harness", text: "여러분들, 저는 harness고\n커밋하는 일을 잘해요.", at: 1700000001000, elapsedMs: 900, index: "harness가 커밋을 잘한다고 소개했다." },
   ],
   sessions: ["owned-1"],
   protocolSessions: ["owned-1"],
@@ -50,7 +50,7 @@ describe("parseRoomState", () => {
   });
 
   it("refuses to write a state over the 1048576 bytes of surface.unload, with its size", () => {
-    const big = { ...state, conversation: [{ speaker: "owner", text: "x".repeat(1048576), at: null, elapsedMs: null }] };
+    const big = { ...state, conversation: [{ speaker: "owner", text: "x".repeat(1048576), at: null, elapsedMs: null, index: null }] };
     expect(() => serializedRoomState(big)).toThrow(/^the state is \d+ bytes, over the limit of 1048576 bytes$/);
     expect(JSON.parse(serializedRoomState(state))).toEqual(state);
   });
@@ -75,7 +75,7 @@ describe("parseRoomState", () => {
     const { folded: _f, ...withoutFold } = state;
     expect(() => parseRoomState(withoutFold)).toThrow("room tab state: folded must be true or false, got undefined");
     expect(() => parseRoomState({ ...state, roster: [{ id: 1 }] })).toThrow("room tab state: roster must be an array of {id, member, checked, role, leader}");
-    expect(() => parseRoomState({ ...state, conversation: "x" })).toThrow("room tab state: conversation must be an array of {speaker, text, at, elapsedMs}");
+    expect(() => parseRoomState({ ...state, conversation: "x" })).toThrow("room tab state: conversation must be an array of {speaker, text, at, elapsedMs, index}");
     expect(() => parseRoomState({ ...state, protocolSessions: [3] })).toThrow(
       "room tab state: protocolSessions must be an array of session identifiers",
     );
@@ -93,9 +93,9 @@ describe("parseRoomState", () => {
 
   it("refuses a conversation entry without its times, and accepts null times (docs/spec/room.md#timing)", () => {
     expect(() => parseRoomState({ ...state, conversation: [{ speaker: "owner", text: "hi" }] })).toThrow(
-      "room tab state: conversation must be an array of {speaker, text, at, elapsedMs}",
+      "room tab state: conversation must be an array of {speaker, text, at, elapsedMs, index}",
     );
-    const timed = [{ speaker: "owner", text: "hi", at: null, elapsedMs: null }, { speaker: "a", text: "yes", at: 1700000000000, elapsedMs: 12400 }];
+    const timed = [{ speaker: "owner", text: "hi", at: null, elapsedMs: null, index: null }, { speaker: "a", text: "yes", at: 1700000000000, elapsedMs: 12400, index: "a agreed." }];
     expect(parseRoomState({ ...state, conversation: timed })?.conversation).toEqual(timed);
   });
 
@@ -103,7 +103,14 @@ describe("parseRoomState", () => {
     expect(() => parseRoomState({ ...state, team: [] })).toThrow("room tab state: unknown field team");
   });
 
-  it("is declared as the tab state format 3, the form without a team (docs/spec/room.md#restart)", () => {
+  it("refuses a conversation entry without its index or with an index that is not one non-empty line (docs/spec/room.md#index-sentence)", () => {
+    const entry = { speaker: "a", text: "yes", at: 1700000000000, elapsedMs: 12400 };
+    for (const conversation of [[entry], [{ ...entry, index: "" }], [{ ...entry, index: "one\ntwo" }], [{ ...entry, index: 3 }]]) {
+      expect(() => parseRoomState({ ...state, conversation })).toThrow("room tab state: conversation must be an array of {speaker, text, at, elapsedMs, index}");
+    }
+  });
+
+  it("is declared as the tab state format 3, the form with the index of each entry (docs/spec/room.md#restart)", () => {
     expect(manifest.surface.unload).toEqual({ format: 3, maxBytes: 1048576 });
   });
 });

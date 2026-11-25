@@ -48,14 +48,16 @@ export interface MemberAnswer {
   status: AnswerStatus;
   // The milliseconds from the submit of the turn line to the arrival of the answer (docs/spec/room.md#timing).
   elapsedMs: number;
-  // The index of the record line of the answer, once the room appended it.
-  index?: number;
+  // The index sentence of the answer (docs/spec/room.md#index-sentence).
+  index: string;
+  // The position of the record line of the answer, once the room appended it.
+  line?: number;
 }
 
 // Appends the answer to the record and keeps the index of its line.
 function appendAnswer(record: RoomRecord, answer: MemberAnswer): void {
-  record.append(answer.id, answer.text, answer.elapsedMs);
-  answer.index = record.lines.length - 1;
+  record.append(answer.id, answer.text, { elapsedMs: answer.elapsedMs, index: answer.index });
+  answer.line = record.lines.length - 1;
 }
 
 export interface RelayPorts extends SessionCommandPort {
@@ -180,7 +182,7 @@ async function relayToMember(
     ended.catch(() => {});
     submitWatch.catch(() => {});
     const reply = await Promise.race([turn.answer, ended, submitWatch]);
-    return { id: member.id, text: reply.text, status: reply.status as AnswerStatus, elapsedMs: record.now() - submittedAt };
+    return { id: member.id, text: reply.text, status: reply.status as AnswerStatus, elapsedMs: record.now() - submittedAt, index: reply.index };
   } catch (error) {
     if (error instanceof TurnStopped) throw error;
     throw new Error(`member ${member.id}: ${messageOf(error)}`);
@@ -240,7 +242,7 @@ function queueMentions(queue: Turn[], text: string, speaker: NamedRelayMember, m
 // Whether the member has record lines that it has not received other than the settled answers of this relay: each answer is a line
 // that the other members have not received, so a turn for each settled answer would never end (docs/spec/room.md#settling).
 function unreceivedBesidesSettled(record: RoomRecord, member: RelayMember, answers: MemberAnswer[]): boolean {
-  const settled = new Set(answers.filter((answer) => answer.status === "settled").map((answer) => answer.index));
+  const settled = new Set(answers.filter((answer) => answer.status === "settled").map((answer) => answer.line));
   return record.unsent(member.session, member.id).some((index) => !settled.has(index));
 }
 

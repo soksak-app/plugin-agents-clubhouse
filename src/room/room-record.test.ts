@@ -20,8 +20,20 @@ describe("createRoomRecord", () => {
     expect(record.delivered()).toEqual({ "s-a": 3 });
   });
 
+  it("keeps the index sentence and the time of an answer line, and null on the other lines (docs/spec/room.md#index-sentence)", () => {
+    const record = createRoomRecord([], {}, nameOf, () => {}, {}, () => 1700000000000);
+    record.append("owner", "REST or GraphQL?");
+    record.append("a", "REST, because ...", { elapsedMs: 900, index: "REST로 가는 것을 추천합니다." });
+    record.append("clubhouse", "the conversation settled");
+    expect(record.lines).toEqual([
+      { speaker: "owner", text: "REST or GraphQL?", at: 1700000000000, elapsedMs: null, index: null },
+      { speaker: "a", text: "REST, because ...", at: 1700000000000, elapsedMs: 900, index: "REST로 가는 것을 추천합니다." },
+      { speaker: "clubhouse", text: "the conversation settled", at: 1700000000000, elapsedMs: null, index: null },
+    ]);
+  });
+
   it("starts from the stored delivered numbers", () => {
-    const record = createRoomRecord([{ speaker: "owner", text: "one", at: null, elapsedMs: null }, { speaker: "a", text: "two", at: null, elapsedMs: null }], { "s-b": 1 }, nameOf, () => {});
+    const record = createRoomRecord([{ speaker: "owner", text: "one", at: null, elapsedMs: null, index: null }, { speaker: "a", text: "two", at: null, elapsedMs: null, index: null }], { "s-b": 1 }, nameOf, () => {});
     expect(record.pending("s-b", "b")?.text).toBe("[@Alpha] two");
   });
 
@@ -39,7 +51,7 @@ describe("createRoomRecord", () => {
   });
 
   it("raises a delivered number and refuses a number that falls or exceeds the record", () => {
-    const record = createRoomRecord([{ speaker: "owner", text: "one", at: null, elapsedMs: null }, { speaker: "a", text: "two", at: null, elapsedMs: null }], {}, nameOf, () => {});
+    const record = createRoomRecord([{ speaker: "owner", text: "one", at: null, elapsedMs: null, index: null }, { speaker: "a", text: "two", at: null, elapsedMs: null, index: null }], {}, nameOf, () => {});
     record.markDelivered("s-a", 2);
     record.markDelivered("s-a", 1);
     expect(() => record.markDelivered("s-a", 3)).toThrow("delivered s-a must be an integer from 0 to 2, got 3");

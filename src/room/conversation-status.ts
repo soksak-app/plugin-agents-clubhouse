@@ -1,4 +1,4 @@
-// The conversation status of the room (docs/spec/room.md#conversation-status): the entries {speaker, text} of the room record that
+// The conversation status of the room (docs/spec/room.md#conversation-status): the entries {speaker, text, index} of the room record that
 // the page shows, each member whose turn the room waits for, with its step and the program state of its session in core.sessions, and
 // the sent and delivered numbers of the session of each member beside the length of the record and its unreceived lines.
 // The room calls changed after each change of the record and at each value of core.sessions; a wait publishes when it begins and
@@ -14,6 +14,8 @@ export interface ConversationEntry {
   at: number | null;
   // The time of the turn of an answer in milliseconds, null otherwise.
   elapsedMs: number | null;
+  // The index sentence of an answer (docs/spec/room.md#index-sentence), null otherwise.
+  index: string | null;
 }
 
 // An entry of the status: the record entry and the sections of its answer (docs/spec/room.md#sections), [] for an entry without them.
@@ -101,7 +103,7 @@ export function createConversationStatus(
     const value = sessions();
     if (!Array.isArray(value)) throw new Error("core.sessions is not a list");
     return {
-      entries: lines.map((line) => ({ speaker: line.speaker, text: line.text, at: line.at, elapsedMs: line.elapsedMs, sections: sections(line) })),
+      entries: lines.map((line) => ({ speaker: line.speaker, text: line.text, at: line.at, elapsedMs: line.elapsedMs, index: line.index, sections: sections(line) })),
       waiting: [...waits].map((wait) => ({ ...wait, program: programOf(value as { session?: unknown }[], wait.session) })),
       delivery: delivery().map((entry) => ({ ...entry })),
       questions: questions().map((entry) => ({ ...entry, rows: [...entry.rows] })),

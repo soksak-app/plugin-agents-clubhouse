@@ -2,6 +2,7 @@
 // answer with the declared command soksak-plugin-agents-clubhouse.answer {turn, text}, and the room accepts each token once, only
 // while its turn is open.
 import { describe, expect, it } from "vitest";
+import manifest from "../../plugin.json";
 import { ANSWER_COMMAND, ANSWER_NEXT, createAnswerChannel, type OpenToken } from "./answer";
 
 const counter = () => {
@@ -15,36 +16,52 @@ describe("createAnswerChannel", () => {
     const turn = channel.open("s-1", "m", 0);
     expect(turn.turn).toBe("t-1");
     const text = Array.from({ length: 451 }, (_, index) => `row ${index}`).join("\n");
-    expect(channel.deliver({ status: "settled", turn: "t-1", text })).toEqual({ turn: "t-1", next: ANSWER_NEXT });
-    await expect(turn.answer).resolves.toEqual({ text, status: "settled" });
+    expect(channel.deliver({ index: "the point", status: "settled", turn: "t-1", text })).toEqual({ turn: "t-1", next: ANSWER_NEXT });
+    await expect(turn.answer).resolves.toEqual({ text, status: "settled", index: "the point" });
   });
 
   it("refuses a token of no open turn, also a second answer of one turn and an answer after the close of its turn", () => {
     const channel = createAnswerChannel({ newTurn: counter(), delivered: () => {}, restoredAnswer: () => {}, changed: () => {} });
-    expect(() => channel.deliver({ status: "settled", turn: "t-9", text: "hi" })).toThrow("turn t-9 is not an open turn of this room");
+    expect(() => channel.deliver({ index: "the point", status: "settled", turn: "t-9", text: "hi" })).toThrow("turn t-9 is not an open turn of this room");
     channel.open("s-1", "m", 0);
-    channel.deliver({ status: "settled", turn: "t-1", text: "first" });
-    expect(() => channel.deliver({ status: "settled", turn: "t-1", text: "second" })).toThrow("turn t-1 is not an open turn of this room");
+    channel.deliver({ index: "the point", status: "settled", turn: "t-1", text: "first" });
+    expect(() => channel.deliver({ index: "the point", status: "settled", turn: "t-1", text: "second" })).toThrow("turn t-1 is not an open turn of this room");
     channel.open("s-1", "m", 0).close();
-    expect(() => channel.deliver({ status: "settled", turn: "t-2", text: "late" })).toThrow("turn t-2 is not an open turn of this room");
+    expect(() => channel.deliver({ index: "the point", status: "settled", turn: "t-2", text: "late" })).toThrow("turn t-2 is not an open turn of this room");
   });
 
   it("gives each turn its own token, so the answer of one member never ends the turn of another", async () => {
     const channel = createAnswerChannel({ newTurn: counter(), delivered: () => {}, restoredAnswer: () => {}, changed: () => {} });
     const first = channel.open("s-1", "m", 0);
     const second = channel.open("s-2", "m", 0);
-    channel.deliver({ status: "settled", turn: second.turn, text: "of s-2" });
-    channel.deliver({ status: "settled", turn: first.turn, text: "of s-1" });
-    await expect(first.answer).resolves.toEqual({ text: "of s-1", status: "settled" });
-    await expect(second.answer).resolves.toEqual({ text: "of s-2", status: "settled" });
+    channel.deliver({ index: "the point", status: "settled", turn: second.turn, text: "of s-2" });
+    channel.deliver({ index: "the point", status: "settled", turn: first.turn, text: "of s-1" });
+    await expect(first.answer).resolves.toEqual({ text: "of s-1", status: "settled", index: "the point" });
+    await expect(second.answer).resolves.toEqual({ text: "of s-2", status: "settled", index: "the point" });
   });
 
   it("refuses invalid parameters with the parameter and the value", () => {
     const channel = createAnswerChannel({ newTurn: counter(), delivered: () => {}, restoredAnswer: () => {}, changed: () => {} });
     channel.open("s-1", "m", 0);
-    expect(() => channel.deliver({ status: "settled", turn: "", text: "x" })).toThrow('turn must be a non-empty string, got ""');
-    expect(() => channel.deliver({ status: "settled", turn: "t-1", text: "  " })).toThrow('text must be a non-empty string, got "  "');
-    expect(() => channel.deliver({ status: "settled", turn: "t-1", text: 3 })).toThrow("text must be a non-empty string, got 3");
+    expect(() => channel.deliver({ index: "the point", status: "settled", turn: "", text: "x" })).toThrow('turn must be a non-empty string, got ""');
+    expect(() => channel.deliver({ index: "the point", status: "settled", turn: "t-1", text: "  " })).toThrow('text must be a non-empty string, got "  "');
+    expect(() => channel.deliver({ index: "the point", status: "settled", turn: "t-1", text: 3 })).toThrow("text must be a non-empty string, got 3");
+  });
+
+  it("requires the index sentence, one line that is not empty after trimming, and keeps it unchanged (docs/spec/room.md#index-sentence)", async () => {
+    const channel = createAnswerChannel({ newTurn: counter(), delivered: () => {}, restoredAnswer: () => {}, changed: () => {} });
+    const turn = channel.open("s-1", "m", 0);
+    expect(() => channel.deliver({ status: "settled", turn: "t-1", text: "hi" })).toThrow("index must be one non-empty line, got undefined");
+    expect(() => channel.deliver({ status: "settled", turn: "t-1", text: "hi", index: "  " })).toThrow('index must be one non-empty line, got "  "');
+    expect(() => channel.deliver({ status: "settled", turn: "t-1", text: "hi", index: "one\ntwo" })).toThrow('index must be one non-empty line, got "one\\ntwo"');
+    expect(() => channel.deliver({ status: "settled", turn: "t-1", text: "hi", index: 3 })).toThrow("index must be one non-empty line, got 3");
+    channel.deliver({ status: "continue", turn: "t-1", text: "hi", index: "REST로 가는 것을 추천합니다." });
+    await expect(turn.answer).resolves.toEqual({ text: "hi", status: "continue", index: "REST로 가는 것을 추천합니다." });
+  });
+
+  it("declares the index sentence as a required parameter of the answer command (docs/spec/room.md#answer)", () => {
+    const command = manifest.exposes.commands.find((entry) => entry.name === ANSWER_COMMAND);
+    expect(command?.params).toMatchObject({ properties: { index: { type: "string" } }, required: ["turn", "text", "status", "index"] });
   });
 
   it("refuses a second open turn of one session", () => {
@@ -62,7 +79,7 @@ describe("createAnswerChannel", () => {
     const channel = createAnswerChannel({ newTurn: counter(), delivered: (session, count) => void raised.push(`${session}=${count}`), restoredAnswer: () => {}, changed: () => {} });
     const turn = channel.open("s-1", "a", 3);
     expect(raised).toEqual([]);
-    channel.deliver({ status: "settled", turn: turn.turn, text: "hi" });
+    channel.deliver({ index: "the point", status: "settled", turn: turn.turn, text: "hi" });
     expect(raised).toEqual(["s-1=3"]);
   });
 
@@ -74,13 +91,13 @@ describe("createAnswerChannel", () => {
       newTurn: counter(),
       restored,
       delivered: (session, count) => void raised.push(`${session}=${count}`),
-      restoredAnswer: (token, text) => void answered.push(`${token.member}:${text}`),
+      restoredAnswer: (token, reply) => void answered.push(`${token.member}:${reply.text}:${reply.index}`),
       changed: () => {},
     });
     expect(channel.tokens()).toEqual(restored);
-    channel.deliver({ status: "settled", turn: "old-1", text: "late answer" });
+    channel.deliver({ index: "the point", status: "settled", turn: "old-1", text: "late answer" });
     expect(raised).toEqual(["s-1=2"]);
-    expect(answered).toEqual(["a:late answer"]);
+    expect(answered).toEqual(["a:late answer:the point"]);
     expect(channel.tokens()).toEqual([]);
   });
 
@@ -104,7 +121,7 @@ describe("an answer across a reload of the room page", () => {
   it("accepts the answer of a token that the page before the reload opened, from the written tab state", async () => {
     const { parseRoomState, serializedRoomState } = await import("./room-state");
     const { createRoomRecord } = await import("./room-record");
-    const conversation = [{ speaker: "owner", text: "go", at: null, elapsedMs: null }];
+    const conversation = [{ speaker: "owner", text: "go", at: null, elapsedMs: null, index: null }];
     let written = "";
     const before = createAnswerChannel({ newTurn: counter(), delivered: () => {}, restoredAnswer: () => {}, changed: () => {
       written = serializedRoomState({
@@ -119,12 +136,12 @@ describe("an answer across a reload of the room page", () => {
     const after = createAnswerChannel({
       restored: saved.turns,
       delivered: (session, count) => record.markDelivered(session, count),
-      restoredAnswer: (token, text) => record.append(token.member, text),
+      restoredAnswer: (token, reply) => record.append(token.member, reply.text, { elapsedMs: null, index: reply.index }),
       changed: () => {},
     });
-    expect(after.deliver({ turn: "t-1", status: "settled", text: "done" })).toEqual({ turn: "t-1", next: ANSWER_NEXT });
+    expect(after.deliver({ index: "the point", turn: "t-1", status: "settled", text: "done" })).toEqual({ turn: "t-1", next: ANSWER_NEXT });
     expect(record.delivered()).toEqual({ "s-1": 1 });
-    expect(record.lines.at(-1)).toMatchObject({ speaker: "m", text: "done" });
+    expect(record.lines.at(-1)).toMatchObject({ speaker: "m", text: "done", elapsedMs: null, index: "the point" });
     expect(after.tokens()).toEqual([]);
   });
 });

@@ -86,6 +86,7 @@
                   "text": { "type": "string" },
                   "at": { "type": ["number", "null"] },
                   "elapsedMs": { "type": ["number", "null"] },
+                  "index": { "type": ["string", "null"] },
                   "sections": {
                     "type": "array",
                     "items": {
@@ -95,7 +96,7 @@
                     }
                   }
                 },
-                "required": ["speaker", "text", "at", "elapsedMs", "sections"]
+                "required": ["speaker", "text", "at", "elapsedMs", "index", "sections"]
               }
             },
             "waiting": {
@@ -440,15 +441,16 @@
       },
       {
         "name": "soksak-plugin-agents-clubhouse.answer",
-        "description": "Deliver the answer of a member for the turn whose token its relayed line carries as [@clubhouse] turn <token>, with status continue while an open question, a disagreement or work remains, or settled when its part is done and verified; run it with the surface of the room. Each token takes one answer while its turn is open. Answers the turn and next, the sentence that tells the member to end its turn without terminal text.",
+        "description": "Deliver the answer of a member for the turn whose token its relayed line carries as [@clubhouse] turn <token>, with status continue while an open question, a disagreement or work remains, or settled when its part is done and verified, and index, one short sentence of its main point; run it with the surface of the room. Each token takes one answer while its turn is open. Answers the turn and next, the sentence that tells the member to end its turn without terminal text.",
         "params": {
           "type": "object",
           "properties": {
             "turn": { "type": "string" },
             "text": { "type": "string" },
-            "status": { "type": "string", "enum": ["continue", "settled"] }
+            "status": { "type": "string", "enum": ["continue", "settled"] },
+            "index": { "type": "string" }
           },
-          "required": ["turn", "text", "status"]
+          "required": ["turn", "text", "status", "index"]
         },
         "result": {
           "type": "object",

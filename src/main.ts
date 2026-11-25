@@ -668,7 +668,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   const answers = createAnswerChannel({
     restored: saved?.turns ?? [],
     delivered: (session, count) => record.markDelivered(session, count),
-    restoredAnswer: (token, text) => record.append(token.member, text),
+    restoredAnswer: (token, reply) => record.append(token.member, reply.text, { elapsedMs: null, index: reply.index }),
     closed: (token) => {
       work?.closed(token);
       keptWaits.get(token.turn)?.();

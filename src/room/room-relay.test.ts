@@ -41,7 +41,7 @@ function fakeCore(
   const finish = (session: string) => {
     const scripted = options.script?.[session]?.shift();
     const reply = scripted ?? (options.replies && session in options.replies ? options.replies[session] : `answer of ${session}`);
-    if (reply !== null) answers.deliver({ status: "settled", turn: turns.get(session)!, text: reply });
+    if (reply !== null) answers.deliver({ status: "settled", turn: turns.get(session)!, text: reply, index: `index of ${session}` });
     setState(session, "idle");
   };
   // The conversation status of the room is the tracker of the awaited members (docs/spec/room.md#conversation-status).
@@ -84,7 +84,7 @@ function fakeCore(
   ports.lines = createSubmitQueue(ports);
   // The member runs the answer command with the status; its program state stays as it is (docs/spec/room.md#turn-end).
   const answer = (session: string, status: "continue" | "settled", text = `answer of ${session}`) =>
-    answers.deliver({ status, turn: turns.get(session)!, text });
+    answers.deliver({ status, turn: turns.get(session)!, text, index: `index of ${session}` });
   return { ports, submitted, submits, finish, status, bound, setState, answer };
 }
 
@@ -152,7 +152,7 @@ describe("relayInMode one member at a time", () => {
   it("closes the turn after the answer, so a later answer of the same session is refused", async () => {
     const core = fakeCore([IDLE("s-1")]);
     await relayInMode(core.ports, "turn", [MEMBERS[0]], "hi", roomRecord("hi"), OPEN);
-    expect(() => core.ports.answers.deliver({ status: "settled", turn: "t-1", text: "again" })).toThrow("turn t-1 is not an open turn of this room");
+    expect(() => core.ports.answers.deliver({ status: "settled", turn: "t-1", text: "again", index: "again" })).toThrow("turn t-1 is not an open turn of this room");
   });
 
   it("waits for a blocked member to leave the block, shows the wait with the step turn, and then relays (docs/spec/room.md#turn-end)", async () => {
@@ -342,6 +342,13 @@ describe("the room record across turns (docs/spec/room.md#room-record)", () => {
     const record = roomRecord();
     await expect(send(core, "turn", MEMBERS, record, "hello")).rejects.toThrow("member writer");
     expect(record.lines.map((line) => line.speaker)).toEqual(["owner", "reviewer", "clubhouse"]);
+  });
+
+  it("records each answer with the index sentence that the member delivered (docs/spec/room.md#index-sentence)", async () => {
+    const core = fakeCore([IDLE("s-1")]);
+    const record = roomRecord();
+    await send(core, "turn", [MEMBERS[0]], record, "hello");
+    expect(record.lines.map((line) => [line.speaker, line.index])).toEqual([["owner", null], ["reviewer", "index of s-1"], ["clubhouse", null]]);
   });
 });
 
