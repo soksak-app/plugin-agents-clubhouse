@@ -30,10 +30,7 @@ import { createSubmitQueue } from "./room/submit-queue";
 import { CLAIM_COMMAND, RELEASE_COMMAND, REPORT_COMMAND, createWorkReports, type WorkReports } from "./room/work-reports";
 import { answerSections } from "./room/sections";
 import { createRoomRecord, leaderRoute, settledRelay } from "./room/room-record";
-import { agentArgs, roleReplyState, teamRowText, maxMembersOf, summonedEntry, teamName, type TeamEntry } from "./room/team";
-import { agentFileText, agentNameOf } from "./room/agent-file";
-import { createTeamControl } from "./room/team-control";
-import { summonableDefinitions } from "./room/summonable";
+import { agentFileText, agentNameOf, roleFileOf } from "./room/agent-file";
 import { createConversationStatus, waitLabel } from "./room/conversation-status";
 import { createProtocolInjector, type AgentPlace } from "./room/protocol";
 import { parseRoomState, serializedRoomState, type RoomState as RoomTabState } from "./room/room-state";
@@ -202,8 +199,6 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   }
   // The largest number of turns that answers start for one message (docs/spec/room.md#conversation).
   const conversationTurns = conversationTurnsOf(settings.conversationTurns);
-  // The largest number of members that the leader summons (docs/spec/room.md#team).
-  const maxMembers = maxMembersOf(settings.maxMembers);
   // Whether each member starts with the flag of its program that accepts every request (docs/spec/room.md#accept-all).
   if (settings.acceptAll !== "ask" && settings.acceptAll !== "accept") {
     throw new Error(`settings.acceptAll must be ask or accept, got ${JSON.stringify(settings.acceptAll)}`);
@@ -216,8 +211,6 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   let folded = saved?.folded ?? false;
   // The roster of the saved state orders and checks the first roster that the definitions give.
   let seed: RosterEntry[] = (saved?.roster ?? []).map((entry) => ({ id: entry.id, name: "", member: entry.member, checked: entry.checked, role: entry.role, leader: entry.leader }));
-  // The members that the leader summoned (docs/spec/room.md#team).
-  const team: TeamEntry[] = [...(saved?.team ?? [])];
   const conversation: RoomTabState["conversation"] = [...(saved?.conversation ?? [])];
   // The member sessions that this room opened, and the sessions that received the room protocol.
   const roomSessions = new Set<string>(saved?.sessions ?? []);
@@ -236,7 +229,6 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
     showTitle();
     const value: RoomTabState = {
       roster: roster.map((entry) => ({ id: entry.id, member: entry.member, checked: entry.checked, role: entry.role, leader: entry.leader })),
-      team: team.map((entry) => ({ ...entry })),
       mode,
       folded,
       conversation,
@@ -262,7 +254,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   // The roster lists the agent definitions of the agents plugin (C13); it is empty until the status arrives.
   const roster: RosterEntry[] = [];
   let definitions: AgentDefinition[] = [];
-  // The open session of each member of the room and of each team member, read again after each change of core.sessions (C3).
+  // The open session of each member of the room, read again after each change of core.sessions (C3).
   let memberSessions = new Map<string, string>();
   // The members that wait for the login of their home (docs/spec/room.md#login).
   const loginGate = createLoginGate({ run: async (program, args) => bridge!.runtime.program.run(program, args) });
@@ -497,13 +489,9 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
       const stored = await sessions.get(definition.id);
       if (stored !== null && openSessionIds.has(stored.sessionId)) next.set(definition.id, stored.sessionId);
     }
-    for (const entry of team) {
-      const stored = await sessions.get(entry.id);
-      if (stored !== null && openSessionIds.has(stored.sessionId)) next.set(entry.id, stored.sessionId);
-    }
     memberSessions = next;
-    // The transport is ready while a member that receives the next message, a checked member or a team member, has an open session.
-    setTransport(roster.some((entry) => entry.checked && next.has(entry.id)) || team.some((entry) => next.has(entry.id)));
+    // The transport is ready while a member that receives the next message, a checked member, has an open session.
+    setTransport(roster.some((entry) => entry.checked && next.has(entry.id)));
     showStates();
   };
   const refreshReported = (): void => {
@@ -542,14 +530,14 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   bridge!.runtime.data.on(() => refreshDefinitions(), { plugin: AGENTS_PLUGIN });
   refreshDefinitions();
 
-  // The ended sessions that a retask waits for core.sessions to drop, each with the resolve of its wait (docs/spec/room.md#team).
+  // The ended sessions that a leave waits for core.sessions to drop, each with the resolve of its wait (docs/spec/room.md#commands).
   const goneWaits = new Map<string, () => void>();
   const gone = (session: string): Promise<void> =>
     openSessionIds.has(session) ? new Promise<void>((resolve) => goneWaits.set(session, resolve)) : Promise.resolve();
   // The value of core.sessions, which the relay reads, and the listeners that the relay watches it with.
   let sessionsValue: unknown = [];
   const sessionListeners = new Set<(value: unknown) => void>();
-  // The value of core.roles, which gives the agent file of the role of each definition (docs/spec/room.md#team).
+  // The value of core.roles, which gives the agent file of the role of each definition (docs/spec/room.md#roster).
   let rolesValue: unknown = undefined;
   Promise.resolve(bridge!.runtime.status.watch("core.roles", (value: unknown) => {
     rolesValue = value;
@@ -594,8 +582,8 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   // Whether the program of a definition is Claude Code, which takes --session-id, --resume and --agent.
   const isClaude = (id: string): boolean => (definitions.find((one) => one.id === id)?.program.split("/").at(-1) ?? "") === "claude";
   // The agent name of a definition: the frontmatter name of the agent file of its role in core.roles, read with the declared program
-  // agent-file, or null when core.roles lists no file for it (docs/spec/room.md#team).
-  const agentFileOf = (id: string): string | null => summonableDefinitions(definitions, {}, rolesValue).find((one) => one.id === id)?.file ?? null;
+  // agent-file, or null when core.roles lists no file for it (docs/spec/room.md#roster).
+  const agentFileOf = (id: string): string | null => roleFileOf(id, rolesValue);
   const agentPlaceOf = async (id: string): Promise<AgentPlace | null> => {
     const file = agentFileOf(id);
     if (file === null) return null;
@@ -603,20 +591,8 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
     return { agent: agentNameOf(agentFileText(reply, file), file), file };
   };
   const agentOf = async (id: string): Promise<string | null> => (await agentPlaceOf(id))?.agent ?? null;
-  // The program name of a definition, the last segment of its program.
-  const programOf = (id: string): string => definitions.find((one) => one.id === id)?.program.split("/").at(-1) ?? "";
   // The agents of the open members whose program takes no --agent, by member id, which their agent line states (docs/spec/room.md#agent-line).
   const memberAgents = new Map<string, AgentPlace>();
-  // The declared program team-worktree creates and removes the worktree of a team member (docs/spec/room.md#worktrees); its reply is one
-  // JSON object.
-  const teamWorktree = async (args: string[]): Promise<Record<string, unknown>> => {
-    const reply = await bridge!.runtime.program.run("team-worktree", args);
-    if (reply.code !== 0) throw new Error(`team-worktree ${args.join(" ")} exited with ${reply.code}: ${reply.stderr.trim()}`);
-    if (reply.truncated.stdout || reply.truncated.stderr) throw new Error(`team-worktree ${args.join(" ")}: output was truncated`);
-    const value = JSON.parse(reply.stdout) as unknown;
-    if (value === null || typeof value !== "object" || Array.isArray(value)) throw new Error(`team-worktree ${args.join(" ")}: reply is not a JSON object, got ${reply.stdout}`);
-    return value as Record<string, unknown>;
-  };
   // Before a Claude Code member starts in folder, its configuration file holds the answers of the questions of a first start: member-start
   // ends the first-start steps and trusts each folder of the member in the home of its account, and project-trust trusts each folder in the
   // configuration file of the person for a definition without a home (docs/spec/room.md#first-start).
@@ -629,21 +605,6 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
       if (reply.code !== 0) throw new Error(`${name} ${args.join(" ")} exited with ${reply.code}: ${reply.stderr.trim()}`);
     }
   };
-  // The member definitions of the summon: the roster definitions and the team members, each team member with its own id, name, role
-  // and directory, so its relation is stored under its summon id (docs/spec/room.md#team).
-  const teamDefinitions = () =>
-    team.flatMap((entry) => {
-      const definition = definitions.find((one) => one.id === entry.definition);
-      if (definition === undefined) return [];
-      const member = toMemberDefinition({ ...definition, id: entry.id, name: teamName(entry, definitions), role: entry.role, cwd: entry.worktree ?? entry.directory }, null, acceptAll);
-      // A Claude Code member starts with its session id and agent, and a later launch resumes the id (docs/spec/room.md#team).
-      return [{ ...member, params: { ...member.params, args: [...(member.params.args as string[]), ...agentArgs(entry)] } }];
-    });
-  // The definition of a member of the roster or of the team, a team member with its own id.
-  const memberDefinitionOf = (id: string): AgentDefinition | undefined => {
-    const entry = team.find((one) => one.id === id);
-    return definitions.find((one) => one.id === (entry === undefined ? id : entry.definition));
-  };
   // login.check summons the members again, which reads the login of their homes, after the person logs in to an account in the agents
   // plugin (docs/spec/room.md#login).
   const checkLogins = async (): Promise<null> => {
@@ -651,8 +612,8 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
     return null;
   };
   const summonRun = (): Promise<void> => {
-    // The members of the room and the team members have sessions; a member that is not checked keeps its session (docs/spec/room.md#roster).
-    const members = [...roster.filter((entry) => entry.member).map((entry) => entry.id), ...team.map((entry) => entry.id)];
+    // The members of the room have sessions; a member that is not checked keeps its session (docs/spec/room.md#roster).
+    const members = roster.filter((entry) => entry.member).map((entry) => entry.id);
     let checked = members;
     return runTrigger(async () => {
       await sessionsReady;
@@ -660,7 +621,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
       // login (docs/spec/room.md#login).
       const starting = members.flatMap((id) => {
         if (memberSessions.has(id)) return [];
-        const definition = memberDefinitionOf(id);
+        const definition = definitions.find((one) => one.id === id);
         return definition === undefined ? [] : [{ ...definition, id }];
       });
       await loginGate.startable(starting);
@@ -675,22 +636,19 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
         if (place === null) memberAgents.delete(definition.id);
         else memberAgents.set(definition.id, place);
       }
-      // A checked Claude Code member of the roster starts with the agent of its definition, as a team member does (C101).
+      // A checked Claude Code member of the roster starts with the agent of its definition (C101).
       const rosterDefinitions = await Promise.all(
         definitions.map(async (definition) =>
           toMemberDefinition(definition, checked.includes(definition.id) && isClaude(definition.id) ? await agentOf(definition.id) : null, acceptAll),
         ),
       );
-      await summonAndArrange(trigger, [...rosterDefinitions, ...teamDefinitions()], checked);
+      await summonAndArrange(trigger, rosterDefinitions, checked);
       // The arrangement closed the tabs of the ended sessions; the room keeps the sessions that are open.
       for (const session of [...roomSessions]) if (!openSessionIds.has(session)) roomSessions.delete(session);
     })
       .then(refreshMembers)
       .then(() => {
         for (const session of memberSessions.values()) roomSessions.add(session);
-        // After its first launch a Claude Code member resumes its session id at every later launch.
-        for (const entry of team) if (entry.agentSession !== null && memberSessions.has(entry.id)) entry.resume = true;
-        settleRetasks();
         persist();
       })
       .then(teachMembers);
@@ -738,8 +696,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   };
   // The conversation shows the room record: it names the owner or a member by its identifier and shows the roster name of the member.
   const memberName = (speaker: string): string => {
-    const entry = team.find((one) => one.id === speaker);
-    return entry !== undefined ? teamName(entry, definitions) : roster.find((one) => one.id === speaker)?.name || speaker;
+    return roster.find((one) => one.id === speaker)?.name || speaker;
   };
   // Below the entries the page shows one line per member whose turn the room waits for (docs/spec/room.md#conversation-status).
   const showConversation = (): void => {
@@ -821,11 +778,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
     for (const key of [...waitStarts.keys()]) if (!keys.has(key)) waitStarts.delete(key);
     // A draw keeps the scroll position; the follow mode decides whether the view moves to the new entries.
     const top = msgs.scrollTop;
-    // The team view lists each team member with its role, directory, branch, merge and session state (docs/spec/room.md#team).
-    const teamRows = value.team.map((entry) =>
-      elText("div", teamRowText(entry), "st-note st-team"),
-    );
-    msgs.replaceChildren(...rows, ...waitRows, ...questionRows, ...teamRows);
+    msgs.replaceChildren(...rows, ...waitRows, ...questionRows);
     msgs.scrollTop = top;
     tickWaits();
     seen.disconnect();
@@ -873,18 +826,13 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   // The declared conversation status carries the entries that the page shows and the members that the room waits for; the page draws
   // each value, and each value of core.sessions publishes the program states again (docs/spec/room.md#conversation-status).
   // The sections of an answer name the addressees by the mention rules among the roster (docs/spec/room.md#sections).
-  // The team commands and the team view (docs/spec/room.md#team).
   type OpenMember = { id: string; name: string; session: string; role: string; mcp: boolean };
   const isOpen = (id: string): boolean => memberSessions.has(id) && openSessionIds.has(memberSessions.get(id)!);
-  const openMembers = (): OpenMember[] => [
-    ...roster
+  const openMembers = (): OpenMember[] =>
+    roster
       // The stored relation is read again after each change of core.sessions; until then a session that has ended is left out.
       .filter((entry) => entry.checked && isOpen(entry.id))
-      .map((entry) => ({ id: entry.id, name: entry.name, session: memberSessions.get(entry.id)!, role: entry.role, mcp: !isolatedMember(entry.id) })),
-    ...team
-      .filter((entry) => isOpen(entry.id))
-      .map((entry) => ({ id: entry.id, name: teamName(entry, definitions), session: memberSessions.get(entry.id)!, role: entry.role, mcp: !isolatedMember(entry.definition) })),
-  ];
+      .map((entry) => ({ id: entry.id, name: entry.name, session: memberSessions.get(entry.id)!, role: entry.role, mcp: !isolatedMember(entry.id) }));
   // The members of the room whose session received the protocol, and the record lines that each has not received, which its next turn
   // line carries (docs/spec/room.md#conversation-status).
   const roomMembers = () => openMembers().filter((member) => taughtSessions.has(member.session));
@@ -901,84 +849,11 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
         unreceived: record.unsent(member.session, member.id).length,
       };
     });
-  // The retasks whose resumed session has not yet been shown by a tab with the role of the new definition (docs/spec/room.md#team), and
-  // the state of the core.tab.role reply for the tab of each retasked member, which the team view shows and the room judges nothing from.
-  const retasks = new Map<string, { ended: string | null; tab: string | null }>();
-  const roleStates = new Map<string, "pending" | "ready">();
-  // Moves the delivery of the ended session to the resumed one, counts its protocol as received, and sets the role of the tab that shows
-  // it; it runs at each value of core.sessions, the event of a new session and of its tab, and does each step once.
-  const settleRetasks = (): void => {
-    for (const [member, retask] of [...retasks]) {
-      const session = memberSessions.get(member);
-      if (session === undefined || session === retask.ended || !openSessionIds.has(session) || retask.tab !== null) continue;
-      let tab: string | null;
-      try {
-        tab = shownByOf(sessionsValue, session);
-      } catch (error) {
-        report("room retask", String((error as Error)?.message ?? error));
-        continue;
-      }
-      if (tab === null) continue;
-      retask.tab = tab;
-      if (retask.ended !== null) record.moveSession(retask.ended, session);
-      taughtSessions.add(session);
-      persist();
-      const entry = team.find((one) => one.id === member);
-      const role = definitions.find((one) => one.id === entry?.definition)?.role;
-      if (role === undefined) {
-        report("room retask", `member ${member}: its definition has no role for core.tab.role`);
-        retasks.delete(member);
-        continue;
-      }
-      room.commands
-        .execute("core.tab.role", { tab, role })
-        .then((reply: unknown) => {
-          roleStates.set(member, roleReplyState(reply));
-          conversationStatus.changed();
-        })
-        .catch((error: unknown) => report("room retask", `core.tab.role ${tab}: ${String((error as Error)?.message ?? error)}`))
-        .finally(() => retasks.delete(member));
-    }
-  };
   // The questions of the blocked members by session, and the sessions whose screen the room reads (docs/spec/room.md#questions).
   const questions = new Map<string, { member: string; rows: string[]; choices: string[] }>();
   const questionReads = new Set<string>();
-  const teamControl = createTeamControl({
-    team,
-    definitions: () => definitions,
-    sessionOf: (id) => memberSessions.get(id) ?? null,
-    leader: () => leaderEntry(),
-    answers,
-    end: (session) => endSession(session),
-    append: (text) => record.append("clubhouse", text),
-    summon: () => summon(),
-    changed: () => {
-      persist();
-      conversationStatus.changed();
-    },
-    report,
-    agentOf: (definition) => agentPlaceOf(definition),
-    programOf,
-    takesAgent: (definition) => isClaude(definition),
-    teachAgent: async (entry, place) => {
-      memberAgents.set(entry.id, place);
-      const session = memberSessions.get(entry.id);
-      if (session === undefined) throw new Error(`member ${entry.id}: its session is not open`);
-      await protocol.teachAgent({ id: entry.id, name: teamName(entry, definitions), session, agent: place });
-    },
-    gone,
-    busy: (member) =>
-      answers.tokens().some((token) => token.member === member) || conversationStatus.read().waiting.some((wait: { member: string }) => wait.member === member),
-    retasked: (member, session) => {
-      retasks.set(member, { ended: session, tab: null });
-      roleStates.delete(member);
-    },
-    roleState: (member) => roleStates.get(member) ?? null,
-    removeWorktree: async (entry) => void (await teamWorktree(["remove", entry.directory, entry.id])),
-  });
   const conversationStatus = createConversationStatus(conversation, () => sessionsValue, () => deliveryEntries(), (entry) =>
     entry.speaker === "owner" || entry.speaker === "clubhouse" ? [] : answerSections(entry.text, roster),
-    () => teamControl.view(sessionsValue),
     () => [...questions.entries()].map(([session, entry]) => ({ member: entry.member, session, rows: entry.rows, choices: entry.choices })),
   );
   conversationStatus.subscribe(() => showConversation());
@@ -1023,7 +898,6 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   // The listener of core.sessions reads the conversation status, the delivery entries and the record, so it is added after them (C96).
   sessionListeners.add((value) => {
     work?.inject();
-    settleRetasks();
     try {
       conversationStatus.changed();
     } catch (error) {
@@ -1049,12 +923,12 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   const taughtMembers = async (members: OpenMember[]): Promise<OpenMember[]> => {
     const outcomes = await Promise.all(
       members.map((member) =>
-        protocol.ensure({ ...member, team: placeOf(member), agent: memberAgents.get(member.id) ?? null }),
+        protocol.ensure({ ...member, place: placeOf(member), agent: memberAgents.get(member.id) ?? null }),
       ),
     );
     return members.filter((_, index) => outcomes[index].ok);
   };
-  // The place of a member in a room with a leader, which its protocol line states (docs/spec/room.md#team).
+  // The place of a member in a room with a leader, which its protocol line states (docs/spec/room.md#leader).
   const placeOf = (member: OpenMember) => {
     const leader = leaderEntry();
     if (leader === undefined) return null;
@@ -1063,51 +937,8 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   const teachMembers = async (): Promise<void> => {
     await taughtMembers(openMembers());
   };
-  // The leader and the tokens of its open turns, which the commands of the leader take (docs/spec/room.md#team).
-  const leaderTurns = () => {
-    const leader = leaderEntry();
-    return leader === undefined ? null : { id: leader.id, turns: answers.tokens().filter((token) => token.member === leader.id).map((token) => token.turn) };
-  };
   const endSession = async (session: string): Promise<void> => {
     await room.commands.execute("core.session.end", { session });
-  };
-  // member.summon adds a team member with the turn token of the leader, opens its session in its directory, and resolves after its
-  // protocol turn; a refused open removes the entry again (docs/spec/room.md#team).
-  const summonMember = async (params: unknown): Promise<{ member: string; session: string }> => {
-    const entry = summonedEntry(params, { team, definitions, leader: leaderTurns(), maxMembers });
-    team.push(entry);
-    try {
-      if (isClaude(entry.definition)) {
-        entry.agentSession = crypto.randomUUID();
-        entry.agent = await agentOf(entry.definition);
-      } else {
-        const place = await agentPlaceOf(entry.definition);
-        entry.agent = place?.agent ?? null;
-        if (place !== null) memberAgents.set(entry.id, place);
-      }
-      const created = await teamWorktree(["add", entry.directory, entry.id]);
-      if (typeof created.worktree !== "string") throw new Error(`team-worktree add: reply has no worktree, got ${JSON.stringify(created)}`);
-      entry.worktree = created.worktree;
-      persist();
-      await prepareStart(entry.definition, created.worktree);
-      await summonRun();
-      // A team member of a home without a login opens no session, and the leader learns why (docs/spec/room.md#login).
-      if (loginGate.needs(entry.id)) throw new Error(`member ${entry.id}: the home of account ${memberDefinitionOf(entry.id)?.account} has no login`);
-    } catch (error) {
-      team.splice(team.indexOf(entry), 1);
-      persist();
-      // A summon that fails after the worktree exists removes it again, so a refused summon leaves no folder or branch.
-      if (entry.worktree !== null) {
-        await teamWorktree(["remove", entry.directory, entry.id]).catch((removal: unknown) =>
-          report("room worktree", `member ${entry.id}: ${removal instanceof Error ? removal.message : String(removal)}`));
-      }
-      throw error;
-    }
-    const member = openMembers().find((one) => one.id === entry.id);
-    if (member === undefined) throw new Error(`member ${entry.id}: its session is not open`);
-    const outcome = await protocol.ensure({ ...member, team: placeOf(member), agent: memberAgents.get(member.id) ?? null });
-    if (!outcome.ok) throw new Error(outcome.reason);
-    return { member: entry.id, session: member.session };
   };
   // A message runs message.send from the send button and from Enter without Shift in the input (docs/spec/room.md#commands).
   // The relay resolves with the answer of each member in relay order.
@@ -1123,10 +954,8 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
     settledRelay(record, async (accepted) => {
       const taught = await taughtMembers(openMembers());
       if (taught.length === 0) throw new Error("no member has the room protocol");
-      // A member that the leader summons during the relay joins it once its protocol turn has ended (docs/spec/room.md#team).
-      const members = () => roomMembers();
       const answers = await relayInMode(relayPorts, mode, taught, text, record, {
-        limit: conversationTurns, stopped, accepted, stopping, leader: leaderEntry()?.id, members,
+        limit: conversationTurns, stopped, accepted, stopping, leader: leaderEntry()?.id,
       });
       return answers.map((answer) => ({ id: answer.id, text: answer.text }));
     });
@@ -1169,7 +998,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
     followUp: () => work?.followUp(),
     stopWaits: () => {
       for (const listener of [...stopListeners]) listener();
-      return answers.closeWaits().length + teamControl.releaseAll();
+      return answers.closeWaits().length;
     },
     failed: (reason) => report("room relay", reason),
   });
@@ -1180,7 +1009,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   bound(expose.bind(pill, `${EXPOSE}.conversation.scroll.bottom`, {}, { failed: failed("conversation.scroll.bottom") }), "conversation.scroll.bottom");
   bound(expose.bind(stop, `${EXPOSE}.conversation.stop`, {}, { failed: failed("conversation.stop") }), "conversation.stop");
   // The mention hint (C102, docs/spec/room.md#mention-hint): while the word before the caret starts with @, the list above the composer
-  // shows all and the names of the checked roster members and the team members that start with its text. A click on an item, or Enter
+  // shows all and the names of the checked roster members that start with its text. A click on an item, or Enter
   // or Tab on the marked item, runs mention.insert; the arrow keys move the mark and Escape closes the list.
   const mentionBox = el("div", "st-mention");
   mentionBox.hidden = true;
@@ -1188,10 +1017,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   let mentionItems: string[] = [];
   let mentionMark = 0;
   let mentionClosed = false;
-  const roomNames = (): { id: string; name: string }[] => [
-    ...roster.filter((entry) => entry.checked).map((entry) => ({ id: entry.id, name: entry.name })),
-    ...team.map((entry) => ({ id: entry.id, name: teamName(entry, definitions) })),
-  ];
+  const roomNames = (): { id: string; name: string }[] => roster.filter((entry) => entry.checked).map((entry) => ({ id: entry.id, name: entry.name }));
   const drawMentions = (): void => {
     const query = input.disabled || mentionClosed ? null : mentionQuery(input.value, input.selectionStart ?? input.value.length);
     mentionItems = query === null ? [] : mentionCandidates(roomNames(), query.query);
@@ -1281,7 +1107,6 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
       ...createRoomCommands({ state }),
       ...operations,
       [ANSWER_COMMAND]: async (params: unknown) => answers.deliver(params),
-      [`${EXPOSE}.member.summon`]: async (params: unknown) => summonMember(params),
       [`${EXPOSE}.login.check`]: async () => checkLogins(),
       // invite opens the invite dialog and joins the picked definitions in roster order (docs/spec/room.md#invite).
       [`${EXPOSE}.invite`]: async () => {
@@ -1292,10 +1117,6 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
         for (const id of ids) await operations[`${EXPOSE}.member.join`]({ id });
         return { invited: ids };
       },
-      [`${EXPOSE}.definitions`]: async () => ({ definitions: summonableDefinitions(definitions, await agentData("groups"), rolesValue) }),
-      [`${EXPOSE}.member.release`]: async (params: unknown) => teamControl.release(params),
-      [`${EXPOSE}.member.merged`]: async (params: unknown) => teamControl.merged(params),
-      [`${EXPOSE}.member.retask`]: async (params: unknown) => teamControl.retask(params),
       [`${EXPOSE}.mention.insert`]: async (params: unknown) => insertMentionName(params),
       [`${EXPOSE}.question.answer`]: async (params: unknown) => {
         const { member, choice } = (params ?? {}) as { member?: unknown; choice?: unknown };
@@ -1311,7 +1132,6 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
         const value = conversationStatus.read();
         const session =
           value.waiting.find((wait) => wait.member === member)?.session ??
-          value.team.find((entry) => entry.member === member)?.session ??
           memberSessions.get(member) ??
           null;
         if (typeof session !== "string") throw new Error(`member ${member} has no open session`);

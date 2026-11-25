@@ -203,8 +203,6 @@ export interface ConversationBound {
   stopping?: (listener: () => void) => () => void;
   // The identifier of the leader among the members; a relay with a leader follows the leader rules (docs/spec/room.md#leader).
   leader?: string;
-  // The members of the relay at each step, which grow when the leader summons a member during the relay; the given members otherwise.
-  members?: () => NamedRelayMember[];
 }
 
 // The stop of the owner ended a turn that waited for a blocked session or for its answer.
@@ -331,18 +329,18 @@ async function runTurns(
 // Runs the relay of a room with a leader (docs/spec/room.md#leader): the members that the owner mentions and then the leader take the
 // first turns; the workers that one answer of the leader mentions start together, and each answer is appended when it arrives
 // (docs/spec/room.md#addressed-views). When no turn waits, each worker of the relay with unreceived lines other than settled answers takes
-// a turn, and then the leader while it has unreceived lines or its last answer continues; the last answer `settled` of the leader with
-// every line received settles the conversation (docs/spec/room.md#settling).
+// a turn, and then the leader while it has unreceived lines; the conversation settles when the last answer of every member of the relay
+// is `settled`, and waits for the owner while one continues, because the status of the leader counts like every other
+// (docs/spec/room.md#settling).
 async function runLeader(
   ports: RelayPorts,
   leader: NamedRelayMember,
-  given: NamedRelayMember[],
+  members: NamedRelayMember[],
   message: string,
   record: RoomRecord,
   bound: ConversationBound,
 ): Promise<MemberAnswer[]> {
-  const members = (): NamedRelayMember[] => bound.members?.() ?? given;
-  const workers = (): NamedRelayMember[] => members().filter((member) => member.id !== leader.id);
+  const workers = (): NamedRelayMember[] => members.filter((member) => member.id !== leader.id);
   const answers: MemberAnswer[] = [];
   // An owner `@all` adds every worker that the message does not name in one batch after the named workers (docs/spec/room.md#mentions).
   const named = mentionedMembers(message, workers());
@@ -358,15 +356,15 @@ async function runLeader(
     if (batches.length === 0) {
       const took = new Set(answers.map((answer) => answer.id));
       const behind = workers().filter((member) => took.has(member.id) && unreceivedBesidesSettled(record, member, answers));
-      const last = answers.filter((answer) => answer.id === leader.id).at(-1);
+      const open = continuing(answers, members);
       if (behind.length > 0) batches.push(...behind.map((member) => ({ members: [member], byAnswer: true })));
       else if (record.unsent(leader.session, leader.id).length > 0) batches.push({ members: [leader], byAnswer: true });
-      else if (last?.status === "settled") {
+      else if (open.length === 0) {
         record.append("clubhouse", "the conversation settled");
         break;
       } else {
-        // A turn without an unreceived line gives the leader nothing to answer, so a leader that continues waits for the owner.
-        record.append("clubhouse", `the conversation waits for the owner: @${leader.name} continue`);
+        // A turn without an unreceived line gives a member nothing to answer, so a member that continues waits for the owner.
+        record.append("clubhouse", `the conversation waits for the owner: ${open.map((member) => `@${member.name}`).join(", ")} continue`);
         break;
       }
     }
@@ -376,7 +374,7 @@ async function runLeader(
     }
     const batch = batches[0];
     if (batch.byAnswer && started + batch.members.length > bound.limit) {
-      const open = continuing(answers, members());
+      const open = continuing(answers, members);
       record.append(
         "clubhouse",
         open.length > 0
@@ -390,7 +388,7 @@ async function runLeader(
     const arrived: MemberAnswer[] = [];
     const results = await Promise.allSettled(
       batch.members.map((member) =>
-        relayToMember(ports, member, record, bound.accepted, rolesLine(member, members()), bound.stopping).then((answer) => {
+        relayToMember(ports, member, record, bound.accepted, rolesLine(member, members), bound.stopping).then((answer) => {
           appendAnswer(record, answer);
           answers.push(answer);
           arrived.push(answer);

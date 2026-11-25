@@ -3,13 +3,10 @@
 // the same roster checks, mode and conversation without input. The reader accepts only this form and names what it found otherwise.
 import type { RoomMode } from "./commands";
 import type { OpenToken } from "./answer";
-import type { TeamEntry } from "./team";
 
 export interface RoomState {
   // The roster order, the membership, the checked state, the role of each entry and the leader, at most one (docs/spec/room.md#leader).
   roster: { id: string; member: boolean; checked: boolean; role: string; leader: boolean }[];
-  // The members that the leader summoned, in summon order (docs/spec/room.md#team).
-  team: TeamEntry[];
   mode: RoomMode;
   // Whether the member grid of the header is folded to its first two rows (docs/spec/room.md#header).
   folded: boolean;
@@ -42,7 +39,7 @@ export function serializedRoomState(state: RoomState): string {
 }
 
 const MODES: readonly string[] = ["turn", "simul"];
-const FIELDS: readonly string[] = ["roster", "team", "mode", "folded", "conversation", "sessions", "protocolSessions", "addressed", "delivered", "sent", "turns"];
+const FIELDS: readonly string[] = ["roster", "mode", "folded", "conversation", "sessions", "protocolSessions", "addressed", "delivered", "sent", "turns"];
 
 const isText = (value: unknown): value is string => typeof value === "string" && value !== "";
 
@@ -61,13 +58,6 @@ export function parseRoomState(value: unknown): RoomState | null {
   const outside = roster.find((entry) => !entry.member && (entry.checked || entry.leader));
   if (outside !== undefined) throw new Error(`room tab state: roster entry ${outside.id} is checked or the leader but no member`);
   if (roster.filter((entry) => entry.leader).length > 1) throw new Error("room tab state: roster has more than one leader");
-  const team = state.team;
-  if (
-    !Array.isArray(team) ||
-    !team.every((entry) => isText(entry?.id) && isText(entry?.definition) && typeof entry?.role === "string" && typeof entry?.directory === "string" && entry.directory.startsWith("/") && (entry?.merged === null || isText(entry?.merged)) && (entry?.agentSession === null || isText(entry?.agentSession)) && typeof entry?.resume === "boolean" && (entry?.agent === null || isText(entry?.agent)) && (entry?.worktree === null || (isText(entry?.worktree) && entry.worktree.startsWith("/"))))
-  ) {
-    throw new Error(`room tab state: team must be an array of {id, definition, role, directory, merged, agentSession, resume, agent, worktree}, got ${JSON.stringify(team)}`);
-  }
   if (!MODES.includes(state.mode as string)) {
     throw new Error(`room tab state: mode must be turn or simul, got ${JSON.stringify(state.mode)}`);
   }
@@ -133,7 +123,6 @@ export function parseRoomState(value: unknown): RoomState | null {
   }
   return {
     roster: roster.map((entry) => ({ id: entry.id, member: entry.member, checked: entry.checked, role: entry.role, leader: entry.leader })),
-    team: team.map((entry) => ({ id: entry.id, definition: entry.definition, role: entry.role, directory: entry.directory, merged: entry.merged, agentSession: entry.agentSession, resume: entry.resume, agent: entry.agent, worktree: entry.worktree })),
     mode: state.mode as RoomMode,
     folded: state.folded,
     conversation: conversation.map((entry) => ({ speaker: entry.speaker, text: entry.text, at: entry.at, elapsedMs: entry.elapsedMs })),

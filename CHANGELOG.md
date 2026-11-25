@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- C144: The leader differs from the other members only in the lines it receives: every line, and the first turn of an owner message after the members that the message mentions. The commands `member.summon`, `definitions`, `member.release`, `member.merged` and `member.retask`, the team, its view, its worktrees, the setting `maxMembers` and the declared program `team-worktree` are removed; the program of the first start is `bin/first-start.mjs` with `trust` and `start`. Every answer status counts, so a relay with a leader settles when the last answer of every member is `settled` and waits for the owner while one continues. The tab state is format 3 without `team`, and a state with `team` is refused with `room tab state: unknown field team`. The protocol line of the leader holds 2801 characters with names of 40 characters, 3666 before.
 - C139: The version is 0.0.28, so the release run publishes C138.
 - C138: The header shows the plugin name, the count and the invite button on its first line and the member cards in a grid of equal columns that uses the whole width and folds from three rows to two (`members.fold`, tab state format 2 with `folded`); it shows nothing of the account login. The modes `순차` and `동시` lie above the composer and hide while the room has a leader; the mode `facil` is removed and `kibitzDefault` defaults to `turn`.
 - C137: The version is 0.0.27, so the release run publishes C135, C135-1 and C136.

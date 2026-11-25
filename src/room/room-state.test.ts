@@ -1,11 +1,11 @@
 // The state of a room tab (docs/spec/room.md#restart): the roster order and checks, the mode, the conversation, the sessions that the
 // room opened, the sessions that received the room protocol and the delivered numbers of the room record, written through the tab state of the view and read back at start.
 import { describe, expect, it } from "vitest";
+import manifest from "../../plugin.json";
 import { parseRoomState, serializedRoomState, type RoomState } from "./room-state";
 
 const state: RoomState = {
   roster: [{ id: "harness-harness", member: true, checked: true, role: "", leader: true }, { id: "moai-manager-lead", member: false, checked: false, role: "", leader: false }],
-  team: [{ id: "claude-1", definition: "claude", role: "server", directory: "/work/game", merged: null, agentSession: "28e7fee6-d618-4598-b9a6-775f3053340e", resume: true, agent: "manager-develop", worktree: null }],
   mode: "turn",
   folded: false,
   conversation: [
@@ -21,21 +21,17 @@ const state: RoomState = {
 };
 
 describe("parseRoomState", () => {
-  it("reads the leader, the team and the addressed lists (docs/spec/room.md#team)", () => {
+  it("reads the leader and the addressed lists (docs/spec/room.md#leader)", () => {
     expect(parseRoomState(JSON.parse(serializedRoomState(state)))).toEqual(state);
   });
 
-  it("refuses two leaders, a roster entry without leader, a team entry with a relative directory and an addressed list out of order", () => {
+  it("refuses two leaders, a roster entry without leader and an addressed list out of order", () => {
     const both = state.roster.map((entry) => ({ ...entry, member: true, leader: true }));
     expect(() => parseRoomState({ ...state, roster: both })).toThrow("room tab state: roster has more than one leader");
     expect(() => parseRoomState({ ...state, roster: [{ id: "a", checked: true, role: "" }] })).toThrow("roster must be an array of {id, member, checked, role, leader}");
     expect(() => parseRoomState({ ...state, roster: [{ id: "a", checked: true, role: "", leader: false }] })).toThrow("roster must be an array of {id, member, checked, role, leader}");
     expect(() => parseRoomState({ ...state, roster: [{ id: "a", member: false, checked: true, role: "", leader: false }] })).toThrow("room tab state: roster entry a is checked or the leader but no member");
     expect(() => parseRoomState({ ...state, roster: [{ id: "a", member: false, checked: false, role: "", leader: true }] })).toThrow("room tab state: roster entry a is checked or the leader but no member");
-    expect(() => parseRoomState({ ...state, team: [{ ...state.team[0], directory: "work" }] })).toThrow("room tab state: team must be an array of {id, definition, role, directory, merged, agentSession, resume, agent, worktree}");
-    // C97-1: a team entry of the earlier form, without the agent members, is refused.
-    const { agentSession: _s, resume: _r, agent: _a, ...earlier } = state.team[0];
-    expect(() => parseRoomState({ ...state, team: [earlier] })).toThrow("room tab state: team must be an array of {id, definition, role, directory, merged, agentSession, resume, agent, worktree}");
     expect(() => parseRoomState({ ...state, addressed: { "owned-1": [1, 0] } })).toThrow("room tab state: addressed owned-1 must hold increasing record indexes below 2");
   });
 
@@ -101,5 +97,13 @@ describe("parseRoomState", () => {
     );
     const timed = [{ speaker: "owner", text: "hi", at: null, elapsedMs: null }, { speaker: "a", text: "yes", at: 1700000000000, elapsedMs: 12400 }];
     expect(parseRoomState({ ...state, conversation: timed })?.conversation).toEqual(timed);
+  });
+
+  it("refuses the team of the earlier form, because the room has no team (docs/spec/room.md#leader)", () => {
+    expect(() => parseRoomState({ ...state, team: [] })).toThrow("room tab state: unknown field team");
+  });
+
+  it("is declared as the tab state format 3, the form without a team (docs/spec/room.md#restart)", () => {
+    expect(manifest.surface.unload).toEqual({ format: 3, maxBytes: 1048576 });
   });
 });

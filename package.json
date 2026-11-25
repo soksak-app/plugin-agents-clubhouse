@@ -14,7 +14,7 @@
     "soksak": "^0.0.52"
   },
   "bin": {
-    "sok-team-worktree": "bin/team-worktree.mjs"
+    "sok-first-start": "bin/first-start.mjs"
   },
   "files": [
     "plugin.json",
@@ -22,7 +22,7 @@
     "ui/clubhouse.js",
     "ui/invite.html",
     "ui/invite.js",
-    "bin/team-worktree.mjs"
+    "bin/first-start.mjs"
   ],
   "scripts": {
     "build": "node build.mjs",

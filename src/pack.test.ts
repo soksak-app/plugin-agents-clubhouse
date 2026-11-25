@@ -20,14 +20,15 @@ describe("core range", () => {
   });
 });
 
-describe("team worktree program", () => {
+describe("first start program", () => {
   // pnpm pack keeps the execute bit only of a file that bin names, and core installs a plugin: program only with that bit (C104).
-  it("declares bin/team-worktree.mjs as the program of team-worktree and project-trust, ships it and names it in bin", () => {
+  it("declares bin/first-start.mjs as the program of member-start and project-trust, ships it and names it in bin", () => {
     const programs = (manifest as unknown as { programs: Record<string, { program: string }> }).programs;
-    expect(programs["team-worktree"]!.program).toBe("plugin:bin/team-worktree.mjs");
-    expect(programs["project-trust"]!.program).toBe("plugin:bin/team-worktree.mjs");
-    expect(pkg.files).toContain("bin/team-worktree.mjs");
-    expect(Object.values((pkg as unknown as { bin: Record<string, string> }).bin)).toEqual(["bin/team-worktree.mjs"]);
+    expect(programs["member-start"]!.program).toBe("plugin:bin/first-start.mjs");
+    expect(programs["project-trust"]!.program).toBe("plugin:bin/first-start.mjs");
+    expect(programs["team-worktree"]).toBeUndefined();
+    expect(pkg.files).toContain("bin/first-start.mjs");
+    expect(Object.values((pkg as unknown as { bin: Record<string, string> }).bin)).toEqual(["bin/first-start.mjs"]);
   });
 });
 

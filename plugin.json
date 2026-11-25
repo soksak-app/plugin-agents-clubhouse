@@ -9,7 +9,7 @@
       "kind": "view",
       "page": "ui/clubhouse.html"
     },
-    "unload": { "format": 2, "maxBytes": 1048576 }
+    "unload": { "format": 3, "maxBytes": 1048576 }
   },
   "preview": {
     "ink": "--fg"
@@ -42,14 +42,6 @@
       "type": "enum",
       "default": "ask",
       "values": ["ask", "accept"]
-    },
-    "maxMembers": {
-      "label": "team 최대 인원",
-      "description": "leader가 member.summon으로 부를 수 있는 team member의 최대 수. 기본값 6은 leader 한 명이 brief하고 merge할 수 있는 병렬 worker 수다.",
-      "type": "integer",
-      "default": 6,
-      "minimum": 1,
-      "maximum": 16
     }
   },
   "data": {
@@ -62,9 +54,8 @@
     "claude-status": { "program": "/usr/bin/env", "args": [{ "pattern": "CLAUDE_CONFIG_DIR=/.+/plugin-data/agents/accounts/[a-z][a-z0-9-]{0,39}" }, { "pattern": "[^\\s]{1,255}" }, "auth", "status", "--json"] },
     "codex-status": { "program": "/usr/bin/env", "args": [{ "pattern": "CODEX_HOME=/.+/plugin-data/agents/accounts/[a-z][a-z0-9-]{0,39}" }, { "pattern": "[^\\s]{1,255}" }, "login", "status"] },
     "agent-file": { "program": "cat", "args": [{ "pattern": "/.+\\.md" }] },
-    "project-trust": { "program": "plugin:bin/team-worktree.mjs", "args": ["trust", { "pattern": "/.+" }] },
-    "member-start": { "program": "plugin:bin/team-worktree.mjs", "args": ["start", { "pattern": "/.+/plugin-data/agents/accounts/[a-z][a-z0-9-]{0,39}" }, { "pattern": "/.+" }] },
-    "team-worktree": { "program": "plugin:bin/team-worktree.mjs", "args": [{ "pattern": "add|remove" }, { "pattern": "/.+" }, { "pattern": "[a-z0-9][a-z0-9._-]{0,99}" }] }
+    "project-trust": { "program": "plugin:bin/first-start.mjs", "args": ["trust", { "pattern": "/.+" }] },
+    "member-start": { "program": "plugin:bin/first-start.mjs", "args": ["start", { "pattern": "/.+/plugin-data/agents/accounts/[a-z][a-z0-9-]{0,39}" }, { "pattern": "/.+" }] }
   },
   "exposes": {
     "status": [
@@ -137,23 +128,6 @@
                 "required": ["member", "name", "role", "session", "sent", "delivered", "length", "unreceived"]
               }
             },
-            "team": {
-              "type": "array",
-              "items": {
-                "type": "object",
-                "properties": {
-                  "member": { "type": "string" },
-                  "name": { "type": "string" },
-                  "role": { "type": "string" },
-                  "directory": { "type": "string" },
-                  "branch": { "type": "string" },
-                  "merged": { "type": ["string", "null"] },
-                  "session": { "type": ["string", "null"] },
-                  "state": { "type": ["string", "null"], "enum": ["idle", "working", "blocked", "ended", null] }
-                },
-                "required": ["member", "name", "role", "directory", "branch", "merged", "session", "state"]
-              }
-            },
             "questions": {
               "type": "array",
               "items": {
@@ -168,7 +142,7 @@
               }
             }
           },
-          "required": ["entries", "waiting", "delivery", "team", "questions"]
+          "required": ["entries", "waiting", "delivery", "questions"]
         }
       },
       {
@@ -321,83 +295,6 @@
           "type": "object",
           "properties": { "id": { "type": "string" }, "leader": { "type": "boolean" } },
           "required": ["id", "leader"]
-        }
-      },
-      {
-        "name": "soksak-plugin-agents-clubhouse.member.summon",
-        "description": "Summon a team member with the turn token of the leader: open a session of the agent definition with the role in the absolute directory, and answer after its protocol turn. Refused beyond the setting maxMembers.",
-        "params": {
-          "type": "object",
-          "properties": { "turn": { "type": "string" }, "definition": { "type": "string" }, "role": { "type": "string" }, "directory": { "type": "string" } },
-          "required": ["turn", "definition", "role", "directory"]
-        },
-        "result": {
-          "type": "object",
-          "properties": { "member": { "type": "string" }, "session": { "type": "string" } },
-          "required": ["member", "session"]
-        }
-      },
-      {
-        "name": "soksak-plugin-agents-clubhouse.definitions",
-        "description": "List the agent definitions that member.summon takes, each with its name, its plugin, the names of its groups and the agent file of its role in core.roles, null without one; the leader reads each file itself.",
-        "params": { "type": "object", "properties": {} },
-        "result": {
-          "type": "object",
-          "properties": {
-            "definitions": {
-              "type": "array",
-              "items": {
-                "type": "object",
-                "properties": {
-                  "id": { "type": "string" },
-                  "name": { "type": "string" },
-                  "plugin": { "type": "string" },
-                  "groups": { "type": "array", "items": { "type": "string" } },
-                  "file": { "type": ["string", "null"] }
-                },
-                "required": ["id", "name", "plugin", "groups", "file"]
-              }
-            }
-          },
-          "required": ["definitions"]
-        }
-      },
-      {
-        "name": "soksak-plugin-agents-clubhouse.member.release",
-        "description": "End the session of the team member with the turn token of the leader, close its tab and remove it from the team; git is not touched.",
-        "params": {
-          "type": "object",
-          "properties": { "turn": { "type": "string" }, "member": { "type": "string" } },
-          "required": ["turn", "member"]
-        },
-        "result": { "type": "object", "properties": { "member": { "type": "string" } }, "required": ["member"] }
-      },
-      {
-        "name": "soksak-plugin-agents-clubhouse.member.merged",
-        "description": "Record with the turn token of the leader that the branch of the team member is merged in commit, which the team view shows; the room reads no git state.",
-        "params": {
-          "type": "object",
-          "properties": { "turn": { "type": "string" }, "member": { "type": "string" }, "commit": { "type": "string" } },
-          "required": ["turn", "member", "commit"]
-        },
-        "result": {
-          "type": "object",
-          "properties": { "member": { "type": "string" }, "commit": { "type": "string" } },
-          "required": ["member", "commit"]
-        }
-      },
-      {
-        "name": "soksak-plugin-agents-clubhouse.member.retask",
-        "description": "Give the team member another agent definition and role text with the turn token of the leader: the room ends its session, resumes the Claude Code session with the agent of the definition and sets the tab role, keeping the conversation.",
-        "params": {
-          "type": "object",
-          "properties": { "turn": { "type": "string" }, "member": { "type": "string" }, "definition": { "type": "string" }, "role": { "type": "string" } },
-          "required": ["turn", "member", "definition", "role"]
-        },
-        "result": {
-          "type": "object",
-          "properties": { "member": { "type": "string" }, "definition": { "type": "string" }, "role": { "type": "string" } },
-          "required": ["member", "definition", "role"]
         }
       },
       {
@@ -646,7 +543,7 @@
       },
       {
         "name": "soksak-plugin-agents-clubhouse.mention",
-        "description": "Items of the mention hint list above the composer, shown while the word before the caret starts with @: all and the names of the checked roster members and the team members that start with its text; a click runs mention.insert with the name of the item"
+        "description": "Items of the mention hint list above the composer, shown while the word before the caret starts with @: all and the names of the checked roster members that start with its text; a click runs mention.insert with the name of the item"
       },
       {
         "name": "soksak-plugin-agents-clubhouse.invite",

@@ -1,14 +1,14 @@
-// The team worktree program (C104, docs/spec/room.md#worktrees) against a real git repository, a real home folder and a real Claude
-// Code configuration file in a temporary folder.
+// The first start program (docs/spec/room.md#first-start) against a real git repository, a real home folder and a real Claude Code
+// configuration file in a temporary folder.
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { run, worktreePath } from "./team-worktree";
+import { run } from "./first-start";
 
 function setup() {
-  const base = realpathSync(mkdtempSync(join(tmpdir(), "team-worktree-")));
+  const base = realpathSync(mkdtempSync(join(tmpdir(), "first-start-")));
   const home = join(base, "home");
   const repo = join(base, "project");
   mkdirSync(home);
@@ -22,59 +22,7 @@ function setup() {
 
 const config = (home: string) => JSON.parse(readFileSync(join(home, ".claude.json"), "utf8"));
 
-describe("team-worktree add", () => {
-  it("creates the worktree outside the repository on the branch of the member and leaves the configuration file unchanged", async () => {
-    const { home, repo, git } = setup();
-    const result = await run(["add", repo, "dev-1"], home, {});
-    const path = worktreePath(home, repo, "dev-1");
-    expect(result).toEqual({ root: repo, worktree: path, branch: "dev-1", created: true });
-    expect(path.startsWith(join(home, "soksak", "worktrees"))).toBe(true);
-    expect(git("worktree", "list", "--porcelain")).toContain(`worktree ${path}`);
-    expect(execFileSync("git", ["-C", path, "branch", "--show-current"], { encoding: "utf8" }).trim()).toBe("dev-1");
-    expect(config(home)).toEqual({ numStartups: 3, projects: { "/other": { hasTrustDialogAccepted: true } } });
-  });
-
-  it("keeps an existing worktree of the member, so a second add changes nothing", async () => {
-    const { home, repo } = setup();
-    await run(["add", repo, "dev-1"], home, {});
-    expect(await run(["add", repo, "dev-1"], home, {})).toMatchObject({ created: false });
-  });
-
-  it("refuses a member name outside its form and a relative directory", async () => {
-    const { home, repo } = setup();
-    await expect(run(["add", repo, "../x"], home, {})).rejects.toThrow("member must match");
-    await expect(run(["add", "project", "dev-1"], home, {})).rejects.toThrow("directory must be an absolute path");
-  });
-});
-
-describe("team-worktree remove", () => {
-  it("removes the worktree and deletes the merged branch", async () => {
-    const { home, repo, git } = setup();
-    await run(["add", repo, "dev-1"], home, {});
-    expect(await run(["remove", repo, "dev-1"], home, {})).toMatchObject({ removed: true });
-    expect(existsSync(worktreePath(home, repo, "dev-1"))).toBe(false);
-    expect(existsSync(dirname(worktreePath(home, repo, "dev-1")))).toBe(false);
-    expect(git("branch", "--list", "dev-1")).toBe("");
-  });
-
-  it("keeps the folder of the repository while another member has a worktree in it", async () => {
-    const { home, repo } = setup();
-    await run(["add", repo, "dev-1"], home, {});
-    await run(["add", repo, "dev-2"], home, {});
-    await run(["remove", repo, "dev-1"], home, {});
-    expect(existsSync(worktreePath(home, repo, "dev-2"))).toBe(true);
-  });
-
-  it("refuses a worktree with uncommitted changes and keeps it", async () => {
-    const { home, repo } = setup();
-    await run(["add", repo, "dev-1"], home, {});
-    writeFileSync(join(worktreePath(home, repo, "dev-1"), "work.txt"), "x");
-    await expect(run(["remove", repo, "dev-1"], home, {})).rejects.toThrow();
-    expect(existsSync(worktreePath(home, repo, "dev-1"))).toBe(true);
-  });
-});
-
-describe("team-worktree trust", () => {
+describe("first-start trust", () => {
   it("trusts the root of the main checkout for a folder inside the repository, under CLAUDE_CONFIG_DIR when it is set", async () => {
     const { home, repo } = setup();
     mkdirSync(join(repo, "sub"));
@@ -94,7 +42,7 @@ describe("team-worktree trust", () => {
   });
 });
 
-describe("team-worktree start", () => {
+describe("first-start start", () => {
   // The configuration folder of an account home as the agents plugin creates it: an empty folder (agents docs/spec/definitions.md#account-homes).
   function accountHome(base: string): string {
     const folder = join(base, "accounts", "claude-main");
@@ -140,5 +88,14 @@ describe("team-worktree start", () => {
     await expect(run(["start", account, "project"], home, {})).rejects.toThrow("folder must be an absolute path");
     writeFileSync(join(account, ".claude.json"), "[]");
     await expect(run(["start", account, repo], home, {})).rejects.toThrow(`${join(account, ".claude.json")} is not a JSON object`);
+  });
+});
+
+// C144 (docs/spec/room.md#leader): the room creates no worktree, so the program takes only trust and start.
+describe("first-start commands", () => {
+  it("refuses add and remove", async () => {
+    const { home, repo } = setup();
+    await expect(run(["add", repo, "dev-1"], home, {})).rejects.toThrow('command must be trust or start, got "add"');
+    await expect(run(["remove", repo, "dev-1"], home, {})).rejects.toThrow('command must be trust or start, got "remove"');
   });
 });

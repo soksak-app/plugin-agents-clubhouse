@@ -13,7 +13,7 @@ export interface ProtocolMember {
   // false for a member that the isolation table isolates: it has no user-scope MCP servers, so it gets the shell forms only.
   mcp?: boolean;
   // The place of the member in a room with a leader; absent without a leader.
-  team?: TeamPlace | null;
+  place?: LeaderPlace | null;
   // The agent of a member whose program takes no --agent, which the agent line states; absent otherwise (docs/spec/room.md#agent-line).
   agent?: AgentPlace | null;
 }
@@ -32,35 +32,20 @@ export function agentLine(self: string, place: AgentPlace): string {
 // focused card, which need not be this room (docs/spec/room.md#answer). The room cannot read the terminal text of a member, so the line
 // tells the member to say everything through the room, in short imperative sentences, because a long protocol invites restatement.
 // The shell form comes first; the MCP form is stated only when the member has the soksak MCP server (docs/spec/room.md#isolation).
-// The place of a member in a room with a leader: `{leader: null}` for the leader itself, `{leader: <name>}` for a worker of that leader
-// (docs/spec/room.md#team).
-export type TeamPlace = { leader: string | null };
+// The place of a member in a room with a leader: `{leader: null}` for the leader itself, `{leader: <name>}` for another member of
+// that room (docs/spec/room.md#leader).
+export type LeaderPlace = { leader: string | null };
 
-// The team rules of the leader and of a worker. The room creates the worktree of each worker outside the project on the branch of its
-// member id, starts the worker in it and removes it when the leader releases the worker (docs/spec/room.md#worktrees).
-function teamRules(self: string, surface: string, team: TeamPlace): string[] {
-  if (team.leader === null) {
-    return [
-      "You lead: you get every line and split the work; your settled answer ends the conversation.",
-      "List summonable agents with definitions {} and read each file before choosing.",
-      `Summon workers with member.summon {"turn":"<token>","definition":"<id>","role":"<role>","directory":"<project>"}; workers mentioned in one answer start together.`,
-      "Record a merge with member.merged {turn, member, commit}; end a worker with member.release {turn, member}, or retask it with member.retask {turn, member, definition, role}.",
-      "Branch=member id; release drops worktree. Each brief fixes the API contract; workers unit-test and merge integration into their branch before asking for a merge; merge server branches first, then dependents update from integration; name each merge commit.",
-    ];
-  }
-  const leader = `@${team.leader}`;
-  return [
-    `You work for ${leader} and get the owner lines and the lines mentioning you; your brief is your scope.`,
-    `You start in your own worktree on the branch ${self}; work and commit there, and leave its removal to the room.`,
-    `Unit-test thoroughly; before reporting done, merge the latest integration and resolve conflicts, then report the branch ready.`,
-    "After it names the merge commit, check your work and unit tests in integration and report it.",
-    "Leave no background task running when you answer.",
-  ];
+// The leader differs from the other members only in the lines it receives: every line, and an owner message without a mention
+// (docs/spec/room.md#leader); its status counts like every other (docs/spec/room.md#settling).
+function placeRules(place: LeaderPlace): string[] {
+  if (place.leader === null) return ["You lead: you get every line, and an owner message without a mention comes to you."];
+  return [`You work with @${place.leader}, who gets every line; you get the owner lines and the lines mentioning you.`, "Leave no background task running when you answer."];
 }
 
 // The answer form quotes the text in single quotes, which every shell takes as given on one line; a heredoc form refused in the shell of
 // a member when it was written on one line (C126, docs/spec/room.md#room-protocol).
-export function roomProtocolLine(self: string, surface: string, mcp = true, team: TeamPlace | null = null): string {
+export function roomProtocolLine(self: string, surface: string, mcp = true, place: LeaderPlace | null = null): string {
   const answer = `sok ${ANSWER_COMMAND} --surface ${surface} --turn <token> --status <continue|settled> --text '<text>', each ' in it as '\\''`;
   return [
     `Clubhouse room protocol. You are @${self}; [@owner] is the human, [@<member>] another member, [@clubhouse] the room.`,
@@ -73,7 +58,7 @@ export function roomProtocolLine(self: string, surface: string, mcp = true, team
     "Do not narrate plans or confirm a sent answer.",
     "Answer each addressed speaker in speaking order, one section per line starting @<name>: (@owner: the owner, @all: everyone).",
     "A mention @<name> gives that member the next turn; mention only to get an answer.",
-    team?.leader === null ? "@all addresses everyone, and yours starts every worker." : "@all addresses everyone, and yours starts no turn.",
+    place?.leader === null ? "@all addresses everyone, and yours starts every worker." : "@all addresses everyone, and yours starts no turn.",
     "A line ending [@clubhouse] turn <token> is your turn; it holds every record line you have not seen, and only your answer ends it, one answer per token.",
     `Answer with ${answer}` +
       (mcp ? `, or MCP command_run {name: ${ANSWER_COMMAND}, surface: ${surface}, params: {turn, status, text}}.` : "."),
@@ -87,10 +72,10 @@ export function roomProtocolLine(self: string, surface: string, mcp = true, team
     'Claim each file in the turn you write it, before writing: claim {"turn":"<token>","paths":["<path>"]}; release it with release, same params, when done. A claim ends with its turn; a refusal names the holder to coordinate with.',
     'Before and after changing a file, a contract or an API, report it: report {"turn":"<token>","text":"<what and why>","paths":["<claimed path>"]}.',
     "A line starting [@clubhouse] 방장의 새 지시야. is an owner instruction: apply it and answer it next.",
-    ...(team === null ? [] : teamRules(self, surface, team)),
-    // The line names no peer and no role, so it holds its bound at sixteen team members with roles of 200 characters; each turn line
-    // states the roles (docs/spec/room.md#room-protocol).
-    `Members, roles and team: sok status soksak-plugin-agents-clubhouse.conversation --surface ${surface}.`,
+    ...(place === null ? [] : placeRules(place)),
+    // The line names no peer and no role, so it holds its bound at any number of members; each turn line states the roles
+    // (docs/spec/room.md#room-protocol).
+    `Members and roles: sok status soksak-plugin-agents-clubhouse.conversation --surface ${surface}.`,
     "This protocol line takes no answer.",
   ].join(" ");
 }
@@ -101,8 +86,6 @@ export type ProtocolOutcome = { ok: true } | { ok: false; reason: string };
 export interface ProtocolInjector {
   // Resolves with the outcome once the protocol turn of the member's session has ended or failed; it never rejects.
   ensure(member: ProtocolMember): Promise<ProtocolOutcome>;
-  // Submits the agent line of a retask to the open session of the member, whose program takes no --agent.
-  teachAgent(member: ProtocolMember & { agent: AgentPlace }): Promise<void>;
 }
 
 export interface ProtocolMemory {
@@ -149,7 +132,7 @@ export function createProtocolInjector(
       await firstIdle(member.session);
       // The protocol turn ends when core accepts the submit: the program queues the first turn line if it still works on this line
       // (docs/spec/room.md#turn-end).
-      await sessionSubmit(ports, member.session)(roomProtocolLine(member.name, ports.surface, member.mcp ?? true, member.team ?? null));
+      await sessionSubmit(ports, member.session)(roomProtocolLine(member.name, ports.surface, member.mcp ?? true, member.place ?? null));
       if (member.agent) await sessionSubmit(ports, member.session)(agentLine(member.name, member.agent));
       memory.onTaught(member.session);
       return { ok: true };
@@ -172,9 +155,6 @@ export function createProtocolInjector(
         done.set(member.session, turn);
       }
       return turn;
-    },
-    async teachAgent(member) {
-      await sessionSubmit(ports, member.session)(agentLine(member.name, member.agent));
     },
   };
 }

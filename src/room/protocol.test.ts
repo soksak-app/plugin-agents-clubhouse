@@ -52,7 +52,7 @@ describe("roomProtocolLine", () => {
   it("is one line with the speaker labels, the mention rule, the turn rule and the other members", () => {
     const line = roomProtocolLine("Claude", "room-1");
     expect(line).not.toMatch(/[\r\n]/);
-    for (const part of ["[@owner]", "[@<member>]", "[@clubhouse]", "@<name>", "@Claude", "Members, roles and team: sok status", "quoted data"]) {
+    for (const part of ["[@owner]", "[@<member>]", "[@clubhouse]", "@<name>", "@Claude", "Members and roles: sok status", "quoted data"]) {
       expect(line).toContain(part);
     }
   });
@@ -108,15 +108,6 @@ describe("createProtocolInjector", () => {
     const injector = createProtocolInjector(core.ports, () => {});
     const agent = { agent: "developer", file: "/roles/dev/developer.md" };
     expect(await injector.ensure({ ...claude, agent })).toEqual({ ok: true });
-    expect(core.submitted.map((one) => one.text)).toEqual([roomProtocolLine("Claude", "room-1"), agentLine("Claude", agent)]);
-  });
-
-  it("submits the agent line of a retask to the open session without a new protocol line", async () => {
-    const core = fakeCore({ "s-1": "idle" });
-    const injector = createProtocolInjector(core.ports, () => {});
-    await injector.ensure(claude);
-    const agent = { agent: "tester", file: "/roles/qa/tester.md" };
-    await injector.teachAgent({ ...claude, agent });
     expect(core.submitted.map((one) => one.text)).toEqual([roomProtocolLine("Claude", "room-1"), agentLine("Claude", agent)]);
   });
 
@@ -269,30 +260,25 @@ describe("soksak knowledge", () => {
 });
 
 
-// The team protocol (docs/spec/room.md#team): the leader line states the summon and the merge, and the worker line the worktree
-// lifecycle inside the project, because Claude Code keeps a cd of the shell only inside the folders of the session.
-describe("the team protocol", () => {
-  it("tells the leader that it leads, how to summon and that its settled answer ends the conversation", () => {
+// The protocol of a room with a leader (docs/spec/room.md#leader): the leader receives every line and an owner message without a
+// mention, and has no other power, so its line states no summon, no merge and no settling of its own.
+describe("the leader protocol", () => {
+  it("tells the leader that it gets every line and the owner messages without a mention, and nothing of a team", () => {
     const line = roomProtocolLine("Lead", "room-1", true, { leader: null });
-    expect(line).toContain("You lead: you get every line and split the work; your settled answer ends the conversation.");
-    expect(line).toContain('member.summon {"turn":"<token>","definition":"<id>","role":"<role>","directory":"<project>"}');
-    expect(line).toContain("Branch=member id; release drops worktree.");
-    expect(line).toContain("Record a merge with member.merged {turn, member, commit}; end a worker with member.release {turn, member}, or retask it with member.retask {turn, member, definition, role}.");
-    expect(line).toContain("workers mentioned in one answer start together.");
+    expect(line).toContain("You lead: you get every line, and an owner message without a mention comes to you.");
     expect(line).toContain("@all addresses everyone, and yours starts every worker.");
-    expect(line).toContain("List summonable agents with definitions {} and read each file before choosing.");
+    for (const gone of ["member.summon", "member.merged", "member.release", "member.retask", "worktree", "definitions {}", "ends the conversation"]) expect(line).not.toContain(gone);
   });
 
-  it("tells a worker that it starts in its own worktree and leaves its removal to the room", () => {
+  it("tells a worker which lines it gets, and nothing of a worktree or a brief", () => {
     const line = roomProtocolLine("W1", "room-1", true, { leader: "Lead" });
-    expect(line).toContain("You work for @Lead and get the owner lines and the lines mentioning you; your brief is your scope.");
-    expect(line).toContain("You start in your own worktree on the branch W1; work and commit there, and leave its removal to the room.");
+    expect(line).toContain("You work with @Lead, who gets every line; you get the owner lines and the lines mentioning you.");
     expect(line).toContain("@all addresses everyone, and yours starts no turn.");
-    expect(line).toContain("After it names the merge commit, check your work and unit tests in integration and report it.");
     expect(line).toContain("Leave no background task running when you answer.");
+    for (const gone of ["worktree", "brief", "integration", "merge"]) expect(line).not.toContain(gone);
   });
 
-  it("states no team rule without a leader", () => {
+  it("states no leader rule without a leader", () => {
     expect(roomProtocolLine("Claude", "room-1")).not.toContain("leader");
   });
 });
@@ -303,15 +289,6 @@ describe("a failed room command", () => {
     const line = roomProtocolLine("Claude", "room-1");
     expect(line).toContain("If one fails, rerun it with the same token until it is accepted or refused as not open.");
     expect(line.length).toBeLessThan(3500);
-  });
-});
-
-describe("the work rules of the team (C90)", () => {
-  it("states the work rules of the leader and of a worker", () => {
-    const lead = roomProtocolLine("Lead", "room-1", true, { leader: null });
-    expect(lead).toContain("Each brief fixes the API contract; workers unit-test and merge integration into their branch before asking for a merge; merge server branches first, then dependents update from integration; name each merge commit.");
-    const worker = roomProtocolLine("W1", "room-1", true, { leader: "Lead" });
-    expect(worker).toContain("Unit-test thoroughly; before reporting done, merge the latest integration and resolve conflicts, then report the branch ready.");
   });
 });
 
@@ -333,9 +310,9 @@ describe("the protocol line bound", () => {
   });
 });
 
-// The bound at the largest configuration (C93-1): sixteen team members with names of 40 characters and their number and roles of 200
-// characters. The line takes neither the peers nor the roles: each turn line states the roles, and the members, their roles and the
-// team are a read of the conversation status, so only the names of the member and of its leader vary.
+// The bound at the largest configuration (C93-1): names of 40 characters. The line takes neither the peers nor the roles: each turn
+// line states the roles, and the members and their roles are a read of the conversation status, so only the names of the member and
+// of its leader vary.
 describe("the protocol line bound at the largest configuration", () => {
   it("holds the leader and the worker lines at 3500 characters or less with names of the largest length", () => {
     const name = "N".repeat(40);
@@ -344,7 +321,7 @@ describe("the protocol line bound at the largest configuration", () => {
       const worker = roomProtocolLine(`${name}-16`, "tab-2fm4e7", mcp, { leader: name });
       expect(leader.length, `leader mcp=${mcp}`).toBeLessThanOrEqual(3500);
       expect(worker.length, `worker mcp=${mcp}`).toBeLessThanOrEqual(3500);
-      expect(leader).toContain("Members, roles and team: sok status soksak-plugin-agents-clubhouse.conversation --surface tab-2fm4e7.");
+      expect(leader).toContain("Members and roles: sok status soksak-plugin-agents-clubhouse.conversation --surface tab-2fm4e7.");
     }
   });
 });

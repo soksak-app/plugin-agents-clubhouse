@@ -1,6 +1,6 @@
-// The agent name of an agent file (C97-1, docs/spec/room.md#team): the `name` of its YAML frontmatter, by which Claude Code finds the agent.
+// The agent name of an agent file (C97-1, docs/spec/room.md#roster): the `name` of its YAML frontmatter, by which Claude Code finds the agent.
 import { describe, expect, it } from "vitest";
-import { agentFileText, agentNameOf } from "./agent-file";
+import { agentFileText, agentNameOf, roleFileOf } from "./agent-file";
 
 const FILE = "/p/.claude/agents/moai/manager-develop.md";
 
@@ -29,5 +29,15 @@ describe("agentFileText", () => {
       .toThrow(`agent file ${FILE}: agent-file output was truncated: stdout`);
     expect(() => agentFileText({ code: 0, stdout: text, stderr: "", truncated: { stdout: false, stderr: true } }, FILE))
       .toThrow(`agent file ${FILE}: agent-file output was truncated: stderr`);
+  });
+});
+
+describe("roleFileOf", () => {
+  it("gives the first file of the role of the definition, null without one, and refuses core.roles of another form", () => {
+    const roles = { seq: 3, roles: [{ id: "moai-e2e-tester", text: "t", ko: "k", files: ["/p/.claude/agents/moai/e2e-tester.md"] }, { id: "solo", text: "t", ko: "k", files: [] }] };
+    expect(roleFileOf("moai-e2e-tester", roles)).toBe("/p/.claude/agents/moai/e2e-tester.md");
+    expect(roleFileOf("solo", roles)).toBeNull();
+    expect(roleFileOf("absent", roles)).toBeNull();
+    expect(() => roleFileOf("solo", { roles: "x" })).toThrow("core.roles: the value is not {seq, roles: [{id, text, ko, files}]}");
   });
 });

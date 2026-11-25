@@ -112,19 +112,3 @@ describe("addressed views (docs/spec/room.md#addressed-views)", () => {
   });
 });
 
-// C97-2 (docs/spec/room.md#team): a retask moves the delivery of the ended session to the resumed one.
-describe("moveSession", () => {
-  it("moves the addressed list, sent and delivered of a session to another session", () => {
-    const record = createRoomRecord([], {}, nameOf, () => {});
-    record.append("owner", "one");
-    record.append("a", "two");
-    record.markSent("s-b", record.pending("s-b", "b")!.count);
-    record.markDelivered("s-b", 2);
-    record.moveSession("s-b", "s-c");
-    expect(record.sent()).toEqual({ "s-c": 2 });
-    expect(record.delivered()).toEqual({ "s-c": 2 });
-    expect(record.pending("s-c", "b")).toBeNull();
-    record.append("owner", "three");
-    expect(record.pending("s-c", "b")?.text).toBe("[@owner] three");
-  });
-});

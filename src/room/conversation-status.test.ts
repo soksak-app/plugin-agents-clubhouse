@@ -18,7 +18,7 @@ describe("conversation status", () => {
         delivery: { type: "array", items: { required: ["member", "name", "role", "session", "sent", "delivered", "length", "unreceived"] } },
         questions: { type: "array", items: { required: ["member", "session", "rows", "choices"] } },
       },
-      required: ["entries", "waiting", "delivery", "team", "questions"],
+      required: ["entries", "waiting", "delivery", "questions"],
     });
   });
 
@@ -28,17 +28,17 @@ describe("conversation status", () => {
     const record = createRoomRecord(lines, {}, (speaker) => speaker, () => status.changed(), {}, () => 1000);
     const values: unknown[] = [];
     const stop = status.subscribe((value) => values.push(value));
-    expect(status.read()).toEqual({ entries: [], waiting: [], delivery: [], team: [], questions: [] });
+    expect(status.read()).toEqual({ entries: [], waiting: [], delivery: [], questions: [] });
     record.append("owner", "hello");
     record.append("reviewer", "hi");
-    expect(status.read()).toEqual({ entries: [{ speaker: "owner", text: "hello", at: 1000, elapsedMs: null, sections: [] }, { speaker: "reviewer", text: "hi", at: 1000, elapsedMs: null, sections: [] }], waiting: [], delivery: [], team: [], questions: [] });
+    expect(status.read()).toEqual({ entries: [{ speaker: "owner", text: "hello", at: 1000, elapsedMs: null, sections: [] }, { speaker: "reviewer", text: "hi", at: 1000, elapsedMs: null, sections: [] }], waiting: [], delivery: [], questions: [] });
     record.append("owner", "again");
     record.withdrawLast(2);
     expect(values).toEqual([
-      { entries: [{ speaker: "owner", text: "hello", at: 1000, elapsedMs: null, sections: [] }], waiting: [], delivery: [], team: [], questions: [] },
-      { entries: [{ speaker: "owner", text: "hello", at: 1000, elapsedMs: null, sections: [] }, { speaker: "reviewer", text: "hi", at: 1000, elapsedMs: null, sections: [] }], waiting: [], delivery: [], team: [], questions: [] },
-      { entries: [{ speaker: "owner", text: "hello", at: 1000, elapsedMs: null, sections: [] }, { speaker: "reviewer", text: "hi", at: 1000, elapsedMs: null, sections: [] }, { speaker: "owner", text: "again", at: 1000, elapsedMs: null, sections: [] }], waiting: [], delivery: [], team: [], questions: [] },
-      { entries: [{ speaker: "owner", text: "hello", at: 1000, elapsedMs: null, sections: [] }, { speaker: "reviewer", text: "hi", at: 1000, elapsedMs: null, sections: [] }], waiting: [], delivery: [], team: [], questions: [] },
+      { entries: [{ speaker: "owner", text: "hello", at: 1000, elapsedMs: null, sections: [] }], waiting: [], delivery: [], questions: [] },
+      { entries: [{ speaker: "owner", text: "hello", at: 1000, elapsedMs: null, sections: [] }, { speaker: "reviewer", text: "hi", at: 1000, elapsedMs: null, sections: [] }], waiting: [], delivery: [], questions: [] },
+      { entries: [{ speaker: "owner", text: "hello", at: 1000, elapsedMs: null, sections: [] }, { speaker: "reviewer", text: "hi", at: 1000, elapsedMs: null, sections: [] }, { speaker: "owner", text: "again", at: 1000, elapsedMs: null, sections: [] }], waiting: [], delivery: [], questions: [] },
+      { entries: [{ speaker: "owner", text: "hello", at: 1000, elapsedMs: null, sections: [] }, { speaker: "reviewer", text: "hi", at: 1000, elapsedMs: null, sections: [] }], waiting: [], delivery: [], questions: [] },
     ]);
     stop();
     record.append("owner", "after");
@@ -116,7 +116,7 @@ describe("waitLabel (docs/spec/room.md#conversation-status)", () => {
 describe("questions of the conversation status (docs/spec/room.md#questions)", () => {
   it("lists the question that the room read from the screen of each blocked member", () => {
     const questions = [{ member: "lead", session: "s-1", rows: [" Accessing workspace:", " ❯ No, exit"], choices: ["No, exit"] }];
-    const status = createConversationStatus([], () => [], () => [], () => [], () => [], () => questions);
+    const status = createConversationStatus([], () => [], () => [], () => [], () => questions);
     expect(status.read().questions).toEqual(questions);
   });
 });

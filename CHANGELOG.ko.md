@@ -2,6 +2,7 @@
 
 ## 미출시
 
+- C144: leader는 받는 줄만 다른 member와 다르다. 모든 줄을 받고, owner 메시지의 첫 turn을 메시지가 mention한 member들 다음에 받는다. `member.summon`, `definitions`, `member.release`, `member.merged`, `member.retask` command, team, 그 view, 그 worktree, 설정 `maxMembers`, 선언된 program `team-worktree`를 없앴다. 첫 시작 program은 `trust`와 `start`를 받는 `bin/first-start.mjs`다. 모든 답의 status를 세므로, leader가 있는 relay는 모든 member의 마지막 답이 `settled`일 때 settle되고 하나라도 continue이면 owner를 기다린다. tab state는 `team`이 없는 format 3이고, `team`이 있는 상태는 `room tab state: unknown field team`으로 거부한다. 이름 40자의 leader protocol 줄은 2801자이고, 전에는 3666자였다.
 - C139: version은 0.0.28이며 release run이 C138를 게시한다.
 - C138: header의 첫 줄은 plugin 이름, 개수, 초대 button을 보이고, member card는 전체 폭을 쓰는 같은 열의 grid에 놓이며 세 줄부터 두 줄로 접힌다(`members.fold`, `folded`가 있는 tab state format 2). header는 계정 login에 관한 것을 보이지 않는다. `순차`와 `동시` mode는 composer 위에 있고 방에 leader가 있으면 숨는다. `facil` mode는 없어졌고 `kibitzDefault`의 기본값은 `turn`이다.
 - C137: version은 0.0.27이며 release run이 C135, C135-1 and C136를 게시한다.

@@ -707,22 +707,22 @@ describe("a relay with a leader (docs/spec/room.md#leader)", () => {
     expect(record.lines.at(-1)).toMatchObject({ speaker: "clubhouse", text: "the conversation waits for the owner: @Lead continue" });
   });
 
-  it("starts a worker that the relay gains after its start when the leader mentions it", async () => {
+  // C144 (docs/spec/room.md#settling): the status of the leader counts like that of every member.
+  it("waits for the owner when the leader settles and a worker continues, because no answer alone settles the conversation", async () => {
     const core = fakeCore([IDLE("s-l"), IDLE("s-1"), IDLE("s-2")], { manual: true });
     const record = leaderRecord();
     core.bound.record = record;
-    record.append("owner", "go");
-    const members = [TEAM[0]];
-    const relay = relayInMode(core.ports, "turn", members, "go", record, { ...OPEN, leader: "lead", members: () => members });
+    record.append("owner", "build the server");
+    const relay = relayInMode(core.ports, "turn", TEAM, "build the server", record, { ...OPEN, leader: "lead" });
     await core.submits(1);
-    members.push(TEAM[1]);
-    core.answer("s-l", "continue", "@W1 start");
+    core.answer("s-l", "continue", "@W1 build the server");
     await core.submits(2);
-    expect(core.submitted[1].session).toBe("s-1");
-    core.answer("s-1", "settled", "ok");
+    core.answer("s-1", "continue", "@Lead which port?");
     await core.submits(3);
-    core.answer("s-l", "settled", "end");
+    core.answer("s-l", "settled", "port 8080 is fine; I am done here");
     await relay;
+    expect(core.submitted).toHaveLength(3);
+    expect(record.lines.at(-1)).toMatchObject({ speaker: "clubhouse", text: "the conversation waits for the owner: @W1 continue" });
   });
 });
 

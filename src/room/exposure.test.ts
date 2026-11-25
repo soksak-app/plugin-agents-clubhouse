@@ -78,3 +78,13 @@ describe("registerExposure", () => {
     );
   });
 });
+
+// C144 (docs/spec/room.md#leader): the leader has no power over sessions, so the room declares no team command.
+describe("the commands of the leader", () => {
+  it("declares none of the team commands", () => {
+    const names = manifest.exposes.commands.map((command) => command.name);
+    for (const gone of ["member.summon", "definitions", "member.release", "member.merged", "member.retask"]) {
+      expect(names).not.toContain(`soksak-plugin-agents-clubhouse.${gone}`);
+    }
+  });
+});
