@@ -2,6 +2,7 @@
 
 ## 미출시
 
+- C158: 방 specification의 command 목록이 `message.send {text, mood?}`를 밝힌다.
 - C157: manifest는 저장된 group이 leader를 가지는 `@soksak/plugin-agents` `>=0.0.10`을 요구한다.
 - C156: version은 0.0.29이며 C140부터 C155까지를 release한다.
 - C150: composer에 고르지 않아도 되는 기분 선택이 있고, 그 emoji가 메시지 글 앞에 붙어 member가 owner의 감정을 읽는다.
