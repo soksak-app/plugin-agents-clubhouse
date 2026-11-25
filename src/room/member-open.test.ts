@@ -52,7 +52,7 @@ describe("createMemberOpen", () => {
   it("refuses a member whose account has no login with the account and the place of the login, and asks no protocol turn", async () => {
     const t = setup([{ ok: true }], () => {}, null, "claude");
     await expect(t.open({ id: "a", name: "A" })).rejects.toThrow(
-      "member a: the account claude has no login; log in to it in the agent definitions and send again",
+      "member a: the account claude has no login; log in to it in the settings of the agents plugin and send again",
     );
     expect(t.calls).toEqual(["check a", "summon a"]);
   });

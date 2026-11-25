@@ -24,7 +24,7 @@ export function createMemberOpen(deps: MemberOpenDeps): (member: { id: string; n
     if (deps.stops() !== stops) throw new TurnStopped();
     const account = deps.loginless(member.id);
     // The refusal names the account and the place of its login, because the room opens no login (docs/spec/room.md#login).
-    if (account !== null) throw new Error(`member ${member.id}: the account ${account} has no login; log in to it in the agent definitions and send again`);
+    if (account !== null) throw new Error(`member ${member.id}: the account ${account} has no login; log in to it in the settings of the agents plugin and send again`);
     const outcome = await deps.protocol(member.id);
     if (outcome === undefined) throw new Error(`member ${member.id}: its session did not open`);
     if (!outcome.result.ok && "stopped" in outcome.result) throw new TurnStopped();

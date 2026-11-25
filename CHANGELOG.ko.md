@@ -2,6 +2,7 @@
 
 ## 미출시
 
+- C162: login이 없는 member의 거부가 agents plugin의 설정을 login 장소로 지정한다.
 - C161: login이 없는 member의 거절이 account와, 사람이 login하는 agent definitions를 말한다.
 - C160: page start test가 언어를 한국어로 고정해 모든 locale에서 통과한다.
 - C157-1: room definitions의 dependency test가 `@soksak/plugin-agents` `>=0.0.10`을 기대한다.
