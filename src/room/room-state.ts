@@ -2,6 +2,7 @@
 // docs/spec/plugins.md#memory-saver, `surface.unload`), which core stores per tab and gives back after a restart, so the room shows
 // the same group and conversation without input. The reader accepts only this form and names what it found otherwise.
 import { isIndexSentence, type OpenToken } from "./answer";
+import type { MemberWorktree } from "./protocol";
 
 export interface RoomState {
   // The identifier of the assigned group of the agents plugin, or null without one (docs/spec/room.md#group).
@@ -23,6 +24,8 @@ export interface RoomState {
   // The open turn tokens, so an answer after a restart is accepted
   // (docs/spec/room.md#restart).
   turns: OpenToken[];
+  // The worktree of each member that has one, by member identifier (docs/spec/room.md#worktrees).
+  worktrees: Record<string, MemberWorktree>;
 }
 
 // The largest tab state that surface.unload of plugin.json declares.
@@ -36,7 +39,7 @@ export function serializedRoomState(state: RoomState): string {
   return json;
 }
 
-const FIELDS: readonly string[] = ["group", "folded", "conversation", "sessions", "protocolSessions", "addressed", "delivered", "sent", "turns"];
+const FIELDS: readonly string[] = ["group", "folded", "conversation", "sessions", "protocolSessions", "addressed", "delivered", "sent", "turns", "worktrees"];
 
 const isText = (value: unknown): value is string => typeof value === "string" && value !== "";
 
@@ -107,6 +110,18 @@ export function parseRoomState(value: unknown): RoomState | null {
       );
     }
   }
+  const worktrees = state.worktrees;
+  if (typeof worktrees !== "object" || worktrees === null || Array.isArray(worktrees)) {
+    throw new Error(`room tab state: worktrees must be an object of member identifier to worktree, got ${JSON.stringify(worktrees)}`);
+  }
+  for (const [member, tree] of Object.entries(worktrees as Record<string, unknown>)) {
+    const one = tree as Record<string, unknown> | null;
+    const valid =
+      typeof one === "object" && one !== null && !Array.isArray(one) && Object.keys(one).sort().join() === "branch,integration,root,worktree" &&
+      typeof one.root === "string" && one.root.startsWith("/") && typeof one.worktree === "string" && one.worktree.startsWith("/") &&
+      isText(one.branch) && isText(one.integration);
+    if (!valid) throw new Error(`room tab state: worktree ${member} must be {root, worktree, branch, integration} with absolute paths, got ${JSON.stringify(tree)}`);
+  }
   return {
     group,
     folded: state.folded,
@@ -117,5 +132,6 @@ export function parseRoomState(value: unknown): RoomState | null {
     delivered: { ...(delivered as Record<string, number>) },
     sent: { ...(sent as Record<string, number>) },
     turns: turns.map((token) => ({ turn: token.turn, session: token.session, member: token.member, count: token.count })),
+    worktrees: Object.fromEntries(Object.entries(worktrees as Record<string, MemberWorktree>).map(([member, tree]) => [member, { ...tree }])),
   };
 }

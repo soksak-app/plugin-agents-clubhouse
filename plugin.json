@@ -45,6 +45,9 @@
     "codex-status": { "program": "/usr/bin/env", "args": [{ "pattern": "CODEX_HOME=/.+/plugin-data/agents/accounts/[a-z][a-z0-9-]{0,39}" }, { "pattern": "[^\\s]{1,255}" }, "login", "status"] },
     "agent-file": { "program": "cat", "args": [{ "pattern": "/.+\\.md" }] },
     "project-trust": { "program": "plugin:bin/first-start.mjs", "args": ["trust", { "pattern": "/.+" }] },
+    "member-worktree": { "program": "plugin:bin/first-start.mjs", "args": ["worktree", { "pattern": "/.+" }, { "pattern": "[A-Za-z0-9][A-Za-z0-9._-]{0,99}" }, { "pattern": "[A-Za-z0-9][A-Za-z0-9._-]{0,99}" }] },
+    "member-root": { "program": "plugin:bin/first-start.mjs", "args": ["root", { "pattern": "/.+" }] },
+    "member-worktree-remove": { "program": "plugin:bin/first-start.mjs", "args": ["remove", { "pattern": "/.+" }, { "pattern": "[A-Za-z0-9][A-Za-z0-9._-]{0,99}" }, { "pattern": "[A-Za-z0-9][A-Za-z0-9._-]{0,99}" }, { "pattern": "[^\\s]{1,255}" }] },
     "member-start": { "program": "plugin:bin/first-start.mjs", "args": ["start", { "pattern": "/.+/plugin-data/agents/accounts/[a-z][a-z0-9-]{0,39}" }, { "pattern": "/.+" }] }
   },
   "exposes": {
@@ -292,6 +295,20 @@
         }
       },
       {
+        "name": "soksak-plugin-agents-clubhouse.member.end",
+        "description": "End a member that the person chooses: remove its worktree, refusing changes that are not committed and a branch that is not merged into the integration branch, then end its session.",
+        "params": {
+          "type": "object",
+          "properties": { "member": { "type": "string" } },
+          "required": ["member"]
+        },
+        "result": {
+          "type": "object",
+          "properties": { "member": { "type": "string" }, "ended": { "type": "boolean" } },
+          "required": ["member", "ended"]
+        }
+      },
+      {
         "name": "soksak-plugin-agents-clubhouse.conversation.stop",
         "description": "End the conversation of the message that the room relays: no further turn starts and a turn that waits for its answer ends without it; also end the wait of each token kept from before a restart. Refused when no message is relayed and no kept token is open. A second call changes nothing.",
         "params": { "type": "object", "properties": {} },
@@ -394,6 +411,10 @@
         "name": "soksak-plugin-agents-clubhouse.tab",
         "description": "Member card of the header: the initials, the name after a star for the leader, and the state of the member; it runs no command",
         "many": true
+      },
+      {
+        "name": "soksak-plugin-agents-clubhouse.member.end",
+        "description": "The button 끝내기 of a member card with a session: runs member.end with the member of the card"
       },
       {
         "name": "soksak-plugin-agents-clubhouse.group",

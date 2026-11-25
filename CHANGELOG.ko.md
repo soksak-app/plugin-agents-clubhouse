@@ -2,6 +2,7 @@
 
 ## 미출시
 
+- C148: 정의의 folder가 git repository에 있는 member는 session이 열릴 때 만들어지는 자기 worktree `<home>/soksak/worktrees/<repository>-<hash>/<room>/<member>`에서 branch `clubhouse/<room>/<member>`로 일한다. room protocol 뒤의 worktree 줄이 merge 순서를 말하고, `member.end`와 card 버튼 `끝내기`는 commit하지 않은 변경과 merge하지 않은 branch를 거부하며 worktree를 지우고 session을 끝낸다. tab state는 `worktrees`를 유지한다.
 - C142: member는 첫 turn에 session을 연다. group을 지정하거나 바꿔도 session은 열리지 않고 방의 열린 session에 다시 붙으며, relay는 session이 없는 member를 summon하고 그 tab을 배치하고 room protocol을 submit한 뒤 turn 줄을 보낸다. 지정된 group에 member가 있는 동안 composer는 입력을 받는다.
 - C141: owner의 메시지는 mention된 member에게, 그다음 group의 leader에게 가고, mention이 없는 메시지는 leader에게만 간다. `message.send`는 받는 member에게 열린 session이 없는 메시지를 `member <name> has no open session`으로 거부한다. 대화 mode `turn`과 `simul`, `mode.set`, mode button, 설정 `kibitzDefault`가 없어지고, tab state에는 `mode`가 없다.
 - C140: 방은 `group.set`으로 agents plugin의 group 하나를 지정받는다. header는 group select와 member마다 card를 보이고 leader에는 별을 붙이며, tab state는 `group`을 유지하고, roster, check, role, 초대 dialog는 없어진다.

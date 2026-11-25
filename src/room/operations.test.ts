@@ -26,6 +26,7 @@ function room(overrides: Partial<OperationDeps> = {}) {
     stopWaits: () => 0,
     followUp: () => void log.push("follow-up"),
     failed: (reason) => void log.push(`failed ${reason}`),
+    endMember: async (member) => void log.push(`end ${member}`),
     ...overrides,
   };
   return { log, group: () => group, folded: () => folded, commands: createRoomOperations(deps) };
@@ -53,6 +54,21 @@ describe("group.set (docs/spec/room.md#group)", () => {
 describe("mode.set (C141, docs/spec/room.md#receivers)", () => {
   it("is no command, because the room has no conversation mode", () => {
     expect(Object.keys(room().commands).some((name) => name.endsWith(".mode.set"))).toBe(false);
+  });
+});
+
+describe("member.end (C148, docs/spec/room.md#worktrees)", () => {
+  it("ends the member through the room and refuses a value that is not a member identifier", async () => {
+    const r = room();
+    expect(await r.commands[`${P}.member.end`]({ member: "b" })).toEqual({ member: "b", ended: true });
+    expect(r.log).toEqual(["end b", "changed"]);
+    await expect(r.commands[`${P}.member.end`]({ member: "" })).rejects.toThrow('member must be a member identifier, got ""');
+  });
+
+  it("rejects with the refusal of the removal and redraws nothing", async () => {
+    const r = room({ endMember: async () => { throw new Error("member b: worktree /w has changes that are not committed"); } });
+    await expect(r.commands[`${P}.member.end`]({ member: "b" })).rejects.toThrow("member b: worktree /w has changes that are not committed");
+    expect(r.log).toEqual([]);
   });
 });
 

@@ -11,6 +11,8 @@ export interface OperationDeps {
   // Whether the member grid of the header is folded, and its change (docs/spec/room.md#header).
   folded: () => boolean;
   setFolded: (folded: boolean) => void;
+  // Ends a member with its worktree; it rejects with the refusal of the removal (docs/spec/room.md#worktrees).
+  endMember: (member: string) => Promise<void>;
   // Redraws the members after a change.
   changed: () => void;
   // Summons the members that have no open session.
@@ -54,6 +56,13 @@ export function createRoomOperations(deps: OperationDeps): Record<string, (param
         deps.changed();
       }
       return { folded };
+    },
+    [`${P}.member.end`]: async (params) => {
+      const member = params?.member;
+      if (typeof member !== "string" || member === "") throw new Error(`member must be a member identifier, got ${JSON.stringify(member)}`);
+      await deps.endMember(member);
+      deps.changed();
+      return { member, ended: true };
     },
     // conversation.stop ends the relay and its waiting turns and the waits of the kept tokens; a second call changes nothing.
     [`${P}.conversation.stop`]: async () => {

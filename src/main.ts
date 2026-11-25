@@ -30,7 +30,7 @@ import { answerSections } from "./room/sections";
 import { createRoomRecord, leaderRoute, settledRelay } from "./room/room-record";
 import { agentFileText, agentNameOf, roleFileOf } from "./room/agent-file";
 import { createConversationStatus, waitLabel } from "./room/conversation-status";
-import { createProtocolInjector, type AgentPlace } from "./room/protocol";
+import { createProtocolInjector, type AgentPlace, type MemberWorktree } from "./room/protocol";
 import { parseRoomState, serializedRoomState, type RoomState as RoomTabState } from "./room/room-state";
 import { ownedSessionIds, shownByOf } from "./room/session-channel";
 import { answerQuestion, questionChoices, readQuestion, showMember } from "./room/question";
@@ -55,6 +55,7 @@ const CSS = `
 .st-tab{min-width:0;box-sizing:border-box}
 .st-tab{display:inline-flex;align-items:center;gap:7px;padding:4px 9px 4px 5px;border-radius:9px;border:1px solid rgba(127,127,127,.28);background:rgba(127,127,127,.06);font-size:12px}
 .st-tab.none{border-style:dashed}
+.st-tab .end{appearance:none;margin-left:auto;border:1px solid rgba(127,127,127,.28);border-radius:6px;background:transparent;color:inherit;font:inherit;font-size:11px;padding:1px 6px;cursor:pointer;white-space:nowrap;flex:0 0 auto}
 .st-tab .ini{width:24px;height:24px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;background:rgba(127,127,127,.22);flex:0 0 auto}
 .st-tab .txt{display:flex;flex-direction:column;min-width:0;line-height:1.25}
 .st-tab .nm{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -183,6 +184,8 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   const saved = parseRoomState(await bridge!.calls.request("tab.state.read", null));
   // default: a room tab without a state shows its member grid unfolded (docs/spec/room.md#restart).
   let folded = saved?.folded ?? false;
+  // The worktree of each member that has one (docs/spec/room.md#worktrees).
+  const worktrees = new Map<string, MemberWorktree>(Object.entries(saved?.worktrees ?? {}));
   // The assigned group of the agents plugin; a room tab without a state has none (docs/spec/room.md#group).
   let group: string | null = saved?.group ?? null;
   // The groups of the agents plugin, read with the definitions.
@@ -213,6 +216,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
       delivered: record.delivered(),
       sent: record.sent(),
       turns: answers.tokens(),
+      worktrees: Object.fromEntries(worktrees),
     };
     let json: string;
     try {
@@ -355,6 +359,14 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
       // The leader shows the star U+2B50 before its name (docs/spec/room.md#header).
       text.append(elText("span", entry.leader ? `\u2B50 ${entry.name}` : entry.name, "nm"), sub);
       tab.append(elText("span", initialsOf(entry.name), "ini"), text);
+      // The button 끝내기 ends a member with a session and its worktree (docs/spec/room.md#worktrees).
+      const end = document.createElement("button");
+      end.type = "button";
+      end.className = "end";
+      end.textContent = t("endMember", lang);
+      end.dataset.expose = `${EXPOSE}.member.end`;
+      bound(expose.bind(end, `${EXPOSE}.member.end`, { member: entry.id }, { failed: failed("member.end") }), "member.end");
+      tab.append(end);
       sub.append(elText("span", "", "state"));
       tabsEl.append(tab);
     }
@@ -368,6 +380,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
       const id = tab.dataset.id!;
       const state = memberState(memberSessions.has(id), waited.has(id));
       tab.classList.toggle("none", state === "none");
+      tab.querySelector<HTMLButtonElement>(".end")!.hidden = !memberSessions.has(id);
       tab.querySelector(".state")!.textContent = t(state === "answering" ? "stateAnswering" : state === "idle" ? "stateIdle" : "stateNone", lang);
     }
   }
@@ -499,6 +512,23 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   // Before a Claude Code member starts in folder, its configuration file holds the answers of the questions of a first start: member-start
   // ends the first-start steps and trusts each folder of the member in the home of its account, and project-trust trusts each folder in the
   // configuration file of the person for a definition without a home (docs/spec/room.md#first-start).
+  // Runs a command of the first start program and reads its JSON answer; a refusal fails with the member and the error of the program.
+  const firstStart = async (name: string, args: string[], id: string): Promise<Record<string, unknown>> => {
+    const reply = await bridge!.runtime.program.run(name, args);
+    if (reply.code !== 0) throw new Error(`member ${id}: ${reply.stderr.trim()}`);
+    return JSON.parse(reply.stdout) as Record<string, unknown>;
+  };
+  // Ends a member that the person chooses: the program removes its worktree, refusing changes that are not committed and a branch that
+  // is not merged, and then the room ends its session and forgets the worktree (docs/spec/room.md#worktrees).
+  const endMember = async (id: string): Promise<void> => {
+    const session = memberSessions.get(id);
+    if (session === undefined) throw new Error(`member ${id} has no session`);
+    const tree = worktrees.get(id);
+    if (tree !== undefined) await firstStart("member-worktree-remove", ["remove", tree.root, surface, id, tree.integration], id);
+    worktrees.delete(id);
+    persist();
+    await room.commands.execute("core.session.end", { session });
+  };
   const prepareStart = async (id: string, folder: string): Promise<void> => {
     const definition = definitions.find((one) => one.id === id);
     if (definition === undefined || !isClaude(id)) return;
@@ -533,8 +563,38 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
       await loginGate.startable(closed);
       starting = ids.filter((id) => memberSessions.has(id) || (opening.includes(id) && !loginGate.needs(id)));
       showStates();
-      // A starting member starts in the folder of its definition without a question of a first start.
-      for (const definition of definitions) if (starting.includes(definition.id)) await prepareStart(definition.id, definition.cwd);
+      // A member whose session opens works in its own worktree when the folder of its definition is in a git repository; a reattached
+      // member whose definition folder is now in another repository starts a new session (docs/spec/room.md#worktrees).
+      const folders = new Map<string, string>();
+      for (const definition of definitions) {
+        if (!starting.includes(definition.id)) continue;
+        const kept = worktrees.get(definition.id);
+        if (memberSessions.has(definition.id)) {
+          if (kept === undefined) continue;
+          const { root } = await firstStart("member-root", ["root", definition.cwd], definition.id);
+          if (root === kept.root) continue;
+          await room.commands.execute("core.session.end", { session: memberSessions.get(definition.id)! });
+          memberSessions.delete(definition.id);
+          worktrees.delete(definition.id);
+          record.append("clubhouse", `@${definition.name} starts a new session: its folder ${definition.cwd} left the repository ${kept.root}, and its worktree ${kept.worktree} stays`);
+        }
+        const tree = await firstStart("member-worktree", ["worktree", definition.cwd, surface, definition.id], definition.id);
+        if (tree.worktree === null) {
+          worktrees.delete(definition.id);
+          record.append("clubhouse", `@${definition.name} works in ${definition.cwd} without a worktree`);
+        } else {
+          const { root, worktree, branch, integration } = tree;
+          if (![root, worktree, branch, integration].every((one) => typeof one === "string" && one !== "")) {
+            throw new Error(`member ${definition.id}: member-worktree answered ${JSON.stringify(tree)}`);
+          }
+          worktrees.set(definition.id, { root, worktree, branch, integration } as MemberWorktree);
+          folders.set(definition.id, worktree as string);
+        }
+      }
+      // A starting member starts in its folder without a question of a first start.
+      for (const definition of definitions) {
+        if (starting.includes(definition.id)) await prepareStart(definition.id, folders.get(definition.id) ?? definition.cwd);
+      }
       // A starting member whose program takes no --agent learns the agent of its definition from the agent line (C110).
       for (const definition of definitions) {
         if (!starting.includes(definition.id) || isClaude(definition.id)) continue;
@@ -545,7 +605,11 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
       // A starting Claude Code member starts with the agent of its definition (C101).
       const memberDefinitions = await Promise.all(
         definitions.map(async (definition) =>
-          toMemberDefinition(definition, starting.includes(definition.id) && isClaude(definition.id) ? await agentOf(definition.id) : null, acceptAll),
+          toMemberDefinition(
+            { ...definition, cwd: folders.get(definition.id) ?? definition.cwd },
+            starting.includes(definition.id) && isClaude(definition.id) ? await agentOf(definition.id) : null,
+            acceptAll,
+          ),
         ),
       );
       await summonAndArrange(trigger, memberDefinitions, starting);
@@ -844,7 +908,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   const taughtMembers = async (members: OpenMember[]): Promise<OpenMember[]> => {
     const outcomes = await Promise.all(
       members.map((member) =>
-        protocol.ensure({ ...member, place: placeOf(member), agent: memberAgents.get(member.id) ?? null }),
+        protocol.ensure({ ...member, place: placeOf(member), agent: memberAgents.get(member.id) ?? null, worktree: worktrees.get(member.id) ?? null }),
       ),
     );
     return members.filter((_, index) => outcomes[index].ok);
@@ -881,6 +945,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
       return answers.map((answer) => ({ id: answer.id, text: answer.text }));
     });
   const operations = createRoomOperations({
+    endMember,
     group: () => group,
     setGroup: (next) => {
       group = next;
@@ -1010,6 +1075,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
     [`${EXPOSE}.tab`]: tabTargets,
     [`${EXPOSE}.group`]: header.group,
     [`${EXPOSE}.fold`]: header.fold,
+    [`${EXPOSE}.member.end`]: () => [...tabsEl.querySelectorAll<HTMLElement>(".st-tab .end")],
     [`${EXPOSE}.question`]: () => [...msgs.querySelectorAll<HTMLElement>(".st-question-answer")],
     [`${EXPOSE}.question.choice`]: () => [...msgs.querySelectorAll<HTMLElement>(".st-question-choice")],
     [`${EXPOSE}.mention`]: () => [...mentionBox.querySelectorAll<HTMLElement>(".st-mention-item")],

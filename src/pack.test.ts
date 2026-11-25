@@ -27,6 +27,8 @@ describe("first start program", () => {
     expect(programs["member-start"]!.program).toBe("plugin:bin/first-start.mjs");
     expect(programs["project-trust"]!.program).toBe("plugin:bin/first-start.mjs");
     expect(programs["team-worktree"]).toBeUndefined();
+    // C148 (docs/spec/room.md#worktrees): the worktree commands of the same program.
+    for (const name of ["member-worktree", "member-root", "member-worktree-remove"]) expect(programs[name]!.program).toBe("plugin:bin/first-start.mjs");
     expect(pkg.files).toContain("bin/first-start.mjs");
     expect(Object.values((pkg as unknown as { bin: Record<string, string> }).bin)).toEqual(["bin/first-start.mjs"]);
   });

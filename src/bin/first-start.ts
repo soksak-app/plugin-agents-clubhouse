@@ -2,6 +2,9 @@
 // `member-start`.
 //   first-start trust <folder>          trusts the folder for Claude Code in the configuration file of the person
 //   first-start start <home> <folder>   ends the first-start steps and trusts the folder in the configuration file of an account home
+//   first-start worktree <folder> <room> <member>                creates the worktree of a member of a room (docs/spec/room.md#worktrees)
+//   first-start remove <root> <room> <member> <integration>      removes that worktree and its merged branch
+//   first-start root <folder>                                     names the root of the main checkout of the folder, or null outside git
 // Each command writes one JSON object on its standard output and exits with 0, or writes its error on its standard error and exits
 // with 1.
 // Claude Code keeps the trust of a folder in projects[<path>].hasTrustDialogAccepted of its configuration file, keyed by the root of
@@ -12,7 +15,8 @@
 // The program writes that member under the lock of proper-lockfile and replaces the file whole, because Claude Code rewrites the same
 // file while it runs.
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { existsSync, readdirSync, readFileSync, renameSync, rmdirSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import lockfile from "proper-lockfile";
@@ -79,6 +83,69 @@ export async function prepare(file: string, root: string, onboarding: boolean): 
   }
 }
 
+// A member identifier and a room surface are single path segments and branch name parts.
+const SEGMENT = /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/;
+
+function segment(name: string, value: string | undefined): string {
+  if (value === undefined || !SEGMENT.test(value) || value.includes("..")) throw new Error(`${name} must match ${SEGMENT}, got ${JSON.stringify(value)}`);
+  return value;
+}
+
+// The worktree of a member of a room: outside the repository under the home of the person, so the project holds no worktree folder; the
+// hash of the root keeps two repositories of one name apart, and the room keeps two rooms that use one definition apart.
+export function worktreePath(home: string, root: string, room: string, member: string): string {
+  const hash = createHash("sha256").update(root).digest("hex").slice(0, 8);
+  return join(home, "soksak", "worktrees", `${basename(root)}-${hash}`, room, member);
+}
+
+function insideGit(directory: string): boolean {
+  try {
+    return git(directory, ["rev-parse", "--is-inside-work-tree"]) === "true";
+  } catch (error) {
+    if (/not a git repository/.test(String((error as { stderr?: unknown }).stderr ?? ""))) return false;
+    throw error;
+  }
+}
+
+function addWorktree(home: string, folder: string, room: string, member: string): Record<string, unknown> {
+  if (!insideGit(folder)) return { worktree: null };
+  const root = repositoryRoot(folder);
+  const branch = `clubhouse/${room}/${member}`;
+  const path = worktreePath(home, root, room, member);
+  let integration: string;
+  try {
+    integration = git(root, ["symbolic-ref", "--quiet", "--short", "HEAD"]);
+  } catch {
+    throw new Error(`the main checkout ${root} is on no branch`);
+  }
+  git(root, ["worktree", "prune"]);
+  const listed = git(root, ["worktree", "list", "--porcelain"]).split("\n\n").some((entry) => entry.split("\n").includes(`worktree ${path}`) && entry.split("\n").includes(`branch refs/heads/${branch}`));
+  if (!listed) {
+    if (git(root, ["branch", "--list", branch]) !== "") throw new Error(`branch ${branch} exists and is not the worktree of the room`);
+    git(root, ["worktree", "add", "-q", "-b", branch, path]);
+  }
+  return { root, worktree: path, branch, integration };
+}
+
+function removeWorktree(home: string, root: string, room: string, member: string, integration: string): Record<string, unknown> {
+  const branch = `clubhouse/${room}/${member}`;
+  const path = worktreePath(home, root, room, member);
+  if (git(path, ["status", "--porcelain"]) !== "") throw new Error(`worktree ${path} has changes that are not committed`);
+  try {
+    git(root, ["merge-base", "--is-ancestor", branch, integration]);
+  } catch {
+    throw new Error(`branch ${branch} is not merged into ${integration}`);
+  }
+  git(root, ["worktree", "remove", path]);
+  git(root, ["branch", "-d", branch]);
+  // Each folder that the removal leaves empty goes with it, up to the folder soksak of the home.
+  for (let folder = dirname(path); folder.startsWith(join(home, "soksak")); folder = dirname(folder)) {
+    if (readdirSync(folder).length > 0) break;
+    rmdirSync(folder);
+  }
+  return { root, worktree: path, branch, removed: true };
+}
+
 function absolute(name: string, value: string | undefined): string {
   if (value === undefined || !value.startsWith("/")) throw new Error(`${name} must be an absolute path, got ${JSON.stringify(value)}`);
   return value;
@@ -95,7 +162,17 @@ export async function run(args: string[], home: string, env: NodeJS.ProcessEnv):
     const key = trustKey(absolute("folder", args[2]));
     return { root: key, changed: await prepare(join(config, ".claude.json"), key, true) };
   }
-  throw new Error(`command must be trust or start, got ${JSON.stringify(command)}`);
+  if (command === "worktree" && args.length === 4) {
+    return addWorktree(home, absolute("folder", args[1]), segment("room", args[2]), segment("member", args[3]));
+  }
+  if (command === "root" && args.length === 2) {
+    const folder = absolute("folder", args[1]);
+    return { root: insideGit(folder) ? repositoryRoot(folder) : null };
+  }
+  if (command === "remove" && args.length === 5) {
+    return removeWorktree(home, absolute("root", args[1]), segment("room", args[2]), segment("member", args[3]), args[4]);
+  }
+  throw new Error(`command must be trust, start, worktree, root or remove, got ${JSON.stringify(command)}`);
 }
 
 if (process.argv[1] !== undefined && /first-start(\.mjs)?$/.test(process.argv[1])) {

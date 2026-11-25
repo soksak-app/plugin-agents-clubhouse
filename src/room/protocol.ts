@@ -6,6 +6,14 @@ import type { RelayPorts } from "./room-relay";
 import { sessionProgram, sessionSubmit } from "./session-channel";
 import { ANSWER_COMMAND } from "./answer";
 
+// The worktree of a member as the program member-worktree answered it (docs/spec/room.md#worktrees).
+export interface MemberWorktree {
+  root: string;
+  worktree: string;
+  branch: string;
+  integration: string;
+}
+
 export interface ProtocolMember {
   id: string;
   name: string;
@@ -16,6 +24,8 @@ export interface ProtocolMember {
   place?: LeaderPlace | null;
   // The agent of a member whose program takes no --agent, which the agent line states; absent otherwise (docs/spec/room.md#agent-line).
   agent?: AgentPlace | null;
+  // The worktree of the member, which the worktree line states; absent for a member without one (docs/spec/room.md#worktrees).
+  worktree?: MemberWorktree | null;
 }
 
 // The agent name of the frontmatter of an agent file and the absolute path of that file.
@@ -45,6 +55,15 @@ function placeRules(place: LeaderPlace): string[] {
 
 // The answer form quotes the text in single quotes, which every shell takes as given on one line; a heredoc form refused in the shell of
 // a member when it was written on one line (C126, docs/spec/room.md#room-protocol).
+
+// The worktree line of a member with a worktree, which the room submits after the protocol line, because the paths would take the room
+// that the bound of the protocol line leaves (docs/spec/room.md#worktrees). In this order conflicts are solved only in the worktree, so
+// none reaches the checkout of the person.
+export function worktreeLine(tree: MemberWorktree): string {
+  const { root, worktree, branch, integration } = tree;
+  return `[@clubhouse] worktree: you work in ${worktree} on ${branch}. Merge ${integration} into it there, where conflicts are solved; test; run git -C ${root} merge --ff-only ${branch}, and when git refuses, merge ${integration} again and retry; name the commit in your answer; merge the newest ${integration} before new work. This line takes no answer.`;
+}
+
 export function roomProtocolLine(self: string, surface: string, mcp = true, place: LeaderPlace | null = null): string {
   const answer = `sok ${ANSWER_COMMAND} --surface ${surface} --turn <token> --status <continue|settled> --index '<sentence>' --text '<text>', each ' in it as '\\''`;
   return [
@@ -136,6 +155,7 @@ export function createProtocolInjector(
       // (docs/spec/room.md#turn-end).
       await sessionSubmit(ports, member.session)(roomProtocolLine(member.name, ports.surface, member.mcp ?? true, member.place ?? null));
       if (member.agent) await sessionSubmit(ports, member.session)(agentLine(member.name, member.agent));
+      if (member.worktree) await sessionSubmit(ports, member.session)(worktreeLine(member.worktree));
       memory.onTaught(member.session);
       return { ok: true };
     } catch (error) {

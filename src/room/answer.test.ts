@@ -126,7 +126,7 @@ describe("an answer across a reload of the room page", () => {
     const before = createAnswerChannel({ newTurn: counter(), delivered: () => {}, restoredAnswer: () => {}, changed: () => {
       written = serializedRoomState({
         group: null, folded: false, conversation, sessions: ["s-1"], protocolSessions: ["s-1"],
-        addressed: { "s-1": [0] }, delivered: { "s-1": 0 }, sent: { "s-1": 1 }, turns: before.tokens(),
+        addressed: { "s-1": [0] }, delivered: { "s-1": 0 }, sent: { "s-1": 1 }, turns: before.tokens(), worktrees: {},
       });
     } });
     before.open("s-1", "m", 1);

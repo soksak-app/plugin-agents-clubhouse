@@ -2,7 +2,7 @@
 // ends before any relayed message; a failure is reported and refuses the member.
 import { execFileSync } from "node:child_process";
 import { describe, expect, it } from "vitest";
-import { agentLine, createProtocolInjector, roomProtocolLine } from "./protocol";
+import { agentLine, createProtocolInjector, roomProtocolLine, worktreeLine } from "./protocol";
 import type { RelayPorts } from "./room-relay";
 import { createConversationStatus } from "./conversation-status";
 
@@ -104,6 +104,27 @@ describe("agentLine", () => {
     expect(agentLine("Codex-1", { agent: "developer", file: "/roles/dev/developer.md" })).toBe(
       "[@clubhouse] agent: you are developer, called @Codex-1. Read the agent file /roles/dev/developer.md and its folder /roles/dev, and follow them as your instructions from now on; this line takes no answer.",
     );
+  });
+});
+
+// C148 (docs/spec/room.md#worktrees): the worktree line states the merge order to a member with a worktree after its protocol line.
+describe("worktreeLine", () => {
+  const tree = { root: "/work/game", worktree: "/home/p/soksak/worktrees/game-1a2b3c4d/tab-1/w1", branch: "clubhouse/tab-1/w1", integration: "main" };
+
+  it("states the worktree, the branch and the merge order with the main checkout and the integration branch", () => {
+    expect(worktreeLine(tree)).toBe(
+      "[@clubhouse] worktree: you work in /home/p/soksak/worktrees/game-1a2b3c4d/tab-1/w1 on clubhouse/tab-1/w1. Merge main into it there, where conflicts are solved; test; run git -C /work/game merge --ff-only clubhouse/tab-1/w1, and when git refuses, merge main again and retry; name the commit in your answer; merge the newest main before new work. This line takes no answer.",
+    );
+  });
+
+  it("is submitted after the protocol line to a member with a worktree, and no line names a worktree without one", async () => {
+    const core = fakeCore({ "s-1": "idle" });
+    const injector = createProtocolInjector(core.ports, () => {});
+    expect(await injector.ensure({ ...claude, worktree: tree })).toEqual({ ok: true });
+    expect(core.submitted.map((one) => one.text)).toEqual([roomProtocolLine("Claude", "room-1"), worktreeLine(tree)]);
+    const plain = fakeCore({ "s-1": "idle" });
+    await createProtocolInjector(plain.ports, () => {}).ensure(claude);
+    for (const one of plain.submitted) expect(one.text).not.toContain("worktree");
   });
 });
 

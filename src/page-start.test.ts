@@ -74,6 +74,8 @@ describe("the start of the room page (C96)", () => {
     expect((view.window.document.querySelector("textarea") as HTMLTextAreaElement).disabled).toBe(false);
     expect([...document.querySelectorAll(".st-tab .nm")].map((name) => name.textContent)).toEqual(["\u2B50 harness"]);
     expect(select.value).toBe("g1");
+    // C148 (docs/spec/room.md#worktrees): a member without a session shows no button 끝내기.
+    expect([...document.querySelectorAll(".st-tab .end")].map((button) => (button as HTMLButtonElement).hidden)).toEqual([true]);
     // C115 (docs/spec/room.md#group): a member that the agents plugin adds to the group reaches the room through the data changes of
     // the agents plugin, which runtime.data.on follows only with {plugin}.
     view.change!.dependencyData("agents", "groups", { g1: { name: "Team", members: ["harness", "reviewer"], leader: "harness" } });

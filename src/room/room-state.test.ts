@@ -17,6 +17,7 @@ const state: RoomState = {
   delivered: { "owned-1": 2 },
   sent: { "owned-1": 2 },
   turns: [{ turn: "t-1", session: "owned-1", member: "harness-harness", count: 2 }],
+  worktrees: { "harness-harness": { root: "/work/game", worktree: "/home/p/soksak/worktrees/game-1a2b3c4d/tab-1/harness-harness", branch: "clubhouse/tab-1/harness-harness", integration: "main" } },
 };
 
 describe("parseRoomState", () => {
@@ -60,6 +61,15 @@ describe("parseRoomState", () => {
 
   it("reads null as a room without a stored state", () => {
     expect(parseRoomState(null)).toBeNull();
+  });
+
+  // C148 (docs/spec/room.md#worktrees): the worktree of each member with one.
+  it("refuses a worktree that is not {root, worktree, branch, integration} with absolute paths", () => {
+    const { worktrees: _w, ...without } = state;
+    expect(() => parseRoomState(without)).toThrow("room tab state: worktrees must be an object of member identifier to worktree, got undefined");
+    expect(() => parseRoomState({ ...state, worktrees: { a: { root: "work", worktree: "/w", branch: "b", integration: "main" } } })).toThrow(
+      'room tab state: worktree a must be {root, worktree, branch, integration} with absolute paths, got {"root":"work","worktree":"/w","branch":"b","integration":"main"}',
+    );
   });
 
   it("reads back the state that the room wrote, with an answer of several lines", () => {

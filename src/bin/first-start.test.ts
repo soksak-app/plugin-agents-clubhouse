@@ -1,7 +1,8 @@
 // The first start program (docs/spec/room.md#first-start) against a real git repository, a real home folder and a real Claude Code
 // configuration file in a temporary folder.
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -91,11 +92,69 @@ describe("first-start start", () => {
   });
 });
 
-// C144 (docs/spec/room.md#leader): the room creates no worktree, so the program takes only trust and start.
-describe("first-start commands", () => {
-  it("refuses add and remove", async () => {
+// C148 (docs/spec/room.md#worktrees): the worktree of a member of a room, on a real repository.
+describe("first-start worktree and remove", () => {
+  const branch = "clubhouse/tab-1/dev-1";
+  const worktreeOf = (home: string, repo: string) => {
+    const hash = createHash("sha256").update(repo).digest("hex").slice(0, 8);
+    return join(home, "soksak", "worktrees", `project-${hash}`, "tab-1", "dev-1");
+  };
+
+  it("creates the worktree on the room branch from the main checkout, names the integration branch, and keeps it when run again", async () => {
+    const { home, repo, git } = setup();
+    mkdirSync(join(repo, "sub"));
+    const worktree = worktreeOf(home, repo);
+    const answer = { root: repo, worktree, branch, integration: "main" };
+    expect(await run(["worktree", join(repo, "sub"), "tab-1", "dev-1"], home, {})).toEqual(answer);
+    expect(git("worktree", "list", "--porcelain")).toContain(`worktree ${worktree}\nHEAD`);
+    expect(git("rev-parse", branch)).toBe(git("rev-parse", "main"));
+    expect(await run(["worktree", repo, "tab-1", "dev-1"], home, {})).toEqual(answer);
+  });
+
+  it("answers no worktree for a folder outside git, and refuses a branch of the room without its worktree and a checkout on no branch", async () => {
+    const { home, repo, git } = setup();
+    const plain = join(home, "plain");
+    mkdirSync(plain);
+    expect(await run(["worktree", plain, "tab-1", "dev-1"], home, {})).toEqual({ worktree: null });
+    git("branch", branch);
+    await expect(run(["worktree", repo, "tab-1", "dev-1"], home, {})).rejects.toThrow(`branch ${branch} exists and is not the worktree of the room`);
+    git("branch", "-D", branch);
+    git("checkout", "-q", "--detach");
+    await expect(run(["worktree", repo, "tab-1", "dev-1"], home, {})).rejects.toThrow(`the main checkout ${repo} is on no branch`);
+    await expect(run(["worktree", repo, "tab-1", "../x"], home, {})).rejects.toThrow("member must match");
+  });
+
+  it("removes a merged worktree with its branch and its empty folders, and refuses changes and an unmerged branch", async () => {
+    const { home, repo, git } = setup();
+    const { worktree } = (await run(["worktree", repo, "tab-1", "dev-1"], home, {})) as { worktree: string };
+    writeFileSync(join(worktree, "new.txt"), "work");
+    await expect(run(["remove", repo, "tab-1", "dev-1", "main"], home, {})).rejects.toThrow(`worktree ${worktree} has changes that are not committed`);
+    execFileSync("git", ["-C", worktree, "add", "new.txt"]);
+    execFileSync("git", ["-C", worktree, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "work"]);
+    await expect(run(["remove", repo, "tab-1", "dev-1", "main"], home, {})).rejects.toThrow(`branch ${branch} is not merged into main`);
+    git("merge", "-q", "--ff-only", branch);
+    expect(await run(["remove", repo, "tab-1", "dev-1", "main"], home, {})).toEqual({ root: repo, worktree, branch, removed: true });
+    expect(git("branch", "--list", branch)).toBe("");
+    expect(existsSync(join(home, "soksak", "worktrees"))).toBe(false);
+  });
+});
+
+describe("first-start root (C148)", () => {
+  it("names the root of the main checkout of a folder, from a worktree too, and null outside git", async () => {
     const { home, repo } = setup();
-    await expect(run(["add", repo, "dev-1"], home, {})).rejects.toThrow('command must be trust or start, got "add"');
-    await expect(run(["remove", repo, "dev-1"], home, {})).rejects.toThrow('command must be trust or start, got "remove"');
+    mkdirSync(join(repo, "sub"));
+    expect(await run(["root", join(repo, "sub")], home, {})).toEqual({ root: repo });
+    const { worktree } = (await run(["worktree", repo, "tab-1", "dev-1"], home, {})) as { worktree: string };
+    expect(await run(["root", worktree], home, {})).toEqual({ root: repo });
+    const plain = join(home, "plain");
+    mkdirSync(plain);
+    expect(await run(["root", plain], home, {})).toEqual({ root: null });
+  });
+});
+
+describe("first-start commands", () => {
+  it("refuses another command", async () => {
+    const { home, repo } = setup();
+    await expect(run(["add", repo, "dev-1"], home, {})).rejects.toThrow('command must be trust, start, worktree, root or remove, got "add"');
   });
 });
