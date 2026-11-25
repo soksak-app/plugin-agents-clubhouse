@@ -3,8 +3,6 @@
 // relation survives a restart. A stored session is reused only while core.sessions lists it as open. The room holds no plugin
 // identifier in its code: the member definitions, with the plugin that runs each member, come from the caller, which reads them
 // from the agents definitions point.
-//
-// Not built yet: the trigger that calls summonMembers, which waits for the definitions source (agents F1045-4 and A5).
 
 import type { RoomPort } from "./port";
 import type { MemberSessionStore } from "./session-store";
