@@ -2,9 +2,7 @@
 //
 // The page starts through the view bridge of @soksak/plugin-api/view (core docs/spec/native-surfaces.md#view-surfaces): it
 // reads the settings and the project data, builds the room (member cards and the conversation), and then
-// registers the commands, elements and status that plugin.json declares (src/room/page.ts). The room has no member transport
-// yet: the transport status is unavailable and the composer stays disabled until the member sessions (C3) and the terminal
-// relay (C5) exist.
+// registers the commands, elements and status that plugin.json declares (src/room/page.ts).
 
 import { createExpose } from "@soksak/plugin-api";
 import { createViewBridge, type ViewBridge } from "@soksak/plugin-api/view";
@@ -25,7 +23,7 @@ import { readAgentDefinitions, startFolders, toMemberDefinition, type AgentDataG
 import { createMemberSessionStore } from "./room/session-store";
 import { serialRunner, summonAndArrange, type TriggerDeps } from "./room/trigger";
 import { createOpenedSessions } from "./room/summon";
-import { conversationTurnsOf, refuseClosedReceivers, relayMessage as relayToReceivers, type RelayPorts } from "./room/room-relay";
+import { conversationTurnsOf, relayMessage as relayToReceivers, type RelayPorts } from "./room/room-relay";
 import { createSubmitQueue } from "./room/submit-queue";
 import { CLAIM_COMMAND, RELEASE_COMMAND, REPORT_COMMAND, createWorkReports, type WorkReports } from "./room/work-reports";
 import { answerSections } from "./room/sections";
@@ -393,8 +391,8 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
       if (stored !== null && openSessionIds.has(stored.sessionId)) next.set(definition.id, stored.sessionId);
     }
     memberSessions = next;
-    // The transport is ready while a member of the room has an open session.
-    setTransport(members.some((entry) => next.has(entry.id)));
+    // The transport is ready while the assigned group has a member, which opens its session at its first turn (docs/spec/room.md#header).
+    setTransport(members.length > 0);
     showStates();
   };
   const refreshReported = (): void => {
@@ -412,13 +410,14 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
         groups = readGroups(stored);
         const before = members.map((entry) => entry.id).join("\n");
         members = groupMembers(definitions, groups, group, (text) => report("room group", text));
+        setTransport(members.length > 0);
         showTitle();
         renderTabs();
         // The conversation names each member by the name of its definition.
         showConversation();
         refreshReported();
-        // A change of the members summons the members without an open session; at start a member with an open session of this room is
-        // reattached (docs/spec/room.md#group, docs/spec/room.md#restart).
+        // A change of the members opens no session: it reattaches the members with an open session of this room and arranges them
+        // (docs/spec/room.md#group, docs/spec/room.md#restart).
         if (members.length > 0 && members.map((entry) => entry.id).join("\n") !== before) summon();
       })
       .catch((error: unknown) => report("agents.definitions", String((error as Error)?.message ?? error)));
@@ -511,25 +510,28 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   };
   // login.check summons the members again, which reads the login of their homes, after the person logs in to an account in the agents
   // plugin (docs/spec/room.md#login).
+  // login.check reads the login of each member that waits for a login again and opens the session of each one whose home now has a
+  // login (docs/spec/room.md#login).
   const checkLogins = async (): Promise<null> => {
-    await summonRun();
+    await summonRun(members.filter((entry) => loginGate.needs(entry.id)).map((entry) => entry.id));
     return null;
   };
-  const summonRun = (): Promise<void> => {
-    // The members of the room, the members of its group, have sessions (docs/spec/room.md#group).
+  // Reattaches the members with an open session of this room and opens the sessions of the members in `opening` whose home has a login;
+  // a member opens its session only at its first turn (docs/spec/room.md#receivers).
+  const summonRun = (opening: string[] = []): Promise<void> => {
     const ids = members.map((entry) => entry.id);
-    let starting = ids;
+    let starting: string[] = [];
     return runTrigger(async () => {
       await sessionsReady;
       // A member without an open session starts only while the home of its account has a login; the others stay members with the state
       // login (docs/spec/room.md#login).
       const closed = ids.flatMap((id) => {
-        if (memberSessions.has(id)) return [];
+        if (memberSessions.has(id) || !opening.includes(id)) return [];
         const definition = definitions.find((one) => one.id === id);
         return definition === undefined ? [] : [{ ...definition, id }];
       });
       await loginGate.startable(closed);
-      starting = ids.filter((id) => !loginGate.needs(id));
+      starting = ids.filter((id) => memberSessions.has(id) || (opening.includes(id) && !loginGate.needs(id)));
       showStates();
       // A starting member starts in the folder of its definition without a question of a first start.
       for (const definition of definitions) if (starting.includes(definition.id)) await prepareStart(definition.id, definition.cwd);
@@ -605,6 +607,15 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
     watchSessions: (listener) => {
       sessionListeners.add(listener);
       return () => void sessionListeners.delete(listener);
+    },
+    // The first turn of a member without a session summons it, which arranges its tab, and submits the room protocol before the turn line
+    // (docs/spec/room.md#receivers).
+    open: async (member) => {
+      await summonRun([member.id]);
+      if (loginGate.needs(member.id)) throw new Error(`member ${member.id}: the home of its account has no login`);
+      const session = (await taughtMembers(openMembers().filter((entry) => entry.id === member.id)))[0]?.session;
+      if (session === undefined) throw new Error(`member ${member.id}: its session did not open`);
+      return session;
     },
   };
   // The conversation shows the room record: it names the owner or a member by its identifier and shows the name of the member.
@@ -862,8 +873,9 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
       const leader = leaderEntry();
       if (leader === undefined) throw new Error("no group is assigned");
       const taught = await taughtMembers(openMembers());
-      refuseClosedReceivers(text, members, taught, leader.id);
-      const answers = await relayToReceivers(relayPorts, taught, text, record, {
+      // A member without a session that received the room protocol opens it at its first turn (docs/spec/room.md#receivers).
+      const group = members.map((entry) => ({ id: entry.id, name: entry.name, session: taught.find((one) => one.id === entry.id)?.session ?? null }));
+      const answers = await relayToReceivers(relayPorts, group, text, record, {
         limit: conversationTurns, stopped, accepted, stopping, leader: leader.id,
       });
       return answers.map((answer) => ({ id: answer.id, text: answer.text }));
@@ -873,6 +885,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
     setGroup: (next) => {
       group = next;
       members = groupMembers(definitions, groups, group, (text) => report("room group", text));
+      setTransport(members.length > 0);
     },
     groupDefined: async (id) => id in readGroups(await agentData("groups")),
     folded: () => folded,
@@ -884,7 +897,6 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
       persist();
     },
     summon,
-    openMembers: () => openMembers().length,
     accept: (text) => {
       input.value = "";
       record.append("owner", text);

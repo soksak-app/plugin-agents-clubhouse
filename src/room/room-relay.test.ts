@@ -3,7 +3,7 @@
 // (docs/spec/room.md#answer). The room port double answers with the declared shapes and moves a session through idle, working and idle
 // as core would; the member of a session runs the answer command during its turn, before its program reports idle.
 import { describe, expect, it } from "vitest";
-import { EMPTY_TURN_TEXT, TURN_RULE, conversationTurnsOf, receiversOf, refuseClosedReceivers, relayMessage, type ConversationBound, type RelayPorts } from "./room-relay";
+import { EMPTY_TURN_TEXT, TURN_RULE, conversationTurnsOf, relayMessage, type ConversationBound, type RelayGroupMember, type RelayPorts } from "./room-relay";
 import { createRoomRecord, leaderRoute, settledRelay, type RoomRecord } from "./room-record";
 import { createSubmitQueue } from "./submit-queue";
 import { createAnswerChannel } from "./answer";
@@ -71,6 +71,10 @@ function fakeCore(
       },
     },
     answers,
+    // A test of a member without an open session replaces it (docs/spec/room.md#receivers).
+    open: async (member) => {
+      throw new Error(`unexpected open of ${member.id}`);
+    },
     // Replaced below by the submit queue over these ports, so a test that replaces execute changes the submits too.
     lines: null as never,
     surface: "room-1",
@@ -110,7 +114,7 @@ function roomRecord(...messages: string[]): RoomRecord {
 // Accepts the message as message.send does, then relays it; the leader is the last member unless one is given.
 function send(
   core: { ports: RelayPorts; bound: { record: RoomRecord | null } },
-  members: typeof THREE,
+  members: RelayGroupMember[],
   record: RoomRecord,
   message: string,
   leader = members.at(-1)!.id,
@@ -281,27 +285,43 @@ describe("relayMessage (docs/spec/room.md#receivers)", () => {
     expect(ids[2]).toBe("tester");
   });
 
-  it("refuses a relay whose leader has no open session", async () => {
+  // C142 (docs/spec/room.md#receivers): a member opens its session at its first turn, before its turn line.
+  it("opens the session of the leader without one before its turn line, and submits the line to the opened session", async () => {
+    const core = fakeCore([IDLE("s-1"), IDLE("s-2")]);
+    const opened: string[] = [];
+    core.ports.open = async (member) => {
+      opened.push(member.id);
+      return "s-2";
+    };
+    const group = [MEMBERS[0], { ...MEMBERS[1], session: null }];
+    const answers = await relayMessage(core.ports, group, "hello", roomRecord("hello"), open("writer"));
+    expect(opened).toEqual(["writer"]);
+    expect(core.submitted.map((entry) => entry.session)).toEqual(["s-2"]);
+    expect(answers.map((answer) => answer.id)).toEqual(["writer"]);
+  });
+
+  it("opens the session of a worker that an answer of the leader mentions only when its turn starts", async () => {
+    const core = fakeCore([IDLE("s-1"), IDLE("s-2"), IDLE("s-3")], { script: { "s-3": ["@claude look", "done"] } });
+    const opened: string[] = [];
+    core.ports.open = async (member) => {
+      opened.push(`${member.id} after ${core.submitted.length} submits`);
+      return "s-1";
+    };
+    const group = [{ ...THREE[0], session: null }, { ...THREE[1], session: null }, THREE[2]];
+    await relayMessage(core.ports, group, "plan it", roomRecord("plan it"), open("tester"));
+    expect(opened).toEqual(["reviewer after 1 submits"]);
+    expect(core.submitted.map((entry) => entry.session)).toEqual(["s-3", "s-1", "s-3"]);
+  });
+
+  it("rejects with the reason of the open and submits nothing when a member does not start, so the owner line is withdrawn", async () => {
     const core = fakeCore([IDLE("s-1")]);
-    await expect(relayMessage(core.ports, [MEMBERS[0]], "hi", roomRecord("hi"), open("writer"))).rejects.toThrow("member writer has no open session");
+    core.ports.open = async (member) => {
+      throw new Error(`member ${member.id}: the home of its account has no login`);
+    };
+    const record = roomRecord();
+    await expect(send(core, [MEMBERS[0], { ...MEMBERS[1], session: null }], record, "hi")).rejects.toThrow("member writer: the home of its account has no login");
     expect(core.submitted).toEqual([]);
-  });
-});
-
-describe("receiversOf (docs/spec/room.md#receivers)", () => {
-  it("names the mentioned workers in mention order, the other workers for @all, and the leader last", () => {
-    expect(receiversOf("hello", THREE, "tester").map((member) => member.id)).toEqual(["tester"]);
-    expect(receiversOf("@codex then @claude", THREE, "tester").map((member) => member.id)).toEqual(["writer", "reviewer", "tester"]);
-    expect(receiversOf("@codex @all", THREE, "tester").map((member) => member.id)).toEqual(["writer", "reviewer", "tester"]);
-    expect(receiversOf("@tester", THREE, "tester").map((member) => member.id)).toEqual(["tester"]);
-  });
-
-  it("refuses a message whose receiver has no open session, and accepts one that names only open members", () => {
-    const open = [THREE[0], THREE[2]];
-    expect(() => refuseClosedReceivers("@codex look", THREE, open, "tester")).toThrow("member Codex has no open session");
-    expect(() => refuseClosedReceivers("@all look", THREE, open, "tester")).toThrow("member Codex has no open session");
-    expect(() => refuseClosedReceivers("hi", THREE, [THREE[0]], "tester")).toThrow("member Tester has no open session");
-    expect(() => refuseClosedReceivers("@claude look", THREE, open, "tester")).not.toThrow();
+    expect(record.lines).toEqual([]);
   });
 });
 

@@ -15,8 +15,6 @@ export interface OperationDeps {
   changed: () => void;
   // Summons the members that have no open session.
   summon: () => void;
-  // The number of members whose session is open.
-  openMembers: () => number;
   // Shows the accepted text in the conversation and clears the input.
   accept: (text: string) => void;
   busy: (value: boolean) => void;
@@ -85,7 +83,6 @@ export function createRoomOperations(deps: OperationDeps): Record<string, (param
       return { answers: [] };
     }
     if (deps.group() === null) throw new Error("no group is assigned");
-    if (deps.openMembers() === 0) throw new Error("no member session is open");
     relaying = true;
     stopped = false;
     deps.busy(true);

@@ -35,8 +35,8 @@ const strings = {
     ko: "{name} 탭에서 답하기",
   },
   transportUnavailable: {
-    en: "No member of the room has an open session.",
-    ko: "열린 세션이 있는 방 멤버가 없습니다.",
+    en: "No group with members is assigned to the room.",
+    ko: "멤버가 있는 그룹이 방에 지정되지 않았습니다.",
   },
   groupChoose: {
     en: "Choose a group",
@@ -63,8 +63,8 @@ const strings = {
     ko: "세션 없음",
   },
   transportReady: {
-    en: "Connected: messages go to the checked members with an open session.",
-    ko: "연결됨: 메시지는 열린 세션이 있는 체크된 멤버에게 갑니다.",
+    en: "Connected: a message goes to the members it mentions and to the leader.",
+    ko: "연결됨: 메시지는 멘션한 멤버와 리더에게 갑니다.",
   },
   unseen: {
     en: "{count} new ↓",

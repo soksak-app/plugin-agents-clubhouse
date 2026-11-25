@@ -21,6 +21,14 @@ export interface NamedRelayMember extends RelayMember {
   name: string;
 }
 
+// A member of the group of the room: its open session that received the room protocol, or null until its first turn opens one
+// (docs/spec/room.md#receivers).
+export interface RelayGroupMember {
+  id: string;
+  name: string;
+  session: string | null;
+}
+
 // The rule of each turn line (docs/spec/room.md#room-protocol): the room cannot read the terminal of a member.
 // The preface of a turn line, before the record lines that the member has not received, and the room line of a turn of a member that
 // has received every record line, which still runs and takes an answer with a status (docs/spec/room.md#modes).
@@ -64,6 +72,9 @@ export interface RelayPorts extends SessionCommandPort {
   waiting: BeginWaiting;
   // Resolves when the last write of the tab state has completed, and rejects with its failure (docs/spec/room.md#restart).
   persisted(): Promise<void>;
+  // Opens the session of a member without one: summons it, arranges its tab and submits the room protocol, and resolves with the
+  // session; it rejects with the reason when the member does not start (docs/spec/room.md#receivers).
+  open(member: { id: string; name: string }): Promise<string>;
 }
 
 function messageOf(error: unknown): string {
@@ -220,7 +231,7 @@ function unreceivedBesidesSettled(record: RoomRecord, member: RelayMember, answe
 }
 
 // The members whose last answer of the relay declares `continue`, in member order.
-function continuing(answers: MemberAnswer[], members: NamedRelayMember[]): NamedRelayMember[] {
+function continuing<T extends { id: string }>(answers: MemberAnswer[], members: T[]): T[] {
   const last = new Map<string, MemberAnswer["status"]>();
   for (const answer of answers) last.set(answer.id, answer.status);
   return members.filter((member) => last.get(member.id) === "continue");
@@ -234,30 +245,47 @@ function continuing(answers: MemberAnswer[], members: NamedRelayMember[]): Named
 // (docs/spec/room.md#settling).
 async function runLeader(
   ports: RelayPorts,
-  leader: NamedRelayMember,
-  members: NamedRelayMember[],
+  leader: RelayGroupMember,
+  members: RelayGroupMember[],
   message: string,
   record: RoomRecord,
   bound: ConversationBound,
 ): Promise<MemberAnswer[]> {
-  const workers = (): NamedRelayMember[] => members.filter((member) => member.id !== leader.id);
+  const workers = (): RelayGroupMember[] => members.filter((member) => member.id !== leader.id);
   const answers: MemberAnswer[] = [];
+  // The session of each member of the relay: its open session, or the session that its first turn opened (docs/spec/room.md#receivers).
+  const opened = new Map<string, string>();
+  for (const member of members) if (member.session !== null) opened.set(member.id, member.session);
+  const live = (member: RelayGroupMember): NamedRelayMember | null => {
+    const session = opened.get(member.id);
+    return session === undefined ? null : { id: member.id, name: member.name, session };
+  };
+  const ready = async (member: RelayGroupMember): Promise<NamedRelayMember> => {
+    const known = live(member);
+    if (known !== null) return known;
+    const session = await ports.open({ id: member.id, name: member.name });
+    opened.set(member.id, session);
+    return { id: member.id, name: member.name, session };
+  };
   // An owner `@all` adds every worker that the message does not name in one batch after the named workers (docs/spec/room.md#mentions).
   const { named, rest } = ownerTurns(message, members, leader.id);
-  const batches: { members: NamedRelayMember[]; byAnswer: boolean }[] = [
+  const batches: { members: RelayGroupMember[]; byAnswer: boolean }[] = [
     ...named.map((member) => ({ members: [member], byAnswer: false })),
     ...(rest.length > 0 ? [{ members: rest, byAnswer: false }] : []),
     { members: [leader], byAnswer: false },
   ];
-  const queued = (member: NamedRelayMember): boolean => batches.some((batch) => batch.members.some((one) => one.id === member.id));
+  const queued = (member: RelayGroupMember): boolean => batches.some((batch) => batch.members.some((one) => one.id === member.id));
   let started = 0;
   for (;;) {
     if (batches.length === 0) {
       const took = new Set(answers.map((answer) => answer.id));
-      const behind = workers().filter((member) => took.has(member.id) && unreceivedBesidesSettled(record, member, answers));
+      const behind = workers().filter((member) => {
+        const one = live(member);
+        return took.has(member.id) && one !== null && unreceivedBesidesSettled(record, one, answers);
+      });
       const open = continuing(answers, members);
       if (behind.length > 0) batches.push(...behind.map((member) => ({ members: [member], byAnswer: true })));
-      else if (record.unsent(leader.session, leader.id).length > 0) batches.push({ members: [leader], byAnswer: true });
+      else if (live(leader) !== null && record.unsent(live(leader)!.session, leader.id).length > 0) batches.push({ members: [leader], byAnswer: true });
       else if (open.length === 0) {
         record.append("clubhouse", "the conversation settled");
         break;
@@ -285,8 +313,11 @@ async function runLeader(
     batches.shift();
     if (batch.byAnswer) started += batch.members.length;
     const arrived: MemberAnswer[] = [];
+    // A member without a session opens it before the turn line of its first turn.
+    const turnMembers: NamedRelayMember[] = [];
+    for (const member of batch.members) turnMembers.push(await ready(member));
     const results = await Promise.allSettled(
-      batch.members.map((member) =>
+      turnMembers.map((member) =>
         relayToMember(ports, member, record, bound.accepted, bound.stopping).then((answer) => {
           appendAnswer(record, answer);
           answers.push(answer);
@@ -326,30 +357,17 @@ function ownerTurns<T extends { id: string; name: string }>(message: string, mem
   return { named, rest, leader: members.filter((member) => member.id === leader) };
 }
 
-// The members of the group that a message of the owner starts, in the order of their turns (docs/spec/room.md#receivers).
-export function receiversOf<T extends { id: string; name: string }>(message: string, group: T[], leader: string): T[] {
-  const turns = ownerTurns(message, group, leader);
-  return [...turns.named, ...turns.rest, ...turns.leader];
-}
-
-// Refuses a message of the owner whose receivers include a member of the group without an open session that received the room protocol,
-// before any submit, so the room record withdraws the line of the owner (docs/spec/room.md#receivers).
-export function refuseClosedReceivers(message: string, group: { id: string; name: string }[], open: { id: string }[], leader: string): void {
-  const closed = receiversOf(message, group, leader).find((member) => !open.some((one) => one.id === member.id));
-  if (closed !== undefined) throw new Error(`member ${closed.name} has no open session`);
-}
-
 // Relays the last message of the owner in the record to its receivers (docs/spec/room.md#receivers) and runs the conversation that their
-// answers start (docs/spec/room.md#conversation). `members` are the members with an open session and the room protocol, and the leader
-// of the bound is one of them; a receiver without an open session is refused before the relay by `message.send`.
+// answers start (docs/spec/room.md#conversation). `members` are the members of the group; a member without a session opens it through
+// `ports.open` when its first turn starts.
 export async function relayMessage(
   ports: RelayPorts,
-  members: NamedRelayMember[],
+  members: RelayGroupMember[],
   message: string,
   record: RoomRecord,
   bound: ConversationBound,
 ): Promise<MemberAnswer[]> {
   const leader = members.find((member) => member.id === bound.leader);
-  if (leader === undefined) throw new Error(`member ${bound.leader} has no open session`);
+  if (leader === undefined) throw new Error(`the leader ${bound.leader} is no member of the group`);
   return runLeader(ports, leader, members, message, record, bound);
 }

@@ -98,7 +98,7 @@ export interface ProtocolMemory {
 }
 
 export function createProtocolInjector(
-  ports: Omit<RelayPorts, "answers" | "lines" | "persisted">,
+  ports: Omit<RelayPorts, "answers" | "lines" | "persisted" | "open">,
   report: (where: string, text: string) => void,
   memory: ProtocolMemory = { taught: [], onTaught: () => {} },
 ): ProtocolInjector {

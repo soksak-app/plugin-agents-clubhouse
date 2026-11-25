@@ -56,9 +56,9 @@ describe("the start of the room page (C96)", () => {
     expect({ errors: view.observed.errors, failures: view.observed.failures, tab: view.observed.tab.error }).toEqual({ errors: [], failures: [], tab: null });
     // C140 (docs/spec/room.md#group): a room tab without a state has no group, so it has no members and no card, and the group select
     // lists the groups of the agents plugin after its placeholder.
-    type State = { group: string | null; members: { id: string; leader: boolean }[] };
+    type State = { group: string | null; members: { id: string; leader: boolean }[]; transport: { state: string } };
     const state = (await view.request("soksak-plugin-agents-clubhouse.state", {})) as State;
-    expect({ group: state.group, members: state.members }).toEqual({ group: null, members: [] });
+    expect({ group: state.group, members: state.members, transport: state.transport.state }).toEqual({ group: null, members: [], transport: "unavailable" });
     const document = view.window.document;
     expect(document.querySelectorAll(".st-tab").length).toBe(0);
     const select = document.querySelector(".st-group") as HTMLSelectElement;
@@ -69,6 +69,9 @@ describe("the start of the room page (C96)", () => {
     expect(await view.request("soksak-plugin-agents-clubhouse.group.set", { group: "g1" })).toEqual({ group: "g1" });
     const assigned = (await view.request("soksak-plugin-agents-clubhouse.state", {})) as State;
     expect({ group: assigned.group, members: assigned.members }).toEqual({ group: "g1", members: [{ id: "harness", leader: true }] });
+    // C142 (docs/spec/room.md#header): the composer takes input while the group has a member, before any member session is open.
+    expect(assigned.transport.state).toBe("ready");
+    expect((view.window.document.querySelector("textarea") as HTMLTextAreaElement).disabled).toBe(false);
     expect([...document.querySelectorAll(".st-tab .nm")].map((name) => name.textContent)).toEqual(["\u2B50 harness"]);
     expect(select.value).toBe("g1");
     // C115 (docs/spec/room.md#group): a member that the agents plugin adds to the group reaches the room through the data changes of

@@ -20,7 +20,6 @@ function room(overrides: Partial<OperationDeps> = {}) {
     },
     changed: () => void log.push("changed"),
     summon: () => void log.push("summon"),
-    openMembers: () => 1,
     accept: (text) => void log.push(`accept ${text}`),
     busy: (value) => void log.push(`busy ${value}`),
     relay: async (text) => [{ id: "b", text: `answer to ${text}` }],
@@ -77,13 +76,15 @@ describe("message.send", () => {
     expect(r.log).toEqual(["busy true", "accept hello", "busy false"]);
   });
 
-  it("refuses an empty text and a send without an open member session, and takes a send during a relay", async () => {
+  it("relays a message while no member session is open, because each member opens its session at its first turn (C142)", async () => {
+    const r = room();
+    expect(await r.commands[`${P}.message.send`]({ text: "hello" })).toEqual({ answers: [{ id: "b", text: "answer to hello" }] });
+  });
+
+  it("refuses an empty text and a send without a group, and takes a send during a relay", async () => {
     const empty = room();
     await expect(empty.commands[`${P}.message.send`]({ text: " " })).rejects.toThrow('text must be a non-empty string, got " "');
     expect(empty.log).toEqual(['failed text must be a non-empty string, got " "']);
-    const closed = room({ openMembers: () => 0 });
-    await expect(closed.commands[`${P}.message.send`]({ text: "hi" })).rejects.toThrow("no member session is open");
-    expect(closed.log).toEqual(["failed no member session is open"]);
     const groupless = room({ group: () => null });
     await expect(groupless.commands[`${P}.message.send`]({ text: "hi" })).rejects.toThrow("no group is assigned");
     expect(groupless.log).toEqual(["failed no group is assigned"]);

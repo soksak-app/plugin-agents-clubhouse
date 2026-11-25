@@ -19,7 +19,7 @@ function fakeCore(initial: Record<string, State | null>) {
   };
   // The conversation status of the room is the tracker of the awaited members (docs/spec/room.md#conversation-status).
   const status = createConversationStatus([], value, () => []);
-  const ports: Omit<RelayPorts, "answers" | "lines" | "persisted"> = {
+  const ports: Omit<RelayPorts, "answers" | "lines" | "persisted" | "open"> = {
     waiting: status.waiting,
     commands: {
       execute: async (name, params) => {
