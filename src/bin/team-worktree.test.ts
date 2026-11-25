@@ -108,6 +108,7 @@ describe("team-worktree start", () => {
     expect(await run(["start", account, repo], home, {})).toEqual({ root: repo, changed: true });
     expect(JSON.parse(readFileSync(join(account, ".claude.json"), "utf8"))).toEqual({
       hasCompletedOnboarding: true,
+      claudeInChromeDefaultEnabled: false,
       projects: { [repo]: { hasTrustDialogAccepted: true } },
     });
     expect(config(home)).toEqual({ numStartups: 3, projects: { "/other": { hasTrustDialogAccepted: true } } });
@@ -118,17 +119,18 @@ describe("team-worktree start", () => {
     const account = accountHome(home);
     const maker = join(home, "maker");
     mkdirSync(maker);
-    writeFileSync(join(account, ".claude.json"), JSON.stringify({ hasCompletedOnboarding: true, userID: "u", projects: { [repo]: { hasTrustDialogAccepted: true, allowedTools: [] } } }));
+    writeFileSync(join(account, ".claude.json"), JSON.stringify({ hasCompletedOnboarding: true, claudeInChromeDefaultEnabled: true, userID: "u", projects: { [repo]: { hasTrustDialogAccepted: true, allowedTools: [] } } }));
     expect(await run(["start", account, repo], home, {})).toEqual({ root: repo, changed: false });
     expect(await run(["start", account, maker], home, {})).toEqual({ root: maker, changed: true });
     expect(JSON.parse(readFileSync(join(account, ".claude.json"), "utf8"))).toEqual({
       hasCompletedOnboarding: true,
+      claudeInChromeDefaultEnabled: true,
       userID: "u",
       projects: { [repo]: { hasTrustDialogAccepted: true, allowedTools: [] }, [maker]: { hasTrustDialogAccepted: true } },
     });
     writeFileSync(join(account, ".claude.json"), JSON.stringify({ projects: { [repo]: { hasTrustDialogAccepted: true } } }));
     expect(await run(["start", account, repo], home, {})).toEqual({ root: repo, changed: true });
-    expect(JSON.parse(readFileSync(join(account, ".claude.json"), "utf8")).hasCompletedOnboarding).toBe(true);
+    expect(JSON.parse(readFileSync(join(account, ".claude.json"), "utf8"))).toMatchObject({ hasCompletedOnboarding: true, claudeInChromeDefaultEnabled: false });
   });
 
   it("refuses a relative configuration folder or folder and a configuration file that is not a JSON object", async () => {

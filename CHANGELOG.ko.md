@@ -2,6 +2,7 @@
 
 ## 미출시
 
+- C135-1: `member-start`가 그 답이 없는 home에 `claudeInChromeDefaultEnabled` `false`도 써서, member가 Chrome extension을 기본 browser로 쓸지 묻는 질문에서 멈추지 않는다.
 - C135: Claude Code member가 시작하기 전에 방이 선언된 program `member-start`로 account home의 configuration file에 `hasCompletedOnboarding`과 시작 folder와 각 `--add-dir` folder의 trust를, 없는 것만 쓴다. 그래서 member는 text style 선택, security notes, folder trust 질문 없이 열린다. `project-trust`는 folder를 받아 home이 없는 definition에 쓰이고, `team-worktree add`는 더 이상 trust를 쓰지 않는다.
 - C134: 0.0.25 형식의 저장된 room state를 C120의 형식으로 고쳤고 `member`는 `checked`와 같아요. 그래서 room이 더 이상 `roster must be an array of {id, member, checked, role, leader}`로 거절하지 않아요.
 - C130: room은 member를 시작하기 전에 각 member의 home login을 그 CLI의 문서화된 status 명령으로 읽어요. `claude auth status --json`(program `claude-status`)은 `configDirectory`가 그 home이어야 하고, `codex login status`(program `codex-status`)도 써요. login이 없는 home의 member는 session을 열지 않고, card는 `로그인 필요: 에이전트 정의에서 계정에 로그인`과 `로그인 확인` 버튼을 보여요. 버튼은 `login.check`를 실행해서 member를 다시 summon해요. room은 login을 열지 않아요. agents plugin이 계정에 login하고 member는 그 login을 써요. 전에는 member가 CLI의 첫 시작(text style 선택과 login)에서 시작했고 room은 그 member에게 line을 보냈어요. Red: login module, card 상태, 선언된 command test가 실패했어요. Green: `npx vitest run`의 test 376개가 모두 통과하고 `npx tsc --noEmit`이 통과해요.

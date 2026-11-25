@@ -9,7 +9,8 @@
 // repository, so two repositories with one name keep separate folders.
 // Claude Code keeps the trust of a folder in projects[<path>].hasTrustDialogAccepted of its configuration file, keyed by the root of
 // the main checkout for a folder in a git repository and by the folder itself otherwise, and a worktree follows that root (Claude Code permissions documentation, "What runs before you trust a folder").
-// It keeps the end of its first-start steps, the text style and the security notes, in hasCompletedOnboarding of the same file
+// It keeps the end of its first-start steps, the text style and the security notes, in hasCompletedOnboarding of the same file, and the
+// answer of its question whether the Chrome extension is the default browser of a session in claudeInChromeDefaultEnabled
 // (docs/spec/room.md#first-start).
 // The program writes that member under the lock of proper-lockfile and replaces the file whole, because Claude Code rewrites the same
 // file while it runs.
@@ -55,8 +56,15 @@ export function claudeConfigFile(home: string, env: NodeJS.ProcessEnv): string {
   return join(env.CLAUDE_CONFIG_DIR || home, ".claude.json");
 }
 
-// Writes the trust of root, and with onboarding the end of the first-start steps, into the configuration file, each only when it is
-// missing. Answers whether the file changed.
+// The answers of the first-start questions of an account home: the first-start steps are done, and a member keeps browser tools off,
+// the answer that the question gives without a choice, because a member uses the browser tab of soksak (docs/spec/room.md#first-start).
+const FIRST_START: Array<[string, (value: unknown) => boolean, unknown]> = [
+  ["hasCompletedOnboarding", (value) => value === true, true],
+  ["claudeInChromeDefaultEnabled", (value) => typeof value === "boolean", false],
+];
+
+// Writes the trust of root, and with onboarding the answers of the first-start questions, into the configuration file, each only when it
+// is missing. Answers whether the file changed.
 export async function prepare(file: string, root: string, onboarding: boolean): Promise<boolean> {
   if (!existsSync(file)) writeFileSync(file, "{}\n", { flag: "wx" });
   const release = await lockfile.lock(file, { retries: { retries: 20, minTimeout: 50, maxTimeout: 500 }, realpath: false });
@@ -68,9 +76,9 @@ export async function prepare(file: string, root: string, onboarding: boolean): 
     if (typeof projects !== "object" || Array.isArray(projects)) throw new Error(`${file}: projects is not an object`);
     const key = root.normalize("NFC");
     const trusted = projects[key]?.hasTrustDialogAccepted === true;
-    const onboarded = !onboarding || config.hasCompletedOnboarding === true;
-    if (trusted && onboarded) return false;
-    if (!onboarded) config.hasCompletedOnboarding = true;
+    const missing = onboarding ? FIRST_START.filter(([key, answered]) => !answered(config[key])) : [];
+    if (trusted && missing.length === 0) return false;
+    for (const [key, , answer] of missing) config[key] = answer;
     if (!trusted) projects[key] = { ...(projects[key] ?? {}), hasTrustDialogAccepted: true };
     config.projects = projects;
     const next = `${file}.soksak-${process.pid}`;
