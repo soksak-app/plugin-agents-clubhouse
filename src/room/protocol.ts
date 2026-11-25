@@ -113,7 +113,8 @@ export function roomProtocolLine(self: string, surface: string, mcp = true, plac
 }
 
 // The outcome of the protocol turn of one member; a refusal has already been reported through the room error path.
-export type ProtocolOutcome = { ok: true } | { ok: false; reason: string };
+// A stop of the owner ends the turn without a report, and the next ensure of the session submits the protocol again (C151).
+export type ProtocolOutcome = { ok: true } | { ok: false; reason: string } | { ok: false; stopped: true; reason: string };
 
 export interface ProtocolInjector {
   // Resolves with the outcome once the protocol turn of the member's session has ended or failed; it never rejects.
@@ -125,7 +126,11 @@ export interface ProtocolMemory {
   taught: string[];
   // Called with each session whose protocol turn ended, so the room keeps it.
   onTaught: (session: string) => void;
+  // Adds a listener of conversation.stop, which ends the wait for the first idle; it returns the removal (docs/spec/room.md#commands).
+  stopping?: (listener: () => void) => () => void;
 }
+
+class ProtocolStopped extends Error {}
 
 export function createProtocolInjector(
   ports: Omit<RelayPorts, "answers" | "lines" | "persisted" | "open">,
@@ -134,9 +139,13 @@ export function createProtocolInjector(
 ): ProtocolInjector {
   const done = new Map<string, Promise<ProtocolOutcome>>(memory.taught.map((session) => [session, Promise.resolve({ ok: true })]));
   // Resolves when the session first reports idle, from the current value or from the next values of core.sessions.
+  // conversation.stop ends the wait with ProtocolStopped.
   const firstIdle = (session: string) =>
     new Promise<void>((resolve, reject) => {
-      let stop: () => void = () => {};
+      const stops: (() => void)[] = [];
+      const stop = (): void => {
+        for (const one of stops.splice(0)) one();
+      };
       const check = (value: unknown): boolean => {
         try {
           if (sessionProgram(value, session) !== "idle") return false;
@@ -150,7 +159,13 @@ export function createProtocolInjector(
         return true;
       };
       if (check(ports.sessions())) return;
-      stop = ports.watchSessions((value) => void check(value));
+      stops.push(ports.watchSessions((value) => void check(value)));
+      if (memory.stopping) {
+        stops.push(memory.stopping(() => {
+          stop();
+          reject(new ProtocolStopped());
+        }));
+      }
     });
   // A session that core.sessions no longer lists has ended; a later summon opens the session that replaces it, and that session
   // receives its own protocol turn. The end is no failure of the member, so it is not reported.
@@ -171,6 +186,10 @@ export function createProtocolInjector(
       memory.onTaught(member.session);
       return { ok: true };
     } catch (error) {
+      if (error instanceof ProtocolStopped) {
+        done.delete(member.session);
+        return { ok: false, stopped: true, reason: `member ${member.id}: the owner stopped the conversation before its protocol turn` };
+      }
       if (!listed(member.session)) {
         return { ok: false, reason: `member ${member.id}: session ${member.session} ended before its protocol turn` };
       }

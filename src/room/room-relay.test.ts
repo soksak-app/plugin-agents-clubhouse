@@ -4,7 +4,7 @@
 // as core would; the member of a session runs the answer command during its turn, before its program reports idle.
 import { formatISO } from "date-fns";
 import { describe, expect, it } from "vitest";
-import { EMPTY_TURN_TEXT, TURN_RULE, conversationTurnsOf, relayMessage, type ConversationBound, type RelayGroupMember, type RelayPorts } from "./room-relay";
+import { EMPTY_TURN_TEXT, TURN_RULE, TurnStopped, conversationTurnsOf, relayMessage, type ConversationBound, type RelayGroupMember, type RelayPorts } from "./room-relay";
 import { createRoomRecord, leaderRoute, settledRelay, type RoomRecord } from "./room-record";
 import { createSubmitQueue } from "./submit-queue";
 import { createAnswerChannel } from "./answer";
@@ -323,6 +323,21 @@ describe("relayMessage (docs/spec/room.md#receivers)", () => {
     await expect(send(core, [MEMBERS[0], { ...MEMBERS[1], session: null }], record, "hi")).rejects.toThrow("member writer: the home of its account has no login");
     expect(core.submitted).toEqual([]);
     expect(record.lines).toEqual([]);
+  });
+});
+
+// C151 (docs/spec/room.md#commands): a stop during the open of a member ends the conversation as a stop, not as a failure.
+describe("a stop while a member opens", () => {
+  it("ends the conversation with the stop line when the open rejects with TurnStopped", async () => {
+    const core = fakeCore([IDLE("s-1")]);
+    core.ports.open = async () => {
+      throw new TurnStopped();
+    };
+    const record = roomRecord("hi");
+    const answers = await relayMessage(core.ports, [{ ...MEMBERS[0], session: null }], "hi", record, open("reviewer"));
+    expect(answers).toEqual([]);
+    expect(core.submitted).toEqual([]);
+    expect(record.lines.map((line) => line.text).at(-1)).toBe("the conversation ended: the owner stopped it");
   });
 });
 

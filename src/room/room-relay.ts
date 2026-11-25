@@ -213,7 +213,7 @@ export interface ConversationBound {
 }
 
 // The stop of the owner ended a turn that waited for a blocked session or for its answer.
-class TurnStopped extends Error {
+export class TurnStopped extends Error {
   constructor() {
     super("the owner stopped the conversation");
   }
@@ -321,7 +321,14 @@ async function runLeader(
     const arrived: MemberAnswer[] = [];
     // A member without a session opens it before the turn line of its first turn.
     const turnMembers: NamedRelayMember[] = [];
-    for (const member of batch.members) turnMembers.push(await ready(member));
+    try {
+      for (const member of batch.members) turnMembers.push(await ready(member));
+    } catch (error) {
+      // A stop during the open of a member ends the conversation as a stop (C151).
+      if (!(error instanceof TurnStopped)) throw error;
+      record.append("clubhouse", "the conversation ended: the owner stopped it");
+      break;
+    }
     const results = await Promise.allSettled(
       turnMembers.map((member) =>
         relayToMember(ports, member, record, bound.accepted, bound.stopping).then((answer) => {

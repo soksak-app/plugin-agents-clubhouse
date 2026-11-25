@@ -23,7 +23,7 @@ import { readAgentDefinitions, startFolders, toMemberDefinition, type AgentDataG
 import { createMemberSessionStore } from "./room/session-store";
 import { serialRunner, summonAndArrange, type TriggerDeps } from "./room/trigger";
 import { createOpenedSessions } from "./room/summon";
-import { conversationTurnsOf, relayMessage as relayToReceivers, type RelayPorts } from "./room/room-relay";
+import { TurnStopped, conversationTurnsOf, relayMessage as relayToReceivers, type RelayPorts } from "./room/room-relay";
 import { createSubmitQueue } from "./room/submit-queue";
 import { CLAIM_COMMAND, RELEASE_COMMAND, REPORT_COMMAND, createWorkReports, type WorkReports } from "./room/work-reports";
 import { answerSections } from "./room/sections";
@@ -695,8 +695,11 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
     open: async (member) => {
       await summonRun([member.id]);
       if (loginGate.needs(member.id)) throw new Error(`member ${member.id}: the home of its account has no login`);
-      const session = (await taughtMembers(openMembers().filter((entry) => entry.id === member.id)))[0]?.session;
-      if (session === undefined) throw new Error(`member ${member.id}: its session did not open`);
+      const [outcome] = await protocolOutcomes(openMembers().filter((entry) => entry.id === member.id));
+      if (outcome === undefined) throw new Error(`member ${member.id}: its session did not open`);
+      if (!outcome.result.ok && "stopped" in outcome.result) throw new TurnStopped();
+      if (!outcome.result.ok) throw new Error(outcome.result.reason);
+      const session = outcome.member.session;
       return session;
     },
   };
@@ -915,6 +918,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
       taughtSessions.add(session);
       persist();
     },
+    stopping: (listener) => stopping(listener),
   });
   // A token kept from before a restart shows its member as waiting for the answer until the answer or conversation.stop closes it.
   for (const token of answers.tokens()) keptWaits.set(token.turn, relayPorts.waiting({ id: token.member, session: token.session }, "answer"));
@@ -923,14 +927,15 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   // (docs/spec/room.md#work-reports, docs/spec/room.md#owner-follow-up).
   work = createWorkReports({ answers, lines, sessions: () => sessionsValue, report }, record, roomMembers);
   // Resolves with the members whose protocol turn has ended; a refused member receives no relayed message.
-  const taughtMembers = async (members: OpenMember[]): Promise<OpenMember[]> => {
-    const outcomes = await Promise.all(
-      members.map((member) =>
-        protocol.ensure({ ...member, place: placeOf(member), agent: memberAgents.get(member.id) ?? null, worktree: worktrees.get(member.id) ?? null, memory: memories.get(member.id) ?? null }),
-      ),
+  const protocolOutcomes = (members: OpenMember[]) =>
+    Promise.all(
+      members.map(async (member) => ({
+        member,
+        result: await protocol.ensure({ ...member, place: placeOf(member), agent: memberAgents.get(member.id) ?? null, worktree: worktrees.get(member.id) ?? null, memory: memories.get(member.id) ?? null }),
+      })),
     );
-    return members.filter((_, index) => outcomes[index].ok);
-  };
+  const taughtMembers = async (members: OpenMember[]): Promise<OpenMember[]> =>
+    (await protocolOutcomes(members)).filter((one) => one.result.ok).map((one) => one.member);
   // The place of a member in a room with a leader, which its protocol line states (docs/spec/room.md#leader).
   const placeOf = (member: OpenMember) => {
     const leader = leaderEntry();

@@ -234,6 +234,30 @@ describe("createProtocolInjector waiting (docs/spec/room.md#conversation-status)
   });
 });
 
+// C151 (docs/spec/room.md#commands): conversation.stop ends the wait of a protocol turn for the first idle, and a later turn retries it.
+describe("createProtocolInjector stop", () => {
+  it("ends the wait for the first idle at a stop without a report, and submits the protocol at the next ensure after idle", async () => {
+    const core = fakeCore({ "s-1": null });
+    const stops = new Set<() => void>();
+    const reports: string[] = [];
+    const injector = createProtocolInjector(core.ports, (where, text) => void reports.push(`${where}: ${text}`), {
+      taught: [],
+      onTaught: () => {},
+      stopping: (listener) => (stops.add(listener), () => void stops.delete(listener)),
+    });
+    const turn = injector.ensure(claude);
+    expect(core.status.read().waiting).toEqual([{ member: "reviewer", session: "s-1", step: "protocol", program: null }]);
+    for (const stop of [...stops]) stop();
+    expect(await turn).toEqual({ ok: false, stopped: true, reason: "member reviewer: the owner stopped the conversation before its protocol turn" });
+    expect(core.status.read().waiting).toEqual([]);
+    expect(stops.size).toBe(0);
+    expect(reports).toEqual([]);
+    core.set("s-1", "idle");
+    expect(await injector.ensure(claude)).toEqual({ ok: true });
+    expect(core.submitted.map((one) => one.text)).toEqual([roomProtocolLine("Claude", "room-1")]);
+  });
+});
+
 describe("createProtocolInjector after a restart (docs/spec/room.md#restart)", () => {
   it("submits no protocol line to a session that received it before, and names each session that receives it", async () => {
     const core = fakeCore({ "s-1": "idle", "s-2": "idle" });
