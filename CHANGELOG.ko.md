@@ -2,6 +2,7 @@
 
 ## 미출시
 
+- C166: 버전은 0.0.32이고, C165를 release한다.
 - C165: `room.check`는 실행할 때 각 home의 login을 읽으므로, 메시지가 거절되기 전에 login 없는 home을 나열한다.
 - C164: 버전은 0.0.31이고, C131, C132, C133을 release한다.
 - C131, C132, C133: 다시 열리는 member session은 같은 account home과 folder에서 CLI 대화를 이어 간다. Claude Code는 `--session-id`와 `--resume`을, 자기 worktree의 Codex는 `resume --last`를 쓴다. tab state는 `conversations`가 있는 format 4다. 명세는 사람이 member tab에서 답하는 첫 시작 질문을 적는다.

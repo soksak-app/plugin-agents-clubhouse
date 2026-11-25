@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- C166: The version is 0.0.32, which releases C165.
 - C165: `room.check` reads the login of each home when it runs, so a home without a login is listed before a message is refused.
 - C164: The version is 0.0.31, which releases C131, C132 and C133.
 - C131, C132, C133: A member session that opens again continues the conversation of its CLI from the same account home and folder, with `--session-id` and `--resume` of Claude Code and `resume --last` of Codex in the own worktree; the tab state is format 4 with `conversations`; the specification states the first-start questions that the person answers in the member tab.
