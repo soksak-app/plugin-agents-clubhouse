@@ -8,7 +8,8 @@ export interface MemberOpenDeps {
   // The check of the member before its session opens, which rejects with its reasons (docs/spec/room.md#check).
   check: (id: string) => Promise<void>;
   summon: (id: string) => Promise<void>;
-  needsLogin: (id: string) => boolean;
+  // The account of the member while the home of that account has no login, or null (docs/spec/room.md#login).
+  loginless: (id: string) => string | null;
   // The protocol turn of the open session of the member, or undefined when the member has no open session.
   protocol: (id: string) => Promise<{ session: string; result: ProtocolOutcome } | undefined>;
   // The number of stops of the owner so far.
@@ -21,7 +22,9 @@ export function createMemberOpen(deps: MemberOpenDeps): (member: { id: string; n
     const stops = deps.stops();
     await deps.summon(member.id);
     if (deps.stops() !== stops) throw new TurnStopped();
-    if (deps.needsLogin(member.id)) throw new Error(`member ${member.id}: the home of its account has no login`);
+    const account = deps.loginless(member.id);
+    // The refusal names the account and the place of its login, because the room opens no login (docs/spec/room.md#login).
+    if (account !== null) throw new Error(`member ${member.id}: the account ${account} has no login; log in to it in the agent definitions and send again`);
     const outcome = await deps.protocol(member.id);
     if (outcome === undefined) throw new Error(`member ${member.id}: its session did not open`);
     if (!outcome.result.ok && "stopped" in outcome.result) throw new TurnStopped();

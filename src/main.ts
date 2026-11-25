@@ -761,7 +761,12 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
         }
       },
       summon: (id) => summonRun([id]),
-      needsLogin: (id) => loginGate.needs(id),
+      loginless: (id) => {
+        if (!loginGate.needs(id)) return null;
+        const definition = definitions.find((one) => one.id === id);
+        if (definition === undefined) throw new Error(`member ${id} has no agent definition`);
+        return definition.account;
+      },
       protocol: async (id) => {
         const [outcome] = await protocolOutcomes(openMembers().filter((entry) => entry.id === id));
         return outcome === undefined ? undefined : { session: outcome.member.session, result: outcome.result };

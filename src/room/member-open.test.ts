@@ -5,7 +5,7 @@ import { createMemberOpen, relayGroup } from "./member-open";
 import { TurnStopped } from "./room-relay";
 import type { ProtocolOutcome } from "./protocol";
 
-function setup(outcomes: ProtocolOutcome[], onSummon: () => void = () => {}, refusal: string | null = null) {
+function setup(outcomes: ProtocolOutcome[], onSummon: () => void = () => {}, refusal: string | null = null, loginless: string | null = null) {
   const calls: string[] = [];
   let stops = 0;
   const open = createMemberOpen({
@@ -17,7 +17,7 @@ function setup(outcomes: ProtocolOutcome[], onSummon: () => void = () => {}, ref
       calls.push(`summon ${id}`);
       onSummon();
     },
-    needsLogin: () => false,
+    loginless: () => loginless,
     protocol: async (id) => {
       calls.push(`protocol ${id}`);
       const result = outcomes.shift();
@@ -46,6 +46,15 @@ describe("createMemberOpen", () => {
     await expect(setup([{ ok: false, stopped: true, reason: "r" }]).open({ id: "a", name: "A" })).rejects.toBeInstanceOf(TurnStopped);
     await expect(setup([{ ok: false, reason: "member a: refused" }]).open({ id: "a", name: "A" })).rejects.toThrow("member a: refused");
     await expect(setup([]).open({ id: "a", name: "A" })).rejects.toThrow("member a: its session did not open");
+  });
+
+  // C161 (docs/spec/room.md#login): the refusal of a member without a login names the account and where the person logs in to it.
+  it("refuses a member whose account has no login with the account and the place of the login, and asks no protocol turn", async () => {
+    const t = setup([{ ok: true }], () => {}, null, "claude");
+    await expect(t.open({ id: "a", name: "A" })).rejects.toThrow(
+      "member a: the account claude has no login; log in to it in the agent definitions and send again",
+    );
+    expect(t.calls).toEqual(["check a", "summon a"]);
   });
 
   // C152 (docs/spec/room.md#check): a member that the check refuses opens no session.

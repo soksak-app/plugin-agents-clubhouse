@@ -321,10 +321,10 @@ describe("relayMessage (docs/spec/room.md#receivers)", () => {
   it("rejects with the reason of the open and submits nothing when a member does not start, so the owner line is withdrawn", async () => {
     const core = fakeCore([IDLE("s-1")]);
     core.ports.open = async (member) => {
-      throw new Error(`member ${member.id}: the home of its account has no login`);
+      throw new Error(`member ${member.id}: the account claude has no login; log in to it in the agent definitions and send again`);
     };
     const record = roomRecord();
-    await expect(send(core, [MEMBERS[0], { ...MEMBERS[1], session: null }], record, "hi")).rejects.toThrow("member writer: the home of its account has no login");
+    await expect(send(core, [MEMBERS[0], { ...MEMBERS[1], session: null }], record, "hi")).rejects.toThrow("member writer: the account claude has no login; log in to it in the agent definitions and send again");
     expect(core.submitted).toEqual([]);
     expect(record.lines).toEqual([]);
   });

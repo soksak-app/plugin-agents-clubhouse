@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- C161: The refusal of a member without a login names the account and the agent definitions, where the person logs in to it.
 - C160: The page start test fixes the language to Korean, so it passes in every locale.
 - C157-1: The dependency test of the room definitions expects `@soksak/plugin-agents` `>=0.0.10`.
 - C159: The send button and the input send a message again: `message.send` declares `mood`, and a refusal before `message.send` runs shows as `message.send: <reason>`.
