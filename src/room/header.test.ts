@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // The header of the room (C37, C138, C140, docs/spec/room.md#header): the first line holds the plugin name and the group select;
 // the member cards stand in a grid of equal columns that uses the whole width, and a grid of three rows or more folds to its first two
-// rows. The mode bar above the composer holds the mode buttons and the transport status, which shrinks with an ellipsis and shows its
+// rows. The status bar above the composer holds the transport status, which shrinks with an ellipsis and shows its
 // whole text as its tooltip. jsdom computes the cascade of the style sheet and lays out nothing, so the tests read the declared
 // properties and pass the width of the grid.
 import { beforeEach, describe, expect, it } from "vitest";
@@ -12,11 +12,8 @@ const LABELS = { fold: "접기", unfold: "펼치기" };
 
 function header() {
   const h = createRoomHeader("에이전트 클럽하우스", STATUS, LABELS);
-  const button = document.createElement("button");
-  button.textContent = "순차";
-  h.kib.append(button);
-  document.body.append(h.bar, h.modeBar);
-  return { ...h, mode: button };
+  document.body.append(h.bar, h.statusBar);
+  return h;
 }
 
 function cards(h: ReturnType<typeof header>, count: number): HTMLElement[] {
@@ -75,7 +72,7 @@ describe("grid of the member cards", () => {
   });
 });
 
-describe("first line and mode bar", () => {
+describe("first line and status bar", () => {
   it("puts the plugin name on the left and the group select on the right of the first line (C140)", () => {
     const h = header();
     expect(h.top.firstElementChild?.textContent).toBe("에이전트 클럽하우스");
@@ -95,9 +92,9 @@ describe("first line and mode bar", () => {
     expect(h.group.value).toBe("g2");
   });
 
-  it("keeps each mode button on one line", () => {
+  it("holds only the transport status in the status bar, because the room has no conversation mode (C141)", () => {
     const h = header();
-    expect(getComputedStyle(h.mode).whiteSpace).toBe("nowrap");
+    expect([...h.statusBar.children]).toEqual([h.status]);
   });
 
   it("shrinks the transport status with an ellipsis and shows its whole text as its tooltip", () => {

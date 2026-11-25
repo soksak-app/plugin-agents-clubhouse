@@ -1,7 +1,7 @@
 // soksak-plugin-agents-clubhouse — the room page (ui/clubhouse.html, the view surface of plugin.json).
 //
 // The page starts through the view bridge of @soksak/plugin-api/view (core docs/spec/native-surfaces.md#view-surfaces): it
-// reads the settings and the project data, builds the room (member cards, conversation mode), and then
+// reads the settings and the project data, builds the room (member cards and the conversation), and then
 // registers the commands, elements and status that plugin.json declares (src/room/page.ts). The room has no member transport
 // yet: the transport status is unavailable and the composer stays disabled until the member sessions (C3) and the terminal
 // relay (C5) exist.
@@ -10,7 +10,7 @@ import { createExpose } from "@soksak/plugin-api";
 import { createViewBridge, type ViewBridge } from "@soksak/plugin-api/view";
 import manifest from "../plugin.json";
 import { t, tp } from "./i18n";
-import { createRoomCommands, type RoomMode, type RoomState } from "./room/commands";
+import { createRoomCommands, type RoomState } from "./room/commands";
 import type { ElementTarget, RoomHandlers } from "./room/exposure";
 import { startRoomPage, type RoomContext } from "./room/page";
 import type { RoomPort } from "./room/port";
@@ -25,7 +25,7 @@ import { readAgentDefinitions, startFolders, toMemberDefinition, type AgentDataG
 import { createMemberSessionStore } from "./room/session-store";
 import { serialRunner, summonAndArrange, type TriggerDeps } from "./room/trigger";
 import { createOpenedSessions } from "./room/summon";
-import { conversationTurnsOf, relayInMode, type RelayPorts } from "./room/room-relay";
+import { conversationTurnsOf, refuseClosedReceivers, relayMessage as relayToReceivers, type RelayPorts } from "./room/room-relay";
 import { createSubmitQueue } from "./room/submit-queue";
 import { CLAIM_COMMAND, RELEASE_COMMAND, REPORT_COMMAND, createWorkReports, type WorkReports } from "./room/work-reports";
 import { answerSections } from "./room/sections";
@@ -45,10 +45,6 @@ import { measuredCardSize } from "./room/card-size";
 import { createRoomOperations } from "./room/operations";
 import { ANSWER_COMMAND, createAnswerChannel } from "./room/answer";
 
-const MODES: { id: RoomMode; key: "modeTurn" | "modeSimul" }[] = [
-  { id: "turn", key: "modeTurn" },
-  { id: "simul", key: "modeSimul" },
-];
 const EXPOSE = "soksak-plugin-agents-clubhouse";
 // The plugin whose stored definitions and accounts the room reads (agents docs/spec/definitions.md, dependencies in plugin.json).
 const AGENTS_PLUGIN = "agents";
@@ -174,14 +170,10 @@ const expose = createExpose(
   () => window.sokSurface?.declarations,
 );
 
-// The room of the page: the member cards, the conversation mode and the composer. Its elements and
+// The room of the page: the member cards, the conversation and the composer. Its elements and
 // status are the handlers that startRoomPage registers.
 async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHandlers> {
   const lang = navigator.language.startsWith("ko") ? "ko" : "en";
-  const modeSetting = settings.kibitzDefault;
-  if (modeSetting !== "turn" && modeSetting !== "simul") {
-    throw new Error(`settings.kibitzDefault must be turn or simul, got ${JSON.stringify(modeSetting)}`);
-  }
   // The largest number of turns that answers start for one message (docs/spec/room.md#conversation).
   const conversationTurns = conversationTurnsOf(settings.conversationTurns);
   // Whether each member starts with the flag of its program that accepts every request (docs/spec/room.md#accept-all).
@@ -191,7 +183,6 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   const acceptAll = settings.acceptAll === "accept";
   // The state of this room tab, which core keeps per tab across a restart (docs/spec/room.md#restart).
   const saved = parseRoomState(await bridge!.calls.request("tab.state.read", null));
-  let mode: RoomMode = saved?.mode ?? modeSetting;
   // default: a room tab without a state shows its member grid unfolded (docs/spec/room.md#restart).
   let folded = saved?.folded ?? false;
   // The assigned group of the agents plugin; a room tab without a state has none (docs/spec/room.md#group).
@@ -216,7 +207,6 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
     showTitle();
     const value: RoomTabState = {
       group,
-      mode,
       folded,
       conversation,
       sessions: [...roomSessions],
@@ -259,7 +249,6 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   };
   const arrangement = createArrangementStatus();
   const state = (): RoomState => ({
-    mode,
     group,
     members: members.map((member) => ({ id: member.id, leader: member.leader })),
     transport: { ...transport, notIsolated: [...transport.notIsolated] },
@@ -269,7 +258,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   style.textContent = HEADER_CSS + CSS;
   const root = el("div", "st");
   const header = createRoomHeader(manifest.name, transport.reason, { fold: t("foldButton", lang), unfold: t("unfoldButton", lang) });
-  const { bar, grid: tabsEl, kib, modeBar } = header;
+  const { bar, grid: tabsEl, statusBar } = header;
   const msgs = el("div", "st-msgs");
   // The view follows new entries only at the bottom; in reading mode the pill counts the unseen entries (docs/spec/room.md#follow-mode).
   const msgsBox = el("div", "st-msgs-box");
@@ -335,7 +324,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
     send.title = transport.reason;
     for (const listener of [...transportListeners]) listener({ ...transport });
   };
-  root.append(bar, msgsBox, modeBar, composer);
+  root.append(bar, msgsBox, statusBar, composer);
   document.head.append(style);
   document.body.style.cssText = "margin:0;height:100%";
   document.body.replaceChildren(root);
@@ -385,24 +374,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
     }
   }
 
-  // The mode buttons above the composer; a room with a leader shows none, because a message of the owner then starts the turn of the
-  // leader in every mode (docs/spec/room.md#header).
-  function renderMode(): void {
-    kib.replaceChildren();
-    if (members.some((entry) => entry.leader)) return;
-    for (const option of MODES) {
-      const button = document.createElement("button");
-      button.type = "button";
-      button.textContent = t(option.key, lang);
-      button.dataset.mode = option.id;
-      button.classList.toggle("on", option.id === mode);
-      bound(expose.bind(button, `${EXPOSE}.mode.set`, { mode: option.id }, { failed: failed("mode.set") }), "mode.set");
-      kib.append(button);
-    }
-  }
-
   renderTabs();
-  renderMode();
 
   // The member sessions of the room: the owned session of each member, while core.sessions lists it as open (C3).
   // The room reattaches only to the sessions that it owns, and its member relations are kept per room surface (docs/spec/room.md#restart).
@@ -442,7 +414,6 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
         members = groupMembers(definitions, groups, group, (text) => report("room group", text));
         showTitle();
         renderTabs();
-        renderMode();
         // The conversation names each member by the name of its definition.
         showConversation();
         refreshReported();
@@ -600,8 +571,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
     persist();
   }).catch((error: unknown) => report("room restart", String((error as Error)?.message ?? error)));
 
-  // A message goes to the members whose session is open, by the mode of the room and the mentions of the message
-  // (docs/spec/room.md). Each member delivers its answer with the answer command, and the conversation shows it as text.
+  // A message goes to the members that it mentions and to the leader of the group (docs/spec/room.md#receivers). Each member delivers its answer with the answer command, and the conversation shows it as text.
   let work: WorkReports | null = null;
   // The end of the conversation-status wait of each token kept from before a restart, by token (docs/spec/room.md#restart).
   const keptWaits = new Map<string, () => void>();
@@ -889,10 +859,12 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   };
   const relayMessage = (text: string, stopped: () => boolean): Promise<{ id: string; text: string }[]> =>
     settledRelay(record, async (accepted) => {
+      const leader = leaderEntry();
+      if (leader === undefined) throw new Error("no group is assigned");
       const taught = await taughtMembers(openMembers());
-      if (taught.length === 0) throw new Error("no member has the room protocol");
-      const answers = await relayInMode(relayPorts, mode, taught, text, record, {
-        limit: conversationTurns, stopped, accepted, stopping, leader: leaderEntry()?.id,
+      refuseClosedReceivers(text, members, taught, leader.id);
+      const answers = await relayToReceivers(relayPorts, taught, text, record, {
+        limit: conversationTurns, stopped, accepted, stopping, leader: leader.id,
       });
       return answers.map((answer) => ({ id: answer.id, text: answer.text }));
     });
@@ -903,17 +875,12 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
       members = groupMembers(definitions, groups, group, (text) => report("room group", text));
     },
     groupDefined: async (id) => id in readGroups(await agentData("groups")),
-    mode: () => mode,
-    setMode: (next) => {
-      mode = next;
-    },
     folded: () => folded,
     setFolded: (next) => {
       folded = next;
     },
     changed: () => {
       renderTabs();
-      renderMode();
       persist();
     },
     summon,
@@ -1031,7 +998,6 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
     [`${EXPOSE}.tab`]: tabTargets,
     [`${EXPOSE}.group`]: header.group,
     [`${EXPOSE}.fold`]: header.fold,
-    [`${EXPOSE}.mode`]: kib,
     [`${EXPOSE}.question`]: () => [...msgs.querySelectorAll<HTMLElement>(".st-question-answer")],
     [`${EXPOSE}.question.choice`]: () => [...msgs.querySelectorAll<HTMLElement>(".st-question-choice")],
     [`${EXPOSE}.mention`]: () => [...mentionBox.querySelectorAll<HTMLElement>(".st-mention-item")],

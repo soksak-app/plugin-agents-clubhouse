@@ -1,9 +1,6 @@
 // The commands of the room (plugin.json exposes.commands). Each handler runs in the view page and answers with the result shape that plugin.json declares.
 
-export type RoomMode = "turn" | "simul";
-
 export interface RoomState {
-  mode: RoomMode;
   // The assigned group and its members in the order of the group (docs/spec/room.md#group).
   group: string | null;
   members: { id: string; leader: boolean }[];

@@ -1,4 +1,4 @@
-// The state of a room tab (docs/spec/room.md#restart): the assigned group, the mode, the conversation, the sessions that the
+// The state of a room tab (docs/spec/room.md#restart): the assigned group, the conversation, the sessions that the
 // room opened, the sessions that received the room protocol and the delivered numbers of the room record, written through the tab state of the view and read back at start.
 import { describe, expect, it } from "vitest";
 import manifest from "../../plugin.json";
@@ -6,7 +6,6 @@ import { parseRoomState, serializedRoomState, type RoomState } from "./room-stat
 
 const state: RoomState = {
   group: "group-1",
-  mode: "turn",
   folded: false,
   conversation: [
     { speaker: "owner", text: "한 문장씩만", at: 1700000000000, elapsedMs: null, index: null },
@@ -68,8 +67,8 @@ describe("parseRoomState", () => {
   });
 
   it("refuses a value of another form with the field and the value it found", () => {
-    expect(() => parseRoomState({ ...state, mode: "solo" })).toThrow('room tab state: mode must be turn or simul, got "solo"');
-    expect(() => parseRoomState({ ...state, mode: "facil" })).toThrow('room tab state: mode must be turn or simul, got "facil"');
+    // C141 (docs/spec/room.md#receivers): the room has no conversation mode, so a state with a mode is of another form.
+    expect(() => parseRoomState({ ...state, mode: "turn" })).toThrow("room tab state: unknown field mode");
     expect(() => parseRoomState({ ...state, folded: "no" })).toThrow('room tab state: folded must be true or false, got "no"');
     const { folded: _f, ...withoutFold } = state;
     expect(() => parseRoomState(withoutFold)).toThrow("room tab state: folded must be true or false, got undefined");

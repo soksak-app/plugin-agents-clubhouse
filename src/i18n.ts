@@ -1,5 +1,5 @@
-// UI 문자열 외부화 — t(key, lang) / tp(key, lang, vars) 로 소비.
-// 에러 메시지·LLM 시스템 프롬프트·내부 처리용 문자열은 이 파일 대상 아님.
+// The text of the page elements in English and Korean, read with t(key, lang) and tp(key, lang, vars). Error texts and the lines that
+// the room submits to members are not in this file.
 
 const strings = {
   placeholder: {
@@ -14,105 +14,13 @@ const strings = {
     en: "Stop",
     ko: "중지",
   },
-  statusIdle: {
-    en: "Idle",
-    ko: "대기",
-  },
   busy: {
     en: "Working…",
     ko: "작업 중…",
   },
-  modeTurn: {
-    en: "Sequential",
-    ko: "순차",
-  },
-  modeSimul: {
-    en: "Simultaneous",
-    ko: "동시",
-  },
-  termOpen: {
-    en: "Open this member's terminal (its session, resumed)",
-    ko: "이 멤버의 터미널 열기(같은 세션을 이어서)",
-  },
-  termNoSession: {
-    en: "No session yet — run one turn first",
-    ko: "세션이 아직 없습니다 — 한 턴을 먼저 진행하세요",
-  },
-  termOpenFail: {
-    en: "Terminal open failed",
-    ko: "터미널 열기 실패",
-  },
-  sessionHeld: {
-    en: "session is held by another client (its TUI?) — turn deferred",
-    ko: "세션을 다른 클라이언트(TUI?)가 잡고 있음 — 이 턴은 건너뜁니다",
-  },
-  crownTitle: {
-    en: "Set as facilitator",
-    ko: "진행자로 지정",
-  },
-  statusInterject: {
-    en: "Interjected — reflected after current utterance ends",
-    ko: "참견 — 현재 발화 종결 후 반영",
-  },
-  statusQueued: {
-    en: "Queued — reflected after current conversation ends",
-    ko: "대기 중 — 현재 대화가 끝나면 반영",
-  },
-  railNoBinding: {
-    en: "No clubhouse view bound",
-    ko: "결부된 클럽하우스 뷰 없음",
-  },
-  modalTitle: {
-    en: "{who} is speaking",
-    ko: "{who} 말하는 중",
-  },
-  modalMsg: {
-    en: "Cut in now, or add after they finish?",
-    ko: "지금 끼어들까요, 끝나면 넣을까요?",
-  },
-  btnCut: {
-    en: "Cut now",
-    ko: "지금 끊기",
-  },
-  btnWait: {
-    en: "Add after",
-    ko: "끝나면 넣기",
-  },
-  btnCancel: {
-    en: "Cancel",
-    ko: "취소",
-  },
   pending: {
     en: "Responding…",
     ko: "응답 중…",
-  },
-  thinkBadge: {
-    en: "💭 Think",
-    ko: "💭 생각",
-  },
-  thinkBadgeTitle: {
-    en: "Click to expand/collapse reasoning",
-    ko: "클릭하면 리소닝 펼치기/접기",
-  },
-  whoMe: {
-    en: "Me",
-    ko: "나",
-  },
-  queuedTag: {
-    en: " · queued",
-    ko: " · 대기 중",
-  },
-  statusSimul: {
-    en: "Responding simultaneously…",
-    ko: "동시 응답 중…",
-  },
-  statusFacilDone: {
-    en: "Facilitation cap reached — wrapping up",
-    ko: "진행 한도 도달 — 마무리",
-  },
-  whoConversation: {
-    en: "Conversation",
-    ko: "대화",
   },
   waitingFor: {
     en: "waiting for {name}: {step}, program {program}",

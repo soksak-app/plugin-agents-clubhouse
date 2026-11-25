@@ -1,6 +1,6 @@
 // The header of the room (docs/spec/room.md#header): the first line holds the plugin name on the left and the group select on the
 // right; the member cards stand below in a grid of equal columns that uses the whole width, and a grid of three rows or more folds
-// to its first two rows. The mode bar, which the page puts directly above the composer, holds the mode buttons and the transport status.
+// to its first two rows. The status bar, which the page puts directly above the composer, holds the transport status.
 
 // The smallest width of a member card and the gap between the cards, in points.
 const CARD_MIN = 150;
@@ -19,11 +19,7 @@ export const HEADER_CSS = `
 .st-grid:empty{display:none}
 .st-grid>[hidden]{display:none!important}
 .st-fold{align-self:flex-end;appearance:none;border:0;background:transparent;color:var(--fg3,#888);font:inherit;font-size:11px;padding:0 2px;cursor:pointer;white-space:nowrap}
-.st-modes{display:flex;align-items:center;gap:8px;padding:3px var(--toolbar-pad-x,8px);min-width:0;flex:0 0 auto}
-.st-kib{display:inline-flex;border-radius:8px;overflow:hidden;border:1px solid rgba(127,127,127,.28);flex:0 0 auto}
-.st-kib:empty{display:none}
-.st-kib button{appearance:none;border:0;background:transparent;color:inherit;opacity:.6;font:inherit;font-size:11px;padding:3px 9px;cursor:pointer;white-space:nowrap}
-.st-kib button.on{opacity:1;background:rgba(127,127,127,.2);font-weight:700}
+.st-statusbar{display:flex;align-items:center;gap:8px;padding:3px var(--toolbar-pad-x,8px);min-width:0;flex:0 0 auto}
 .st-status{margin-left:auto;font-size:11px;color:var(--fg3,#888);flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 `;
 
@@ -46,8 +42,8 @@ export interface RoomHeader {
   group: HTMLSelectElement;
   grid: HTMLElement;
   fold: HTMLButtonElement;
-  modeBar: HTMLElement;
-  kib: HTMLElement;
+  // The line above the composer, which holds the transport status.
+  statusBar: HTMLElement;
   status: HTMLElement;
   // Shows the transport status.
   setStatus(text: string): void;
@@ -69,10 +65,9 @@ export function createRoomHeader(name: string, status: string, labels: { fold: s
   fold.type = "button";
   fold.hidden = true;
   bar.append(top, grid, fold);
-  const modeBar = part("div", "st-modes");
-  const kib = part("div", "st-kib");
+  const statusBar = part("div", "st-statusbar");
   const statusEl = part("span", "st-status");
-  modeBar.append(kib, statusEl);
+  statusBar.append(statusEl);
   const setStatus = (text: string): void => {
     statusEl.textContent = text;
     statusEl.title = text;
@@ -87,7 +82,7 @@ export function createRoomHeader(name: string, status: string, labels: { fold: s
     fold.textContent = folded ? labels.unfold : labels.fold;
     for (const [index, card] of cards.entries()) card.hidden = foldable && folded && index >= FOLDED_ROWS * columns;
   };
-  return { bar, top, actions, group, grid, fold, modeBar, kib, status: statusEl, setStatus, layout };
+  return { bar, top, actions, group, grid, fold, statusBar, status: statusEl, setStatus, layout };
 }
 
 function part(tag: string, cls: string): HTMLElement {

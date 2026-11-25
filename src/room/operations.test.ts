@@ -1,13 +1,11 @@
-// The commands of the room operations (C35, C140, docs/spec/room.md#commands): group.set, mode.set, members.fold, message.send and conversation.stop.
+// The commands of the room operations (C35, C140, docs/spec/room.md#commands): group.set, members.fold, message.send and conversation.stop.
 import { describe, expect, it } from "vitest";
 import { createRoomOperations, type OperationDeps } from "./operations";
-import type { RoomMode } from "./commands";
 
 const P = "soksak-plugin-agents-clubhouse";
 
 function room(overrides: Partial<OperationDeps> = {}) {
   let group: string | null = "g1";
-  let mode: RoomMode = "turn";
   let folded = false;
   const log: string[] = [];
   const deps: OperationDeps = {
@@ -16,10 +14,6 @@ function room(overrides: Partial<OperationDeps> = {}) {
       group = next;
     },
     groupDefined: async (id) => id === "g1" || id === "g2",
-    mode: () => mode,
-    setMode: (next) => {
-      mode = next;
-    },
     folded: () => folded,
     setFolded: (next) => {
       folded = next;
@@ -35,7 +29,7 @@ function room(overrides: Partial<OperationDeps> = {}) {
     failed: (reason) => void log.push(`failed ${reason}`),
     ...overrides,
   };
-  return { log, group: () => group, mode: () => mode, folded: () => folded, commands: createRoomOperations(deps) };
+  return { log, group: () => group, folded: () => folded, commands: createRoomOperations(deps) };
 }
 
 describe("group.set (docs/spec/room.md#group)", () => {
@@ -57,15 +51,9 @@ describe("group.set (docs/spec/room.md#group)", () => {
   });
 });
 
-describe("mode.set", () => {
-  it("sets the mode and redraws, and refuses another value", async () => {
-    const r = room();
-    expect(await r.commands[`${P}.mode.set`]({ mode: "simul" })).toEqual({ mode: "simul" });
-    expect(r.mode()).toBe("simul");
-    expect(r.log).toEqual(["changed"]);
-    await expect(r.commands[`${P}.mode.set`]({ mode: "solo" })).rejects.toThrow('mode must be turn or simul, got "solo"');
-    await expect(r.commands[`${P}.mode.set`]({ mode: "facil" })).rejects.toThrow('mode must be turn or simul, got "facil"');
-    expect(r.mode()).toBe("simul");
+describe("mode.set (C141, docs/spec/room.md#receivers)", () => {
+  it("is no command, because the room has no conversation mode", () => {
+    expect(Object.keys(room().commands).some((name) => name.endsWith(".mode.set"))).toBe(false);
   });
 });
 

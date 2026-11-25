@@ -69,7 +69,7 @@ describe("startRoomPage", () => {
     const page = await startRoomPage(
       {
         manifest,
-        settings: async () => ({ kibitzDefault: "turn" }),
+        settings: async () => ({ conversationTurns: 48 }),
         data,
         expose,
         commands,
@@ -82,7 +82,7 @@ describe("startRoomPage", () => {
         return buildRoom();
       },
     );
-    expect(seenSettings).toEqual({ kibitzDefault: "turn" });
+    expect(seenSettings).toEqual({ conversationTurns: 48 });
     expect(page).toBeDefined();
     expect(expose.calls.filter((c) => c[0] === "command").map((c) => c[1]).sort()).toEqual(
       room(manifest.exposes.commands),

@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- C141: A message of the owner goes to the members that it mentions and then to the leader of the group, and a message without a mention goes to the leader alone; `message.send` refuses a message whose receiver has no open session with `member <name> has no open session`. The conversation modes `turn` and `simul`, `mode.set`, the mode buttons and the setting `kibitzDefault` are removed, and the tab state has no `mode`.
 - C140: A room is assigned one group of the agents plugin with `group.set`: the header shows a group select and a card per member with the star for the leader, the tab state keeps `group`, and the roster, the checks, the roles and the invite dialog are removed.
 - C147: The restart recovery is verified in a running application: the published 0.0.28 kept a member tab of an ended session, and the C145 and C146 builds close it, also from the state that 0.0.28 left.
 - C146: The room counts a session of `protocolSessions` as its own, so it also closes the member tab of a session that an earlier start removed from `sessions`.
