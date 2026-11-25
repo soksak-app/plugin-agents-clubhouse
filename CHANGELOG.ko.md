@@ -2,6 +2,7 @@
 
 ## 미출시
 
+- C139: version은 0.0.28이며 release run이 C138를 게시한다.
 - C138: header의 첫 줄은 plugin 이름, 개수, 초대 button을 보이고, member card는 전체 폭을 쓰는 같은 열의 grid에 놓이며 세 줄부터 두 줄로 접힌다(`members.fold`, `folded`가 있는 tab state format 2). header는 계정 login에 관한 것을 보이지 않는다. `순차`와 `동시` mode는 composer 위에 있고 방에 leader가 있으면 숨는다. `facil` mode는 없어졌고 `kibitzDefault`의 기본값은 `turn`이다.
 - C137: version은 0.0.27이며 release run이 C135, C135-1 and C136를 게시한다.
 - C136: 초대 page `invite.html`가 system color scheme의 palette 대신 theme token `--fg`, `--edge`, `--fail`에서 글자, 선, 오류 색을 써서, dark window의 어두운 card 위에 밝게 그려진다.

@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- C139: The version is 0.0.28, so the release run publishes C138.
 - C138: The header shows the plugin name, the count and the invite button on its first line and the member cards in a grid of equal columns that uses the whole width and folds from three rows to two (`members.fold`, tab state format 2 with `folded`); it shows nothing of the account login. The modes `순차` and `동시` lie above the composer and hide while the room has a leader; the mode `facil` is removed and `kibitzDefault` defaults to `turn`.
 - C137: The version is 0.0.27, so the release run publishes C135, C135-1 and C136.
 - C136: The invite page `invite.html` take the text, line and error colors from the theme tokens `--fg`, `--edge` and `--fail` instead of a palette of the system color scheme, so a dark window draws them light on its dark card.

@@ -2,6 +2,7 @@
 
 [English](features.md)
 
+- [o] C139 — P0: C138를 0.0.28로 release한다. package는 0.0.28를 선언하고 release run이 the header of C138를 게시한다.
 - [o] C138 — P1: room header의 첫 줄 왼쪽에는 plugin 이름이, 오른쪽에는 개수 `<checked> / <members>`와 초대 button `+`가 있다. member card는 그 아래 전체 폭을 쓰는 같은 열의 grid에 놓이고, 세 줄 이상인 grid는 `members.fold`로 처음 두 줄로 접히며, 접힘은 format 2 tab state의 `folded`에 유지된다. Header는 계정 login에 관한 것을 보이지 않는다. Mode button `순차`와 `동시`는 composer 바로 위의 mode bar에 transport status와 함께 있고, 방에 leader가 있으면 숨으며, `facil` mode는 없어졌다. Red: 이전 header, mode, state에서 `src/room/header.test.ts`, `src/room/operations.test.ts`, `src/room/room-state.test.ts`가 실패했다. Green: 모든 test가 통과한다.
 - [o] C137 — P0: C135, C135-1 and C136를 0.0.27로 release한다. package는 0.0.27를 선언하고 release run이 the first-start answers of C135 and C135-1 and the theme colors of C136를 게시한다.
 - [o] C136 — P0: 초대 page `invite.html`가 window theme의 색을 쓴다. Input: system appearance가 light인 상태에서 dark theme인 window. Behavior: dialog의 제목, label, button이 theme의 어두운 card 위 어두운 글자였다. View bridge는 theme의 card를 설정하는데, page는 글자, 선, 오류 색을 system color scheme에서 골랐기 때문이다. Expected: page는 view bridge가 root에 설정하는 theme token인 `--fg`에서 글자, `--edge`에서 선, `--fail`에서 오류 색을 쓰고(core docs/spec/native-surfaces.md, Theme), 자기 palette를 고르지 않는다. Red: `src/page-theme.test.ts`의 test가 이전 page에서 실패했다. Green: 통과한다.
