@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- C152-1: The pattern of `member-check` uses a repeat count that the RE2 regexp of the hosts compiles, and a test refuses a count above 1000.
 - C152: The room checks each member before its session opens and on `room.check`, refuses a member whose folder or program is missing, and shows the problems on the cards and in the status `check`, including a home without a login and a session that reports no program state.
 - C151-1: A stop during the summon of a member ends its open, so no second protocol wait holds the conversation.
 - C151: `conversation.stop` ends a protocol turn that waits for the first idle of a session, so a member whose program never reports idle holds no conversation.

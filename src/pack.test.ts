@@ -34,6 +34,19 @@ describe("first start program", () => {
   });
 });
 
+// The hosts compile each argument pattern of a program with RE2 (Go regexp), whose repeat count is at most 1000; a larger count makes the
+// host refuse the whole plugin, although the JavaScript validator accepts it (C152).
+describe("program argument patterns", () => {
+  it("use no repeat count above 1000", () => {
+    const programs = (manifest as unknown as { programs: Record<string, { args: unknown[] }> }).programs;
+    const counts = Object.values(programs)
+      .flatMap((one) => one.args)
+      .flatMap((arg) => (typeof arg === "object" && arg !== null && "pattern" in arg ? [String((arg as { pattern: string }).pattern)] : []))
+      .flatMap((pattern) => [...pattern.matchAll(/\{(\d+)(?:,(\d*))?\}/g)].flatMap((match) => [Number(match[1]), Number(match[2] || 0)]));
+    expect(counts.filter((count) => count > 1000)).toEqual([]);
+  });
+});
+
 describe("release files", () => {
   it("lists the view page and its bundle in the files of package.json", () => {
     expect(pkg.files).toEqual(expect.arrayContaining(["plugin.json", manifest.surface.composition.page, "ui/clubhouse.js"]));

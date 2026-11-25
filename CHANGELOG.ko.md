@@ -2,6 +2,7 @@
 
 ## 미출시
 
+- C152-1: `member-check`의 pattern은 host의 RE2 regexp가 compile하는 반복 수를 쓰고, 테스트가 1000보다 큰 수를 거부한다.
 - C152: 방은 session을 열기 전과 `room.check`에서 각 member를 점검하고, folder나 program이 없는 member를 거부하며, login 없는 home과 program state를 보고하지 않는 session을 포함한 문제를 card와 status `check`에 보인다.
 - C151-1: member의 summon 중 stop은 그 open을 끝내므로, 두 번째 protocol 대기가 대화를 붙잡지 않는다.
 - C151: `conversation.stop`은 session의 첫 idle을 기다리는 protocol turn을 끝내므로, program이 idle을 보고하지 않는 member도 대화를 붙잡지 않는다.
