@@ -2,6 +2,7 @@
 
 [English](features.md)
 
+- [~] C164 — P0, C131 다음: C131, C132, C133을 게시하는 0.0.31을 release하고, 설치하는 application에 저장된 방 tab state를 백업한 뒤 `conversations: {}`가 있는 format 4로 고친다. 남은 일: release 실행과 고치기.
 - [o] C163 — P0, C162에 이어서: C162를 게시하는 0.0.30을 release한다.
 - [o] C162 — P0, C161과 agents A26-2 다음: login이 없는 member의 거부가 agents plugin의 설정을 login 장소로 지정한다. Input: 계정 home에 login이 없는 member에게 보낸 메시지. Behavior: turn이 `log in to it in the agent definitions`로 실패했지만, agents plugin은 login을 자기 settings view에서 실행한다. Expected: turn이 `member <id>: the account <account> has no login; log in to it in the settings of the agents plugin and send again`으로 실패한다. Red: `member-open.test.ts`가 옛 text로 실패했다. Green: `member-open.test.ts`와 `room-relay.test.ts`의 test 68개 중 68개가 통과한다.
 - [o] C161 — P0: login이 없는 member의 거절이 account와 그 login 위치를 말한다. Input: account home에 login이 없는 member에게 보낸 메시지. Behavior: turn이 `member <id>: the home of its account has no login`으로 실패해 account도 login할 곳도 말하지 않았고, specification은 header에 더는 없는 member card의 login 상태와 버튼을 여전히 적었다. Expected: 거절이 `member <id>: the account <account> has no login; log in to it in the agent definitions and send again`이고, specification은 card 상태 대신 이를 적는다. Red: `src/room/member-open.test.ts`가 이전 문구에서 실패했다. Green: `src/room/member-open.test.ts`와 `src/room/room-relay.test.ts`가 68개 중 68개 통과한다.

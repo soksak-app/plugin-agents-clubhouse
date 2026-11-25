@@ -2,6 +2,7 @@
 
 ## 미출시
 
+- C164: 버전은 0.0.31이고, C131, C132, C133을 release한다.
 - C131, C132, C133: 다시 열리는 member session은 같은 account home과 folder에서 CLI 대화를 이어 간다. Claude Code는 `--session-id`와 `--resume`을, 자기 worktree의 Codex는 `resume --last`를 쓴다. tab state는 `conversations`가 있는 format 4다. 명세는 사람이 member tab에서 답하는 첫 시작 질문을 적는다.
 - C163: 버전은 0.0.30이고, C162를 release한다.
 - C162: login이 없는 member의 거부가 agents plugin의 설정을 login 장소로 지정한다.
