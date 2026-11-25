@@ -2,7 +2,7 @@
 // ends before any relayed message; a failure is reported and refuses the member.
 import { execFileSync } from "node:child_process";
 import { describe, expect, it } from "vitest";
-import { agentLine, createProtocolInjector, roomProtocolLine, worktreeLine } from "./protocol";
+import { agentLine, createProtocolInjector, memoryLine, roomProtocolLine, worktreeLine } from "./protocol";
 import type { RelayPorts } from "./room-relay";
 import { createConversationStatus } from "./conversation-status";
 
@@ -125,6 +125,22 @@ describe("worktreeLine", () => {
     const plain = fakeCore({ "s-1": "idle" });
     await createProtocolInjector(plain.ports, () => {}).ensure(claude);
     for (const one of plain.submitted) expect(one.text).not.toContain("worktree");
+  });
+});
+
+// C143-3 (docs/spec/room.md#memory): the memory line names the memory of the project and how a member keeps it.
+describe("memoryLine", () => {
+  it("states the memory folder, its index and log, the claim of a page and the commit of the memory", () => {
+    expect(memoryLine("/work/game/.memory")).toBe(
+      "[@clubhouse] memory: the memory of this project is /work/game/.memory, tracked by git. Read /work/game/.memory/index.md first and only the pages and logs that you need. When you learn or decide something that outlives this conversation, write it in a page there and keep one line per page in index.md; at more than 200 lines, move pages into topic folders, each with its own index.md, and keep one line per folder. Append ## <time> @<name>: <summary> to log/<YYYY-MM>.md of the month, the time in ISO 8601 with offset. Claim a page before you change it and release it only after your commit is merged; commit the memory with your work. This line takes no answer.",
+    );
+  });
+
+  it("is submitted after the protocol line and the worktree line", async () => {
+    const core = fakeCore({ "s-1": "idle" });
+    const tree = { root: "/work/game", worktree: "/w", branch: "clubhouse/tab-1/w1", integration: "main" };
+    await createProtocolInjector(core.ports, () => {}).ensure({ ...claude, worktree: tree, memory: "/work/game/.memory" });
+    expect(core.submitted.map((one) => one.text)).toEqual([roomProtocolLine("Claude", "room-1"), worktreeLine(tree), memoryLine("/work/game/.memory")]);
   });
 });
 

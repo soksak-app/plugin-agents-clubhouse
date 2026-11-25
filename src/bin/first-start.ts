@@ -4,6 +4,7 @@
 //   first-start start <home> <folder>   ends the first-start steps and trusts the folder in the configuration file of an account home
 //   first-start worktree <folder> <room> <member>                creates the worktree of a member of a room (docs/spec/room.md#worktrees)
 //   first-start remove <root> <room> <member> <integration>      removes that worktree and its merged branch
+//   first-start memory <folder>                                   creates the memory of the project in the folder (docs/spec/room.md#memory)
 //   first-start root <folder>                                     names the root of the main checkout of the folder, or null outside git
 // Each command writes one JSON object on its standard output and exits with 0, or writes its error on its standard error and exits
 // with 1.
@@ -16,7 +17,7 @@
 // file while it runs.
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, readdirSync, readFileSync, renameSync, rmdirSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmdirSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import lockfile from "proper-lockfile";
@@ -146,6 +147,38 @@ function removeWorktree(home: string, root: string, room: string, member: string
   return { root, worktree: path, branch, removed: true };
 }
 
+// The memory of a project in the folder .memory of the folder that a member works in, tracked by git (docs/spec/room.md#memory). The
+// union merge driver keeps the lines of both branches of the appended index and monthly logs, so their merges do not conflict. The
+// program commits the files that it creates or changes, so two members that start the memory in two branches at once merge: the index
+// by the union driver and .gitattributes as one identical change; untracked files would refuse the merge.
+const UNION_LINES = [".memory/index.md merge=union", ".memory/log/*.md merge=union"];
+function memoryOf(folder: string): Record<string, unknown> {
+  const memory = join(folder, ".memory");
+  const index = join(memory, "index.md");
+  const changed: string[] = [];
+  mkdirSync(memory, { recursive: true });
+  if (!existsSync(index)) {
+    writeFileSync(index, "# Memory index\n", { flag: "wx" });
+    changed.push(join(".memory", "index.md"));
+  }
+  if (insideGit(folder)) {
+    const attributes = join(folder, ".gitattributes");
+    const text = existsSync(attributes) ? readFileSync(attributes, "utf8") : "";
+    const missing = UNION_LINES.filter((line) => !text.split("\n").includes(line));
+    if (missing.length > 0) {
+      appendFileSync(attributes, `${text === "" || text.endsWith("\n") ? "" : "\n"}${missing.join("\n")}\n`);
+      changed.push(".gitattributes");
+    }
+    if (changed.length > 0) {
+      git(folder, ["add", "--", ...changed]);
+      git(folder, ["commit", "-q", "-m", "chore(memory): Start the memory of the project", "--", ...changed]);
+    }
+  }
+  // The number of lines of the index, which the room compares with its bound.
+  const indexLines = readFileSync(index, "utf8").split("\n").filter((line) => line !== "").length;
+  return { memory, indexLines };
+}
+
 function absolute(name: string, value: string | undefined): string {
   if (value === undefined || !value.startsWith("/")) throw new Error(`${name} must be an absolute path, got ${JSON.stringify(value)}`);
   return value;
@@ -165,6 +198,7 @@ export async function run(args: string[], home: string, env: NodeJS.ProcessEnv):
   if (command === "worktree" && args.length === 4) {
     return addWorktree(home, absolute("folder", args[1]), segment("room", args[2]), segment("member", args[3]));
   }
+  if (command === "memory" && args.length === 2) return memoryOf(absolute("folder", args[1]));
   if (command === "root" && args.length === 2) {
     const folder = absolute("folder", args[1]);
     return { root: insideGit(folder) ? repositoryRoot(folder) : null };
@@ -172,7 +206,7 @@ export async function run(args: string[], home: string, env: NodeJS.ProcessEnv):
   if (command === "remove" && args.length === 5) {
     return removeWorktree(home, absolute("root", args[1]), segment("room", args[2]), segment("member", args[3]), args[4]);
   }
-  throw new Error(`command must be trust, start, worktree, root or remove, got ${JSON.stringify(command)}`);
+  throw new Error(`command must be trust, start, worktree, root, memory or remove, got ${JSON.stringify(command)}`);
 }
 
 if (process.argv[1] !== undefined && /first-start(\.mjs)?$/.test(process.argv[1])) {

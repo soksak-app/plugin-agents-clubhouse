@@ -30,7 +30,7 @@ import { answerSections } from "./room/sections";
 import { createRoomRecord, leaderRoute, settledRelay } from "./room/room-record";
 import { agentFileText, agentNameOf, roleFileOf } from "./room/agent-file";
 import { createConversationStatus, waitLabel } from "./room/conversation-status";
-import { createProtocolInjector, type AgentPlace, type MemberWorktree } from "./room/protocol";
+import { MEMORY_INDEX_LIMIT, createProtocolInjector, type AgentPlace, type MemberWorktree } from "./room/protocol";
 import { parseRoomState, serializedRoomState, type RoomState as RoomTabState } from "./room/room-state";
 import { ownedSessionIds, shownByOf } from "./room/session-channel";
 import { answerQuestion, questionChoices, readQuestion, showMember } from "./room/question";
@@ -186,6 +186,8 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   let folded = saved?.folded ?? false;
   // The worktree of each member that has one (docs/spec/room.md#worktrees).
   const worktrees = new Map<string, MemberWorktree>(Object.entries(saved?.worktrees ?? {}));
+  // The memory folder of the project of each started member, which its memory line names (docs/spec/room.md#memory).
+  const memories = new Map<string, string>();
   // The assigned group of the agents plugin; a room tab without a state has none (docs/spec/room.md#group).
   let group: string | null = saved?.group ?? null;
   // The groups of the agents plugin, read with the definitions.
@@ -529,9 +531,8 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
     persist();
     await room.commands.execute("core.session.end", { session });
   };
-  const prepareStart = async (id: string, folder: string): Promise<void> => {
-    const definition = definitions.find((one) => one.id === id);
-    if (definition === undefined || !isClaude(id)) return;
+  const prepareStart = async (definition: AgentDefinition, folder: string): Promise<void> => {
+    if (!isClaude(definition.id)) return;
     for (const one of startFolders(definition, folder)) {
       const [name, args] = definition.home === null ? ["project-trust", ["trust", one]] : ["member-start", ["start", definition.home.folder, one]];
       const reply = await bridge!.runtime.program.run(name, args);
@@ -572,7 +573,10 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
         if (memberSessions.has(definition.id)) {
           if (kept === undefined) continue;
           const { root } = await firstStart("member-root", ["root", definition.cwd], definition.id);
-          if (root === kept.root) continue;
+          if (root === kept.root) {
+            folders.set(definition.id, kept.worktree);
+            continue;
+          }
           await room.commands.execute("core.session.end", { session: memberSessions.get(definition.id)! });
           memberSessions.delete(definition.id);
           worktrees.delete(definition.id);
@@ -591,9 +595,23 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
           folders.set(definition.id, worktree as string);
         }
       }
+      // Each starting member keeps the memory of its project in the folder .memory of the folder it works in, tracked by git
+      // (docs/spec/room.md#memory).
+      for (const definition of definitions) {
+        if (!starting.includes(definition.id)) continue;
+        const answer = await firstStart("member-memory", ["memory", folders.get(definition.id) ?? definition.cwd], definition.id);
+        const { memory, indexLines } = answer;
+        if (typeof memory !== "string" || !memory.startsWith("/") || !Number.isInteger(indexLines)) {
+          throw new Error(`member ${definition.id}: member-memory answered ${JSON.stringify(answer)}`);
+        }
+        memories.set(definition.id, memory);
+        if ((indexLines as number) > MEMORY_INDEX_LIMIT) {
+          record.append("clubhouse", `the memory index ${memory}/index.md has ${indexLines} lines, over ${MEMORY_INDEX_LIMIT}; move pages into topic folders`);
+        }
+      }
       // A starting member starts in its folder without a question of a first start.
       for (const definition of definitions) {
-        if (starting.includes(definition.id)) await prepareStart(definition.id, folders.get(definition.id) ?? definition.cwd);
+        if (starting.includes(definition.id)) await prepareStart(definition, folders.get(definition.id) ?? definition.cwd);
       }
       // A starting member whose program takes no --agent learns the agent of its definition from the agent line (C110).
       for (const definition of definitions) {
@@ -908,7 +926,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   const taughtMembers = async (members: OpenMember[]): Promise<OpenMember[]> => {
     const outcomes = await Promise.all(
       members.map((member) =>
-        protocol.ensure({ ...member, place: placeOf(member), agent: memberAgents.get(member.id) ?? null, worktree: worktrees.get(member.id) ?? null }),
+        protocol.ensure({ ...member, place: placeOf(member), agent: memberAgents.get(member.id) ?? null, worktree: worktrees.get(member.id) ?? null, memory: memories.get(member.id) ?? null }),
       ),
     );
     return members.filter((_, index) => outcomes[index].ok);

@@ -26,6 +26,8 @@ export interface ProtocolMember {
   agent?: AgentPlace | null;
   // The worktree of the member, which the worktree line states; absent for a member without one (docs/spec/room.md#worktrees).
   worktree?: MemberWorktree | null;
+  // The memory folder of the project, which the memory line names; absent before the program member-memory answered it.
+  memory?: string | null;
 }
 
 // The agent name of the frontmatter of an agent file and the absolute path of that file.
@@ -62,6 +64,15 @@ function placeRules(place: LeaderPlace): string[] {
 export function worktreeLine(tree: MemberWorktree): string {
   const { root, worktree, branch, integration } = tree;
   return `[@clubhouse] worktree: you work in ${worktree} on ${branch}. Merge ${integration} into it there, where conflicts are solved; test; run git -C ${root} merge --ff-only ${branch}, and when git refuses, merge ${integration} again and retry; name the commit in your answer; merge the newest ${integration} before new work. This line takes no answer.`;
+}
+
+// The memory line, which the room submits after the protocol line and the worktree line: the members keep the memory of the project in
+// its folder .memory, tracked by git, and claim a page before they change it (docs/spec/room.md#memory).
+// The largest number of lines of the memory index; above it the room states the size in the record (docs/spec/room.md#memory).
+export const MEMORY_INDEX_LIMIT = 200;
+
+export function memoryLine(memory: string): string {
+  return `[@clubhouse] memory: the memory of this project is ${memory}, tracked by git. Read ${memory}/index.md first and only the pages and logs that you need. When you learn or decide something that outlives this conversation, write it in a page there and keep one line per page in index.md; at more than ${MEMORY_INDEX_LIMIT} lines, move pages into topic folders, each with its own index.md, and keep one line per folder. Append ## <time> @<name>: <summary> to log/<YYYY-MM>.md of the month, the time in ISO 8601 with offset. Claim a page before you change it and release it only after your commit is merged; commit the memory with your work. This line takes no answer.`;
 }
 
 export function roomProtocolLine(self: string, surface: string, mcp = true, place: LeaderPlace | null = null): string {
@@ -156,6 +167,7 @@ export function createProtocolInjector(
       await sessionSubmit(ports, member.session)(roomProtocolLine(member.name, ports.surface, member.mcp ?? true, member.place ?? null));
       if (member.agent) await sessionSubmit(ports, member.session)(agentLine(member.name, member.agent));
       if (member.worktree) await sessionSubmit(ports, member.session)(worktreeLine(member.worktree));
+      if (member.memory) await sessionSubmit(ports, member.session)(memoryLine(member.memory));
       memory.onTaught(member.session);
       return { ok: true };
     } catch (error) {

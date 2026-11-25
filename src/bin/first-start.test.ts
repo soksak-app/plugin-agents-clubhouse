@@ -2,7 +2,7 @@
 // configuration file in a temporary folder.
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -16,7 +16,9 @@ function setup() {
   mkdirSync(repo);
   const git = (...args: string[]) => execFileSync("git", ["-C", repo, ...args], { encoding: "utf8" }).trim();
   git("init", "-q", "-b", "main");
-  git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "init");
+  git("config", "user.name", "t");
+  git("config", "user.email", "t@t");
+  git("commit", "-q", "--allow-empty", "-m", "init");
   writeFileSync(join(home, ".claude.json"), JSON.stringify({ numStartups: 3, projects: { "/other": { hasTrustDialogAccepted: true } } }));
   return { home, repo, git };
 }
@@ -152,9 +154,49 @@ describe("first-start root (C148)", () => {
   });
 });
 
+// C143-3 (docs/spec/room.md#memory): the memory of a project in the folder of a member, tracked by git with union merges.
+describe("first-start memory", () => {
+  it("commits the memory in each worktree, so two members that start it at once and append to one monthly log merge without a conflict", async () => {
+    const { home, repo, git } = setup();
+    const trees: string[] = [];
+    for (const member of ["dev-1", "dev-2"]) trees.push(((await run(["worktree", repo, "tab-1", member], home, {})) as { worktree: string }).worktree);
+    for (const tree of trees) {
+      expect(await run(["memory", tree], home, {})).toEqual({ memory: join(tree, ".memory"), indexLines: 1 });
+      expect(await run(["memory", tree], home, {})).toEqual({ memory: join(tree, ".memory"), indexLines: 1 });
+      expect(readFileSync(join(tree, ".gitattributes"), "utf8")).toBe(".memory/index.md merge=union\n.memory/log/*.md merge=union\n");
+      expect(git("-C", tree, "status", "--porcelain")).toBe("");
+    }
+    const log = (tree: string, line: string) => {
+      mkdirSync(join(tree, ".memory", "log"), { recursive: true });
+      appendFileSync(join(tree, ".memory", "log", "2026-11.md"), line);
+      appendFileSync(join(tree, ".memory", "index.md"), line);
+      git("-C", tree, "add", ".memory");
+      git("-C", tree, "commit", "-q", "-m", "log");
+    };
+    log(trees[0], "## a @one: first\n");
+    git("merge", "-q", "--ff-only", "clubhouse/tab-1/dev-1");
+    log(trees[1], "## b @two: second\n");
+    git("-C", trees[1], "merge", "-q", "--no-edit", "main");
+    git("merge", "-q", "--ff-only", "clubhouse/tab-1/dev-2");
+    // The union driver keeps the lines of both branches, those of the merging branch first, so the order follows the merges.
+    expect(readFileSync(join(repo, ".memory", "log", "2026-11.md"), "utf8").split("\n").sort()).toEqual(["", "## a @one: first", "## b @two: second"]);
+    expect(readFileSync(join(repo, ".memory", "index.md"), "utf8").split("\n").sort()).toEqual(["", "# Memory index", "## a @one: first", "## b @two: second"]);
+    expect(await run(["memory", repo], home, {})).toEqual({ memory: join(repo, ".memory"), indexLines: 3 });
+  });
+
+  it("creates the memory in a folder outside git without .gitattributes", async () => {
+    const { home } = setup();
+    const plain = join(home, "plain");
+    mkdirSync(plain);
+    expect(await run(["memory", plain], home, {})).toEqual({ memory: join(plain, ".memory"), indexLines: 1 });
+    expect(existsSync(join(plain, ".memory", "index.md"))).toBe(true);
+    expect(existsSync(join(plain, ".gitattributes"))).toBe(false);
+  });
+});
+
 describe("first-start commands", () => {
   it("refuses another command", async () => {
     const { home, repo } = setup();
-    await expect(run(["add", repo, "dev-1"], home, {})).rejects.toThrow('command must be trust, start, worktree, root or remove, got "add"');
+    await expect(run(["add", repo, "dev-1"], home, {})).rejects.toThrow('command must be trust, start, worktree, root, memory or remove, got "add"');
   });
 });

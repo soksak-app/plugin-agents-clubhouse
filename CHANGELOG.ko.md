@@ -2,6 +2,7 @@
 
 ## 미출시
 
+- C143-3: 프로젝트의 memory는 index와 달마다의 log에 union merge를 건, git이 추적하는 folder `.memory`이므로 모든 clone과 공유된다. memory 줄이 각 member에게 관리 방법을 말하고, 방은 200줄이 넘는 index를 알린다.
 - C143-2: turn 줄은 record 줄을 최대 100,000자 싣고, 빠진 줄을 conversation status의 entry 위치와 시각으로 알린다. 시각은 date-fns로 적는다.
 - C148: 정의의 folder가 git repository에 있는 member는 session이 열릴 때 만들어지는 자기 worktree `<home>/soksak/worktrees/<repository>-<hash>/<room>/<member>`에서 branch `clubhouse/<room>/<member>`로 일한다. room protocol 뒤의 worktree 줄이 merge 순서를 말하고, `member.end`와 card 버튼 `끝내기`는 commit하지 않은 변경과 merge하지 않은 branch를 거부하며 worktree를 지우고 session을 끝낸다. tab state는 `worktrees`를 유지한다.
 - C142: member는 첫 turn에 session을 연다. group을 지정하거나 바꿔도 session은 열리지 않고 방의 열린 session에 다시 붙으며, relay는 session이 없는 member를 summon하고 그 tab을 배치하고 room protocol을 submit한 뒤 turn 줄을 보낸다. 지정된 group에 member가 있는 동안 composer는 입력을 받는다.
