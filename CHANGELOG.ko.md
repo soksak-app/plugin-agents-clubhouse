@@ -2,6 +2,7 @@
 
 ## 미출시
 
+- C137: version은 0.0.27이며 release run이 C135, C135-1 and C136를 게시한다.
 - C136: 초대 page `invite.html`가 system color scheme의 palette 대신 theme token `--fg`, `--edge`, `--fail`에서 글자, 선, 오류 색을 써서, dark window의 어두운 card 위에 밝게 그려진다.
 - C135-1: `member-start`가 그 답이 없는 home에 `claudeInChromeDefaultEnabled` `false`도 써서, member가 Chrome extension을 기본 browser로 쓸지 묻는 질문에서 멈추지 않는다.
 - C135: Claude Code member가 시작하기 전에 방이 선언된 program `member-start`로 account home의 configuration file에 `hasCompletedOnboarding`과 시작 folder와 각 `--add-dir` folder의 trust를, 없는 것만 쓴다. 그래서 member는 text style 선택, security notes, folder trust 질문 없이 열린다. `project-trust`는 folder를 받아 home이 없는 definition에 쓰이고, `team-worktree add`는 더 이상 trust를 쓰지 않는다.
