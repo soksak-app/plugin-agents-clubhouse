@@ -7,6 +7,7 @@ const P = "soksak-plugin-agents-clubhouse";
 function room(overrides: Partial<OperationDeps> = {}) {
   let group: string | null = "g1";
   let folded = false;
+  let mode: "turn" | "simul" = "turn";
   const log: string[] = [];
   const deps: OperationDeps = {
     group: () => group,
@@ -27,9 +28,13 @@ function room(overrides: Partial<OperationDeps> = {}) {
     followUp: () => void log.push("follow-up"),
     failed: (reason) => void log.push(`failed ${reason}`),
     endMember: async (member) => void log.push(`end ${member}`),
+    mode: () => mode,
+    setMode: (next) => {
+      mode = next;
+    },
     ...overrides,
   };
-  return { log, group: () => group, folded: () => folded, commands: createRoomOperations(deps) };
+  return { log, group: () => group, folded: () => folded, mode: () => mode, commands: createRoomOperations(deps) };
 }
 
 describe("group.set (docs/spec/room.md#group)", () => {
@@ -51,9 +56,16 @@ describe("group.set (docs/spec/room.md#group)", () => {
   });
 });
 
-describe("mode.set (C141, docs/spec/room.md#receivers)", () => {
-  it("is no command, because the room has no conversation mode", () => {
-    expect(Object.keys(room().commands).some((name) => name.endsWith(".mode.set"))).toBe(false);
+describe("mode.set (C154, docs/spec/room.md#modes)", () => {
+  it("sets the mode, redraws once, changes nothing for the set mode, and refuses another value", async () => {
+    const r = room();
+    expect(await r.commands[`${P}.mode.set`]({ mode: "simul" })).toEqual({ mode: "simul" });
+    expect(r.mode()).toBe("simul");
+    expect(r.log).toEqual(["changed"]);
+    expect(await r.commands[`${P}.mode.set`]({ mode: "simul" })).toEqual({ mode: "simul" });
+    expect(r.log).toEqual(["changed"]);
+    await expect(r.commands[`${P}.mode.set`]({ mode: "all" })).rejects.toThrow('mode must be turn or simul, got "all"');
+    expect(r.mode()).toBe("simul");
   });
 });
 

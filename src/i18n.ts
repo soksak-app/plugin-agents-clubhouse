@@ -22,6 +22,14 @@ const strings = {
     en: "Responding…",
     ko: "응답 중…",
   },
+  modeTurn: {
+    en: "Sequential",
+    ko: "순차",
+  },
+  modeSimul: {
+    en: "Simultaneous",
+    ko: "동시",
+  },
   waitingFor: {
     en: "waiting for {name}: {step}, program {program}",
     ko: "{name} 기다리는 중: {step}, program {program}",

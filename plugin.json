@@ -18,6 +18,13 @@
     "@soksak/plugin-agents": ">=0.0.5"
   },
   "settings": {
+    "kibitzDefault": {
+      "label": "대화 기본 모드",
+      "description": "새 방의 대화 방식. 순차는 한 메시지나 답이 부른 member가 차례로, 동시는 함께 받는다. leader는 그 뒤에 받는다.",
+      "type": "enum",
+      "default": "turn",
+      "values": ["turn", "simul"]
+    },
     "conversationTurns": {
       "label": "대화 turn 한도",
       "description": "owner 메시지 하나에서 mention과 continue round가 시작하는 turn의 최대 수. 기본값 48은 member 세 명의 round 16번으로, 계획 합의, 구현, 검증 보고를 거치는 개발 작업 하나에 맞춘 값이다. 한도만큼 진행되면 수렴하지 못했다고 적고 끝낸다.",
@@ -188,11 +195,12 @@
     "commands": [
       {
         "name": "soksak-plugin-agents-clubhouse.state",
-        "description": "Return the live state of the room: the assigned group or null, the members in the order of the group with whether each is the leader, and the transport status.",
+        "description": "Return the live state of the room: the conversation mode, the assigned group or null, the members in the order of the group with whether each is the leader, and the transport status.",
         "params": { "type": "object", "properties": {} },
         "result": {
           "type": "object",
           "properties": {
+            "mode": { "type": "string", "enum": ["turn", "simul"] },
             "group": { "type": ["string", "null"] },
             "members": {
               "type": "array",
@@ -212,7 +220,7 @@
               "required": ["state", "notIsolated"]
             }
           },
-          "required": ["group", "members", "transport"]
+          "required": ["mode", "group", "members", "transport"]
         }
       },
       {
@@ -227,6 +235,20 @@
           "type": "object",
           "properties": { "group": { "type": "string" } },
           "required": ["group"]
+        }
+      },
+      {
+        "name": "soksak-plugin-agents-clubhouse.mode.set",
+        "description": "Set the conversation mode of the room, turn or simul, and keep it in the tab state: in turn the members that one message or one answer starts take their turns one after another, in simul at the same time, and the leader takes its turn after them in both. Setting the set mode changes nothing. Returns {mode}.",
+        "params": {
+          "type": "object",
+          "properties": { "mode": { "type": "string", "enum": ["turn", "simul"] } },
+          "required": ["mode"]
+        },
+        "result": {
+          "type": "object",
+          "properties": { "mode": { "type": "string", "enum": ["turn", "simul"] } },
+          "required": ["mode"]
         }
       },
       {
@@ -448,7 +470,11 @@
       },
       {
         "name": "soksak-plugin-agents-clubhouse.group",
-        "description": "Group select at the right end of the first header line: lists the groups of the agents plugin by name and runs group.set with the chosen group"
+        "description": "Group select at the left of the status bar above the composer: lists the groups of the agents plugin by name and runs group.set with the chosen group"
+      },
+      {
+        "name": "soksak-plugin-agents-clubhouse.mode",
+        "description": "Conversation mode buttons right of the group select (sequential, simultaneous): each runs mode.set with its mode, and the set mode is marked"
       },
       {
         "name": "soksak-plugin-agents-clubhouse.fold",

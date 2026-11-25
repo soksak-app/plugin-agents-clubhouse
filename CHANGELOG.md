@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- C154: The buttons `순차` and `동시` right of the group select set whether the members that one message or answer starts take their turns one after another or at the same time; the leader follows them.
 - C153: A message waits only for the protocol turn of the members that take a turn, so a member whose program reports no state holds no other message.
 - C152-1: The pattern of `member-check` uses a repeat count that the RE2 regexp of the hosts compiles, and a test refuses a count above 1000.
 - C152: The room checks each member before its session opens and on `room.check`, refuses a member whose folder or program is missing, and shows the problems on the cards and in the status `check`, including a home without a login and a session that reports no program state.

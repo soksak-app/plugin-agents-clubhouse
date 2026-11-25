@@ -91,9 +91,10 @@ describe("first line and status bar", () => {
     expect(h.group.value).toBe("g2");
   });
 
-  it("holds the group select and the transport status in the status bar, because the room has no conversation mode (C141, C149)", () => {
+  it("holds the group select, the mode buttons and the transport status in the status bar, in that order (C154)", () => {
     const h = header();
-    expect([...h.statusBar.children]).toEqual([h.group, h.status]);
+    expect([...h.statusBar.children]).toEqual([h.group, h.modes, h.status]);
+    expect(h.modes.className).toBe("st-kib");
   });
 
   it("shrinks the transport status with an ellipsis and shows its whole text as its tooltip", () => {

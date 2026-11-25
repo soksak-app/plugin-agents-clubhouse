@@ -6,6 +6,7 @@ import { parseRoomState, serializedRoomState, type RoomState } from "./room-stat
 
 const state: RoomState = {
   group: "group-1",
+  mode: "simul",
   folded: false,
   conversation: [
     { speaker: "owner", text: "한 문장씩만", at: 1700000000000, elapsedMs: null, index: null },
@@ -59,6 +60,12 @@ describe("parseRoomState", () => {
     expect(() => parseRoomState(rest)).toThrow("room tab state: delivered must be an object of session counts, got undefined");
   });
 
+  it("refuses a state without the mode or with a mode other than turn and simul (C154, docs/spec/room.md#modes)", () => {
+    const { mode: _mode, ...rest } = state;
+    expect(() => parseRoomState(rest)).toThrow("room tab state: mode must be turn or simul, got undefined");
+    expect(() => parseRoomState({ ...state, mode: "all" })).toThrow('room tab state: mode must be turn or simul, got "all"');
+  });
+
   it("reads null as a room without a stored state", () => {
     expect(parseRoomState(null)).toBeNull();
   });
@@ -77,8 +84,6 @@ describe("parseRoomState", () => {
   });
 
   it("refuses a value of another form with the field and the value it found", () => {
-    // C141 (docs/spec/room.md#receivers): the room has no conversation mode, so a state with a mode is of another form.
-    expect(() => parseRoomState({ ...state, mode: "turn" })).toThrow("room tab state: unknown field mode");
     expect(() => parseRoomState({ ...state, folded: "no" })).toThrow('room tab state: folded must be true or false, got "no"');
     const { folded: _f, ...withoutFold } = state;
     expect(() => parseRoomState(withoutFold)).toThrow("room tab state: folded must be true or false, got undefined");

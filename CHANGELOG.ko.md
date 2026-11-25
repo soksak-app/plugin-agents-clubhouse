@@ -2,6 +2,7 @@
 
 ## 미출시
 
+- C154: group select 오른쪽의 `순차`와 `동시` button이 메시지나 답 하나가 시작하는 member가 차례로 받을지 동시에 받을지 정하고, leader는 그 뒤에 받는다.
 - C153: 메시지는 turn을 받는 member의 protocol turn만 기다리므로, 상태를 보고하지 않는 member가 다른 메시지를 붙잡지 않는다.
 - C152-1: `member-check`의 pattern은 host의 RE2 regexp가 compile하는 반복 수를 쓰고, 테스트가 1000보다 큰 수를 거부한다.
 - C152: 방은 session을 열기 전과 `room.check`에서 각 member를 점검하고, folder나 program이 없는 member를 거부하며, login 없는 home과 program state를 보고하지 않는 session을 포함한 문제를 card와 status `check`에 보인다.

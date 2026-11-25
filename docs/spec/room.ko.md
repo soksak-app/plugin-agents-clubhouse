@@ -16,7 +16,7 @@
 
 방의 header는 member card만 갖고 plugin 이름의 줄은 없다. 방의 tab이 그 이름을 보이기 때문이다. 방에 member가 없는 동안 header는 숨는다. member card는 card의 전체 폭을 쓰는 grid에 놓인다. Grid는 폭 안에 최소 150 point card가 들어가는 만큼 같은 폭의 열을 갖고, 모든 card는 같은 폭과 높이를 가지며, card는 group 순서로 행을 채운다. Grid가 세 줄 이상인 동안 그 아래의 `접기` button은 grid를 처음 두 줄로 접고 `펼치기` button은 펼친다. 접힘은 방의 [tab state](#restart)에 유지된다. Card는 member 이름의 initials(첫 두 단어의 첫 글자, 한 단어 이름이면 첫 두 글자, 대문자), [leader](#leader)이면 별 U+2B50 뒤의 이름, 그리고 member 상태의 둘째 줄을 보인다. 상태는 방이 그 member의 답을 기다리는 동안 `응답 중`, session이 열려 있고 기다리는 답이 없으면 `대기`, 열린 session이 없으면 `세션 없음`이며, 마지막 경우 card 테두리는 점선이다. Card를 눌러도 아무것도 실행되지 않는다. 받는 사람은 mention이 정하기 때문이다. Header는 계정의 login에 관한 것을 보이지 않으며, login은 agents plugin이 맡는다([login](#login)). 언어가 한국어가 아닌 page는 이 text를 `Choose a group`, `answering`, `idle`, `no session`, `Fold`, `Unfold`로 보인다. 각 button은 text를 한 줄로 유지한다.
 
-Status bar는 composer 바로 위에 있다. 왼쪽에는 agents plugin의 group select(`soksak-plugin-agents-clubhouse.group`)가 있다. Select는 지정된 group의 이름을 보이고, 없으면 `그룹 선택`을 보이며, group을 identifier 순서로 이름으로 나열한다. Group을 고르면 그것으로 `group.set`이 실행된다. group의 member는 agents plugin에서 편집하므로 방에는 member를 더하는 button이 없다. 오른쪽에는 transport status를 보인다. 지정된 group에 member가 있는 동안 transport는 ready이고 composer는 입력을 받는다. 각 member가 첫 turn에 session을 열기 때문이다([받는 member](#receivers)). Transport status는 남은 폭으로 줄고, 잘리면 ellipsis로 끝나며, 전체 text를 tooltip으로 보인다.
+Status bar는 composer 바로 위에 있다. 왼쪽에는 agents plugin의 group select(`soksak-plugin-agents-clubhouse.group`)가 있다. Select는 지정된 group의 이름을 보이고, 없으면 `그룹 선택`을 보이며, group을 identifier 순서로 이름으로 나열한다. Group을 고르면 그것으로 `group.set`이 실행된다. Select 오른쪽에는 mode button `순차`(`turn`)와 `동시`(`simul`)(`soksak-plugin-agents-clubhouse.mode`)가 있다. 각 button은 자기 mode로 `mode.set`을 실행하고, 설정된 mode의 button이 표시된다([modes](#modes)). 언어가 한국어가 아닌 page는 `Sequential`과 `Simultaneous`로 보인다. group의 member는 agents plugin에서 편집하므로 방에는 member를 더하는 button이 없다. 오른쪽에는 transport status를 보인다. 지정된 group에 member가 있는 동안 transport는 ready이고 composer는 입력을 받는다. 각 member가 첫 turn에 session을 열기 때문이다([받는 member](#receivers)). Transport status는 남은 폭으로 줄고, 잘리면 ellipsis로 끝나며, 전체 text를 tooltip으로 보인다.
 
 방의 tab은 plugin 이름과 지정된 group의 이름을 ` · `로 이어 보이고, group이 없으면 plugin 이름을 보인다. 방은 group이나 그 이름이 바뀔 때마다 그것을 `tab.title`로 보고하므로 두 방이 구별되고 core는 기본 제목을 보이지 않는다. group 이름의 control character는 지우고, 256자보다 긴 제목은 256자에서 말줄임표로 끝난다. `tab.title`이 1자에서 256자를 받기 때문이다.
 
@@ -28,7 +28,8 @@ Summon 뒤 방은 방 card와 member card로 된 이름 `Room`의 group card를 
 
 방의 모든 operation은 선언된 command를 실행하고, 방의 element는 page의 binder(`expose.bind`)로 이 command에 연결된다. 그래서 click과 command 호출은 같은 경로를 실행한다. 각 command는 잘못된 parameter를 그 parameter와 값을 밝힌 error로 거부한다.
 
-- `soksak-plugin-agents-clubhouse.state {}`: 방의 현재 상태 `{group, members, transport}`를 돌려준다. 지정된 group 또는 `null`, group 순서의 member `{id, leader}`, transport status `{state, reason, notIsolated}`이다.
+- `soksak-plugin-agents-clubhouse.state {}`: 방의 현재 상태 `{mode, group, members, transport}`를 돌려준다. 대화 mode, 지정된 group 또는 `null`, group 순서의 member `{id, leader}`, transport status `{state, reason, notIsolated}`이다.
+- `soksak-plugin-agents-clubhouse.mode.set {mode}`: 대화 mode를 `turn`이나 `simul`로 정하고([modes](#modes)) tab state에 보관한다. 멱등이다. 설정된 mode를 다시 정하면 아무것도 바뀌지 않는다. 결과는 `{mode}`이다.
 - `soksak-plugin-agents-clubhouse.group.set {group}`: agents plugin의 group `group`을 방에 지정하고([group](#group)) tab state에 남긴다. Idempotent하다: 지정된 group을 다시 지정하면 아무것도 바뀌지 않는다. agents plugin이 저장하지 않은 group은 `group <group> is not defined`로 거부한다. 결과는 `{group}`이다. [Header](#header)의 group select가 고른 group으로 실행한다.
 - `soksak-plugin-agents-clubhouse.members.fold {folded}`: [header](#header)의 member grid를 처음 두 줄로 접거나 펼치고, 접힘을 tab state에 유지한다. 결과는 `{folded}`다. 접기 button(`soksak-plugin-agents-clubhouse.fold`)이 뒤집은 접힘으로 실행한다.
 - `soksak-plugin-agents-clubhouse.message.send {text}`: `text`(trim한 뒤 비어 있지 않음)를 그 [받는 member](#receivers)에게 전달하고, 그것과 각 답을 대화에 보이며, 전체 [대화](#conversation) 뒤에 turn 순서의 `{answers: [{id, text}]}`로 끝난다. 앞 메시지를 전달하는 동안의 send는 그 대화에 [owner follow-up](#owner-follow-up)으로 더해지고 바로 `{answers: []}`로 끝난다. 지정된 group이 없으면 `no group is assigned`로 거부한다. Send button(`soksak-plugin-agents-clubhouse.send`)과 input(`soksak-plugin-agents-clubhouse.input`)에서 Shift 없는 Enter가 input의 text로 실행하고, command가 text를 받아들이면 input을 비운다. Command는 element가 시작했든 command 호출이 시작했든 각 거부와 실패한 relay를 window의 error display로 `error: room relay: <reason>`(실패한 turn은 `error: room relay: member <id>: <reason>`)으로 보고하고, 같은 이유로 reject한다.
@@ -76,7 +77,7 @@ Inline code span, fenced code block, `>`로 시작하는 인용 줄 안의 menti
 
 대소문자를 구분하지 않는 `@all`은 방의 모든 member에게 간다. 함수 하나가 이 집합을 만들고, [addressed views](#addressed-views)의 route와 relay가 그것을 쓰므로, `@all` 줄은 각 member의 addressed list에 한 번 들어간다. Owner 메시지와 leader 답만 `@all`로 turn을 시작한다. 그 밖의 답, 곧 worker의 답이나 leader 없는 방 member의 답에서 `@all`과 section 제목 `@all:`은 줄을 모든 member에게 보내고, 그들은 다음 turn에 읽으며, turn을 시작하지 않는다. 결정: protocol은 답의 section 제목으로 `@all:`을 권하고, 답마다 모두에게 퍼지면 답 하나가 turn 2개에서 15개를 시작해 `conversationTurns` 한도 48을 답 몇 개에 다 쓴다. 이름 mention과 `@all`이 함께 있으면 이름 mention된 member가 mention 순서로 먼저, 나머지가 그 뒤에 온다.
 
-Leader가 있는 방에서 owner의 `@all`은 이름 mention된 worker를 mention 순서로, 그다음 다른 모든 worker를 병렬 batch 하나로, 그다음 leader를 시작하므로 leader는 모든 답을 읽는다. `@all`이 있는 leader 답은 모든 worker를 batch 하나로 시작한다. Owner가 모든 member에게 물었기 때문이다.
+Owner의 `@all`은 이름 mention된 worker를 mention 순서로, 그다음 다른 모든 worker를 [mode](#modes)에 따라 시작하고, 그다음 leader를 시작하므로 leader는 모든 답을 읽는다. `@all`이 있는 leader 답은 모든 worker를 mode에 따라 시작한다. Owner가 모든 member에게 물었기 때문이다.
 
 답한 반론: 서로를 mention하지 않고 `continue`로 답한 병렬 worker 둘은 서로의 답으로 turn을 받지 않는다. 답은 worker를 mention할 때만 그 worker에게 가므로 다음 turn은 leader의 것이다. Leader를 mention한 worker 답은 그 답이 시작하지 않은 어떤 worker turn보다 먼저 leader에게 다음 turn을 준다. Leader가 있는 relay의 한도 줄은 아직 `continue`를 밝힌 member를 밝힌다.
 
@@ -90,13 +91,17 @@ composer의 caret 앞 단어가 text의 시작이나 공백 뒤에서 `@`로 시
 
 ## Receivers
 
-Owner의 메시지는 그 메시지가 [mention](#mention)한 member에게, 그다음 [leader](#leader)에게 가고, mention이 없는 메시지는 leader에게만 간다. Mention된 member가 처음 mention된 순서로 차례로 첫 turn을 받고, owner의 `@all`은 그 뒤에 다른 모든 worker를 batch 하나로 더하며, leader는 그 다음 turn을 받는다. 메시지는 turn을 받는 member의 room protocol만 기다린다. protocol을 받지 않은 열린 session은 그 member의 turn에서 protocol을 받고, member의 summon은 protocol turn을 기다리지 않으므로, program이 상태를 보고하지 않는 member는 자기에게 가지 않는 메시지를 붙잡지 않는다. 열린 session이 없는 member의 turn은 먼저 session을 연다. 방은 member를 summon하고([login](#login)), 그 tab을 배치하고([arrangement](#arrangement)), [room protocol](#room-protocol)을 submit한 뒤 turn 줄을 submit한다. 답이 시작하는 turn도 같은 방식으로 session을 연다. 시작하지 못한 member의 turn은 `member <id>: the home of its account has no login`이나 그 summon의 이유로 실패하고, core가 submit을 하나도 받아들이지 않은 relay는 owner의 줄을 거둔다([room record](#room-record)). 결정: member 열한 명의 group은 지정될 때 session 열한 개를 열었고 각 session은 자기 CLI를 띄웠지만, 대화는 그중 몇 member만 부른다. 결정: 방에는 대화 mode가 없다. member가 있는 모든 group에는 leader가 있고(agents `docs/spec/definitions.md#leader`), mode `turn`과 `simul`은 leader 없는 방의 순서만 정했기 때문이다.
+Owner의 메시지는 그 메시지가 [mention](#mention)한 member에게, 그다음 [leader](#leader)에게 가고, mention이 없는 메시지는 leader에게만 간다. Mention된 member가 처음 mention된 순서로 첫 turn을 받고, owner의 `@all`은 그 뒤에 다른 모든 worker를 더한다. 이들이 차례로 turn을 받을지 동시에 받을지는 [mode](#modes)가 정하고, leader는 그 다음 turn을 받는다. 메시지는 turn을 받는 member의 room protocol만 기다린다. protocol을 받지 않은 열린 session은 그 member의 turn에서 protocol을 받고, member의 summon은 protocol turn을 기다리지 않으므로, program이 상태를 보고하지 않는 member는 자기에게 가지 않는 메시지를 붙잡지 않는다. 열린 session이 없는 member의 turn은 먼저 session을 연다. 방은 member를 summon하고([login](#login)), 그 tab을 배치하고([arrangement](#arrangement)), [room protocol](#room-protocol)을 submit한 뒤 turn 줄을 submit한다. 답이 시작하는 turn도 같은 방식으로 session을 연다. 시작하지 못한 member의 turn은 `member <id>: the home of its account has no login`이나 그 summon의 이유로 실패하고, core가 submit을 하나도 받아들이지 않은 relay는 owner의 줄을 거둔다([room record](#room-record)). 결정: member 열한 명의 group은 지정될 때 session 열한 개를 열었고 각 session은 자기 CLI를 띄웠지만, 대화는 그중 몇 member만 부른다.
 
 모든 member는 room record 전체를, 자기 turn의 줄에서만 읽는다([room record](#room-record), [conversation first](#conversation-first)). Member가 자기 turn 시작에 받는 줄은 `[@clubhouse] 네 차례야. 아래는 네가 아직 못 본 기록이야.` 뒤에 그 member가 아직 받지 않은 모든 record 줄을 바꾸지 않고 record 순서로 담고, 그 member의 turn token인 ` | [@clubhouse] turn <token>`으로 끝난다([답](#answer)). 모든 줄을 받은 member는 줄 대신 `[@clubhouse] 네 차례야. 네가 아직 못 본 기록은 없어.`를 받는다. 차례로 turn을 받는 member는 앞 member들의 답을 자기 turn 줄에서 읽는다. 한 batch의 member는 함께 시작하고, 각자 다른 member의 답을 다음 turn 줄에서 읽는다.
 
 Turn은 program이 `idle`이든 `working`이든 session의 submit queue로 줄을 submit한다([work reports](#work-reports)). `blocked` session은 core.sessions의 값이 blocked가 아님을 보여 줄 때까지 줄을 받지 않는다([turn end](#turn-end)). 기다리는 동안 [conversation status](#conversation-status)는 그 member를 step `turn`으로 보여 준다. `conversation.stop`은 그 기다림을 끝낸다. Turn은 아무것도 submit하지 않고, 방은 `[@clubhouse] the conversation ended: the owner stopped it`을 덧붙인다.
 
 실패한 turn은 member와 이유로 relay를 reject하고, `message.send`가 그것을 보고한다([command](#command)). Core가 submit을 하나도 받아들이지 않은 relay는 owner의 줄을 room record와 대화에서 거둔다. 그 밖의 실패한 relay는 owner의 줄과 도착한 모든 답을 유지하고 방의 줄 `[@clubhouse] the relay failed: <reason>`을 덧붙인다([room record](#room-record)). 실패한 turn 뒤의 turn은 아무것도 시작하지 않는다. batch 안에서는 다른 turn이 끝까지 진행되고, relay는 member 순서로 첫 실패로 reject한다.
+
+## Modes
+
+방의 mode `turn` 또는 `simul`은 owner의 메시지 하나나 답 하나가 시작하는 member가 turn을 받는 방식을 정한다. `turn`에서는 mention 순서로 차례로 받고, 각 turn은 앞의 turn이 끝난 뒤 시작한다. `simul`에서는 동시에 받는다. 방은 그 turn 중 어느 것도 끝나기 전에 각 member에게 turn 줄을 submit하고, 답은 mention 순서를 지킨다. 두 mode 모두 leader는 owner의 메시지가 시작한 member 뒤에 turn을 받으므로 그 답을 읽는다. 상태가 없는 방 tab은 plugin setting `kibitzDefault`(`turn` 또는 `simul`, 기본값 `turn`)를 따르고, [tab state](#restart)가 mode를 보관한다. 결정: leader가 있어도 방은 두 mode를 유지한다. 여러 member를 mention한 메시지나 답에도, member가 자기 turn 전에 다른 member의 답을 읽을지(`turn`) 모두 동시에 일할지(`simul`)의 선택이 남기 때문이다.
 
 ## Conversation
 
@@ -156,7 +161,7 @@ Claude Code는 첫 시작에서 세 종류의 질문을 하고, 각 질문은 co
 
 각 member session은 addressed list, 곧 그 session에 가는 줄의 record index를 record 순서로 가지며 tab state의 `addressed`로 남는다. Leader가 없으면 모든 줄이 모든 session에 간다. Leader가 있으면 leader는 모든 줄을 받고, 그 밖의 모든 member인 worker는 owner의 줄, [mention 규칙](#mention)으로 자기나 `@all`을 mention한 줄, 자기를 mention한 방의 줄을 받는다. Worker에게는 자기 brief와 자기에게 온 질문이 필요하고, 전체 record는 다른 member의 작업으로 그 context를 채우기 때문이다. 방은 새 줄을 덧붙일 때 그 줄이 가는 각 session의 list에 index를 더하고, list가 없는 session은 처음 쓰일 때 자기에게 가는 모든 줄의 index를 받는다. `sent`와 `delivered`는 session의 addressed list 안의 위치이고, turn 줄은 `sent`부터 끝까지의 addressed 줄을 member 자신의 줄 없이 담는다.
 
-Leader의 답이 여러 worker를 mention하면 그 worker들은 함께 turn을 시작하고, 방은 각 답이 도착할 때 record에 덧붙인다. 그래서 leader의 다음 turn 줄은 그 답을 모두 담고, leader는 일찍 끝낸 worker를 본다. Worker의 답이 시작하는 turn은 차례로 진행된다.
+답이 여러 worker를 mention하면 그 worker들은 [mode](#modes)에 따라 turn을 받고, 방은 각 답이 도착할 때 record에 덧붙인다. 그래서 leader의 다음 turn 줄은 그 답을 모두 담고, leader는 일찍 끝낸 worker를 본다.
 
 ## Work reports
 
@@ -257,9 +262,10 @@ Member는 화면이 아니라 선언된 command `soksak-plugin-agents-clubhouse.
 
 ## Restart
 
-Application의 restart, 방 tab의 unload, view의 restart 뒤에도 방은 입력 없이 이전과 같은 상태를 보여 준다. 방은 `surface.unload` `{format: 3, maxBytes: 1048576}`을 선언하고, 바뀔 때마다 view의 tab state(`tab.state.write`)로 tab의 상태를 쓴다. Core는 이를 tab마다 restart 너머로 보관한다(core `docs/spec/plugins.md#memory-saver`). 방은 turn 줄을 그 token이 든 tab state의 쓰기가 끝난 뒤에만 submit하므로, page의 reload가 다음 page가 복원할 수 없는 token을 member에게 남기지 않는다. 쓰기가 실패하면 turn은 그 이유로 실패한다. 상태는 `{group, folded, conversation, sessions, protocolSessions, addressed, delivered, sent, turns, worktrees}`다.
+Application의 restart, 방 tab의 unload, view의 restart 뒤에도 방은 입력 없이 이전과 같은 상태를 보여 준다. 방은 `surface.unload` `{format: 3, maxBytes: 1048576}`을 선언하고, 바뀔 때마다 view의 tab state(`tab.state.write`)로 tab의 상태를 쓴다. Core는 이를 tab마다 restart 너머로 보관한다(core `docs/spec/plugins.md#memory-saver`). 방은 turn 줄을 그 token이 든 tab state의 쓰기가 끝난 뒤에만 submit하므로, page의 reload가 다음 page가 복원할 수 없는 token을 member에게 남기지 않는다. 쓰기가 실패하면 turn은 그 이유로 실패한다. 상태는 `{group, mode, folded, conversation, sessions, protocolSessions, addressed, delivered, sent, turns, worktrees}`다.
 
 - `group`: 지정된 [group](#group)의 identifier이며, 없으면 `null`이다. agents plugin이 더 이상 저장하지 않는 group이면 사람이 group을 지정할 때까지 방에는 member가 없다.
+- `mode`: 대화 [mode](#modes), `turn` 또는 `simul`.
 - `folded`: [header](#header)의 member grid가 처음 두 줄로 접혔는지 여부.
 - `conversation`: 대화가 보여 주는 entry `{speaker, text, at, elapsedMs, index}`. `speaker`는 `owner` 또는 member의 identifier이고 `text`는 메시지 또는 member의 [답](#answer)이며 `index`는 그 [index 문장](#index-sentence)이고 owner나 방의 줄에서는 `null`이므로, restart 뒤에도 대화는 같은 답을 보여 준다.
 - `sessions`: 이 방이 연 member session.

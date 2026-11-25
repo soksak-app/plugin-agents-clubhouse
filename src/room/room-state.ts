@@ -1,12 +1,15 @@
 // The state of a room tab (docs/spec/room.md#restart). The room writes it through the tab state of its view (core
 // docs/spec/plugins.md#memory-saver, `surface.unload`), which core stores per tab and gives back after a restart, so the room shows
 // the same group and conversation without input. The reader accepts only this form and names what it found otherwise.
+import type { RoomMode } from "./room-relay";
 import { isIndexSentence, type OpenToken } from "./answer";
 import type { MemberWorktree } from "./protocol";
 
 export interface RoomState {
   // The identifier of the assigned group of the agents plugin, or null without one (docs/spec/room.md#group).
   group: string | null;
+  // The conversation mode of the room (docs/spec/room.md#modes).
+  mode: RoomMode;
   // Whether the member grid of the header is folded to its first two rows (docs/spec/room.md#header).
   folded: boolean;
   // The conversation as the room shows it: the owner or the member identifier, and the text.
@@ -39,7 +42,8 @@ export function serializedRoomState(state: RoomState): string {
   return json;
 }
 
-const FIELDS: readonly string[] = ["group", "folded", "conversation", "sessions", "protocolSessions", "addressed", "delivered", "sent", "turns", "worktrees"];
+const MODES: readonly string[] = ["turn", "simul"];
+const FIELDS: readonly string[] = ["group", "mode", "folded", "conversation", "sessions", "protocolSessions", "addressed", "delivered", "sent", "turns", "worktrees"];
 
 const isText = (value: unknown): value is string => typeof value === "string" && value !== "";
 
@@ -50,6 +54,7 @@ export function parseRoomState(value: unknown): RoomState | null {
   for (const field of Object.keys(state)) if (!FIELDS.includes(field)) throw new Error(`room tab state: unknown field ${field}`);
   const group = state.group;
   if (!(group === null || isText(group))) throw new Error(`room tab state: group must be a group identifier or null, got ${JSON.stringify(group)}`);
+  if (!MODES.includes(state.mode as string)) throw new Error(`room tab state: mode must be turn or simul, got ${JSON.stringify(state.mode)}`);
   if (typeof state.folded !== "boolean") throw new Error(`room tab state: folded must be true or false, got ${JSON.stringify(state.folded)}`);
   const conversation = state.conversation;
   const timeOrNull = (value: unknown): boolean => value === null || (typeof value === "number" && Number.isFinite(value) && value >= 0);
@@ -124,6 +129,7 @@ export function parseRoomState(value: unknown): RoomState | null {
   }
   return {
     group,
+    mode: state.mode as RoomMode,
     folded: state.folded,
     conversation: conversation.map((entry) => ({ speaker: entry.speaker, text: entry.text, at: entry.at, elapsedMs: entry.elapsedMs, index: entry.index })),
     sessions: [...(state.sessions as string[])],

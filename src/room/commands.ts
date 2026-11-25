@@ -1,6 +1,10 @@
 // The commands of the room (plugin.json exposes.commands). Each handler runs in the view page and answers with the result shape that plugin.json declares.
 
+import type { RoomMode } from "./room-relay";
+
 export interface RoomState {
+  // The conversation mode of the room (docs/spec/room.md#modes).
+  mode: RoomMode;
   // The assigned group and its members in the order of the group (docs/spec/room.md#group).
   group: string | null;
   members: { id: string; leader: boolean }[];

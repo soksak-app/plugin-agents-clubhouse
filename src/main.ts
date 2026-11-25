@@ -23,7 +23,7 @@ import { readAgentDefinitions, startFolders, toMemberDefinition, type AgentDataG
 import { createMemberSessionStore } from "./room/session-store";
 import { serialRunner, summonAndArrange, type TriggerDeps } from "./room/trigger";
 import { createOpenedSessions } from "./room/summon";
-import { conversationTurnsOf, relayMessage as relayToReceivers, type RelayPorts } from "./room/room-relay";
+import { conversationTurnsOf, relayMessage as relayToReceivers, type RelayPorts, type RoomMode } from "./room/room-relay";
 import { createSubmitQueue } from "./room/submit-queue";
 import { CLAIM_COMMAND, RELEASE_COMMAND, REPORT_COMMAND, createWorkReports, type WorkReports } from "./room/work-reports";
 import { answerSections } from "./room/sections";
@@ -183,6 +183,9 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
     throw new Error(`settings.acceptAll must be ask or accept, got ${JSON.stringify(settings.acceptAll)}`);
   }
   const acceptAll = settings.acceptAll === "accept";
+  if (settings.kibitzDefault !== "turn" && settings.kibitzDefault !== "simul") {
+    throw new Error(`settings.kibitzDefault must be turn or simul, got ${JSON.stringify(settings.kibitzDefault)}`);
+  }
   // The state of this room tab, which core keeps per tab across a restart (docs/spec/room.md#restart).
   const saved = parseRoomState(await bridge!.calls.request("tab.state.read", null));
   // default: a room tab without a state shows its member grid unfolded (docs/spec/room.md#restart).
@@ -193,6 +196,8 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   const memories = new Map<string, string>();
   // The assigned group of the agents plugin; a room tab without a state has none (docs/spec/room.md#group).
   let group: string | null = saved?.group ?? null;
+  // The conversation mode; a room tab without a state takes the setting kibitzDefault (docs/spec/room.md#modes).
+  let mode: RoomMode = saved?.mode ?? settings.kibitzDefault;
   // The groups of the agents plugin, read with the definitions.
   let groups: Record<string, AgentGroup> = {};
   const conversation: RoomTabState["conversation"] = [...(saved?.conversation ?? [])];
@@ -213,6 +218,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
     showTitle();
     const value: RoomTabState = {
       group,
+      mode,
       folded,
       conversation,
       sessions: [...roomSessions],
@@ -293,6 +299,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   };
   const arrangement = createArrangementStatus();
   const state = (): RoomState => ({
+    mode,
     group,
     members: members.map((member) => ({ id: member.id, leader: member.leader })),
     transport: { ...transport, notIsolated: [...transport.notIsolated] },
@@ -389,6 +396,20 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   // The grid lays out its cards again at each change of its width, which the observer reports, and at each draw of the cards.
   const layoutGrid = (): void => header.layout(tabsEl.clientWidth, folded);
   new ResizeObserver(layoutGrid).observe(tabsEl);
+  // The mode buttons right of the group select, one per mode, the set mode marked (docs/spec/room.md#modes).
+  function renderMode(): void {
+    header.modes.replaceChildren();
+    for (const option of [{ id: "turn", key: "modeTurn" }, { id: "simul", key: "modeSimul" }] as const) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = t(option.key, lang);
+      button.dataset.mode = option.id;
+      button.classList.toggle("on", option.id === mode);
+      bound(expose.bind(button, `${EXPOSE}.mode.set`, { mode: option.id }, { failed: failed("mode.set") }), "mode.set");
+      header.modes.append(button);
+    }
+  }
+
   function renderTabs(): void {
     showGroups();
     tabsEl.replaceChildren();
@@ -431,6 +452,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   }
 
   renderTabs();
+  renderMode();
 
   // The member sessions of the room: the owned session of each member, while core.sessions lists it as open (C3).
   // The room reattaches only to the sessions that it owns, and its member relations are kept per room surface (docs/spec/room.md#restart).
@@ -1020,7 +1042,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
       // another member (docs/spec/room.md#receivers, C153).
       const group = relayGroup(members, openMembers(), taughtSessions);
       const answers = await relayToReceivers(relayPorts, group, text, record, {
-        limit: conversationTurns, stopped, accepted, stopping, leader: leader.id,
+        limit: conversationTurns, stopped, accepted, stopping, leader: leader.id, mode,
       });
       return answers.map((answer) => ({ id: answer.id, text: answer.text }));
     });
@@ -1033,12 +1055,17 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
       setTransport(members.length > 0);
     },
     groupDefined: async (id) => id in readGroups(await agentData("groups")),
+    mode: () => mode,
+    setMode: (next) => {
+      mode = next;
+    },
     folded: () => folded,
     setFolded: (next) => {
       folded = next;
     },
     changed: () => {
       renderTabs();
+      renderMode();
       persist();
     },
     summon,
@@ -1155,6 +1182,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
     [`${EXPOSE}.input`]: input,
     [`${EXPOSE}.tab`]: tabTargets,
     [`${EXPOSE}.group`]: header.group,
+    [`${EXPOSE}.mode`]: header.modes,
     [`${EXPOSE}.fold`]: header.fold,
     [`${EXPOSE}.member.end`]: () => [...tabsEl.querySelectorAll<HTMLElement>(".st-tab .end")],
     [`${EXPOSE}.question`]: () => [...msgs.querySelectorAll<HTMLElement>(".st-question-answer")],

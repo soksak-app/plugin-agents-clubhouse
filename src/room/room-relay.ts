@@ -210,7 +210,12 @@ export interface ConversationBound {
   stopping?: (listener: () => void) => () => void;
   // The identifier of the leader of the group, which receives every message of the owner (docs/spec/room.md#leader).
   leader: string;
+  // Whether the members that one message or one answer starts take their turns one after another or at the same time
+  // (docs/spec/room.md#modes).
+  mode: RoomMode;
 }
+
+export type RoomMode = "turn" | "simul";
 
 // The stop of the owner ended a turn that waited for a blocked session or for its answer.
 export class TurnStopped extends Error {
@@ -273,13 +278,13 @@ async function runLeader(
     opened.set(member.id, session);
     return { id: member.id, name: member.name, session };
   };
-  // An owner `@all` adds every worker that the message does not name in one batch after the named workers (docs/spec/room.md#mentions).
+  // The members that one message or one answer starts: one batch each in `turn`, and one batch together in `simul`
+  // (docs/spec/room.md#modes).
+  const starts = (list: RelayGroupMember[], byAnswer: boolean): { members: RelayGroupMember[]; byAnswer: boolean }[] =>
+    bound.mode === "simul" ? (list.length > 0 ? [{ members: list, byAnswer }] : []) : list.map((member) => ({ members: [member], byAnswer }));
+  // An owner `@all` adds every worker that the message does not name after the named workers (docs/spec/room.md#mentions).
   const { named, rest } = ownerTurns(message, members, leader.id);
-  const batches: { members: RelayGroupMember[]; byAnswer: boolean }[] = [
-    ...named.map((member) => ({ members: [member], byAnswer: false })),
-    ...(rest.length > 0 ? [{ members: rest, byAnswer: false }] : []),
-    { members: [leader], byAnswer: false },
-  ];
+  const batches: { members: RelayGroupMember[]; byAnswer: boolean }[] = [...starts([...named, ...rest], false), { members: [leader], byAnswer: false }];
   const queued = (member: RelayGroupMember): boolean => batches.some((batch) => batch.members.some((one) => one.id === member.id));
   let started = 0;
   for (;;) {
@@ -348,14 +353,14 @@ async function runLeader(
       const free = workers().filter((member) => member.id !== answer.id && !queued(member));
       const named = mentionedMembers(answer.text, free);
       if (answer.id === leader.id) {
-        // A leader `@all` starts every worker with the named workers first, in one batch.
+        // A leader `@all` starts every worker with the named workers first.
         const all = mentionsAll(answer.text) ? [...named, ...free.filter((member) => !named.includes(member))] : named;
-        if (all.length > 0) batches.push({ members: all, byAnswer: true });
+        batches.push(...starts(all, true));
         continue;
       }
       // A worker `@all` addresses the line and starts no turn; a mention of the leader gives the leader the next turn.
       if (mentionedMembers(answer.text, [leader]).length > 0 && !queued(leader)) batches.unshift({ members: [leader], byAnswer: true });
-      batches.push(...named.map((member) => ({ members: [member], byAnswer: true })));
+      batches.push(...starts(named, true));
     }
   }
   return answers;

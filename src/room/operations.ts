@@ -1,6 +1,9 @@
 // The operations of the room as declared commands (C35, docs/spec/room.md#commands). The elements of the page are bound to these
 // commands, so a click and a command call run the same path. Each command refuses an invalid parameter with an explicit error.
+import type { RoomMode } from "./room-relay";
+
 const P = "soksak-plugin-agents-clubhouse";
+const MODES: RoomMode[] = ["turn", "simul"];
 
 export interface OperationDeps {
   // The assigned group of the agents plugin, or null, and its change (docs/spec/room.md#group).
@@ -8,6 +11,9 @@ export interface OperationDeps {
   setGroup: (group: string) => void;
   // Whether the agents plugin stores the group.
   groupDefined: (group: string) => Promise<boolean>;
+  // The conversation mode of the room and its change (docs/spec/room.md#modes).
+  mode: () => RoomMode;
+  setMode: (mode: RoomMode) => void;
   // Whether the member grid of the header is folded, and its change (docs/spec/room.md#header).
   folded: () => boolean;
   setFolded: (folded: boolean) => void;
@@ -36,6 +42,16 @@ export function createRoomOperations(deps: OperationDeps): Record<string, (param
   // Whether conversation.stop ended the conversation of the current relay.
   let stopped = false;
   return {
+    // mode.set sets the conversation mode; the set mode changes nothing (docs/spec/room.md#modes).
+    [`${P}.mode.set`]: async (params) => {
+      const mode = params?.mode;
+      if (!MODES.includes(mode)) throw new Error(`mode must be turn or simul, got ${JSON.stringify(mode)}`);
+      if (deps.mode() !== mode) {
+        deps.setMode(mode);
+        deps.changed();
+      }
+      return { mode };
+    },
     // group.set assigns a group of the agents plugin to the room and summons its members; the assigned group changes nothing
     // (docs/spec/room.md#commands).
     [`${P}.group.set`]: async (params) => {
