@@ -43,7 +43,7 @@ import { initialsOf, memberState } from "./room/member-card";
 import { createLoginGate } from "./room/login";
 import { roomTitle } from "./room/title";
 import { measuredCardSize } from "./room/card-size";
-import { createRoomOperations } from "./room/operations";
+import { createRoomOperations, shownByRoom } from "./room/operations";
 import { ANSWER_COMMAND, createAnswerChannel } from "./room/answer";
 
 const EXPOSE = "soksak-plugin-agents-clubhouse";
@@ -1078,9 +1078,11 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
     },
     failed: (reason) => report("room relay", reason),
   });
-  // message.send has shown each of its refusals and failures through the error display before it rejects, so the bindings show none
-  // a second time; without failed, the binder would pass the rejection to unhandledrejection of the document.
-  const shownBySend = (): void => {};
+  // message.send shows each of its refusals and failures through the error display before it rejects, so a binding shows only a rejection
+  // that message.send did not show, such as a refusal of the registry before message.send ran (C159).
+  const shownBySend = (error: unknown): void => {
+    if (!shownByRoom(error)) report("message.send", String((error as Error)?.message ?? error));
+  };
   bound(expose.bind(send, `${EXPOSE}.message.send`, () => ({ text: input.value, mood: mood.value }), { failed: shownBySend }), "message.send");
   bound(expose.bind(pill, `${EXPOSE}.conversation.scroll.bottom`, {}, { failed: failed("conversation.scroll.bottom") }), "conversation.scroll.bottom");
   bound(expose.bind(stop, `${EXPOSE}.conversation.stop`, {}, { failed: failed("conversation.stop") }), "conversation.stop");

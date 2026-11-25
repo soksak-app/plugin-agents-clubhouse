@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- C159: The send button and the input send a message again: `message.send` declares `mood`, and a refusal before `message.send` runs shows as `message.send: <reason>`.
 - C158: The command list of the room specification states `message.send {text, mood?}`.
 - C157: The manifest requires `@soksak/plugin-agents` `>=0.0.10`, whose stored groups hold a leader.
 - C156: The version is 0.0.29, which releases C140 to C155.

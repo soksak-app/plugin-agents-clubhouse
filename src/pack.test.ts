@@ -10,7 +10,7 @@ const pkg = JSON.parse(read("package.json")) as { engines?: Record<string, strin
 const manifest = JSON.parse(read("plugin.json")) as {
   dependencies?: Record<string, string>;
   surface: { composition: { kind: string; page: string } };
-  exposes: { commands: { name: string }[]; element: { name: string }[]; status: { name: string }[] };
+  exposes: { commands: { name: string; params: { properties?: Record<string, unknown> } }[]; element: { name: string }[]; status: { name: string }[] };
 };
 
 describe("core range", () => {
@@ -61,6 +61,16 @@ describe("release files", () => {
   it("builds the bundle from src/main.ts into ui/clubhouse.js", () => {
     expect(read("build.mjs")).toContain('outfile: "ui/clubhouse.js"');
     expect(read("build.mjs")).toContain('entryPoints: ["src/main.ts"]');
+  });
+});
+
+describe("message.send declaration (C159, docs/spec/room.md#mood)", () => {
+  // The send button and the input run message.send with {text, mood}, so its params declare mood, and mention.insert keeps its result {text}.
+  it("declares mood among the params of message.send and in no other command", () => {
+    const send = manifest.exposes!.commands!.find((one) => one.name.endsWith(".message.send"))!;
+    expect(Object.keys(send.params.properties ?? {})).toEqual(["text", "mood"]);
+    const others = manifest.exposes!.commands!.filter((one) => one !== send && JSON.stringify(one).includes('"mood":{"type":"string","enum"'));
+    expect(others.map((one) => one.name)).toEqual([]);
   });
 });
 

@@ -2,6 +2,7 @@
 
 ## 미출시
 
+- C159: 전송 button과 입력창이 다시 메시지를 보낸다. `message.send`가 `mood`를 선언하고, `message.send` 실행 전의 거절은 `message.send: <reason>`으로 보인다.
 - C158: 방 specification의 command 목록이 `message.send {text, mood?}`를 밝힌다.
 - C157: manifest는 저장된 group이 leader를 가지는 `@soksak/plugin-agents` `>=0.0.10`을 요구한다.
 - C156: version은 0.0.29이며 C140부터 C155까지를 release한다.

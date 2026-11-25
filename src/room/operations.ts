@@ -36,6 +36,15 @@ export interface OperationDeps {
   failed: (reason: string) => void;
 }
 
+// The errors that message.send showed through the error display before it rejected with them (C159): a binding of the send button
+// shows only a rejection that is not among them, such as a refusal of the registry before message.send ran.
+const shown = new WeakSet<object>();
+
+// shownByRoom tells whether message.send showed error before it rejected with it.
+export function shownByRoom(error: unknown): boolean {
+  return typeof error === "object" && error !== null && shown.has(error);
+}
+
 export function createRoomOperations(deps: OperationDeps): Record<string, (params: any) => Promise<any>> {
   let relaying = false;
   // Whether conversation.stop ended the conversation of the current relay.
@@ -85,6 +94,7 @@ export function createRoomOperations(deps: OperationDeps): Record<string, (param
         return await sendMessage(params);
       } catch (error) {
         deps.failed(error instanceof Error ? error.message : String(error));
+        if (typeof error === "object" && error !== null) shown.add(error);
         throw error;
       }
     },

@@ -1,6 +1,6 @@
 // The commands of the room operations (C35, C140, docs/spec/room.md#commands): group.set, members.fold, message.send and conversation.stop.
 import { describe, expect, it } from "vitest";
-import { createRoomOperations, type OperationDeps } from "./operations";
+import { createRoomOperations, shownByRoom, type OperationDeps } from "./operations";
 
 const P = "soksak-plugin-agents-clubhouse";
 
@@ -123,6 +123,14 @@ describe("message.send", () => {
     expect(r.log).toContain("follow-up");
     finish();
     expect(await first).toEqual({ answers: [] });
+  });
+
+  it("marks each error that it showed, so a binding shows only a refusal that came before message.send (C159)", async () => {
+    const r = room();
+    const refused = await r.commands[`${P}.message.send`]({ text: " " }).catch((error: unknown) => error);
+    expect(shownByRoom(refused)).toBe(true);
+    expect(shownByRoom(new Error("command message.send: unknown parameter mood"))).toBe(false);
+    expect(shownByRoom("text")).toBe(false);
   });
 
   it("ends the relay state when the relay fails, reports the failure and rejects with its error", async () => {

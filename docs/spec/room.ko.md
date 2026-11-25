@@ -104,7 +104,7 @@ Turn은 program이 `idle`이든 `working`이든 session의 submit queue로 줄�
 
 ## Mood
 
-composer에는 메시지 입력 왼쪽에 고르지 않아도 되는 기분 선택이 있다. 선택지는 기분 없음, 또는 `glad` 😊, `fine` 🙂, `worried` 😟, `upset` 😠, `thankful` 🙏, `excited` 🤩 중 하나다. `message.send`는 그 선택을 `mood`로 받아 그 emoji와 공백 하나를 글 앞에 붙인다. 그래서 방 기록, turn 줄, 각 member가 메시지와 함께 owner의 감정을 받는다. `mood`가 없거나 비어 있으면 글만 보내고, 다른 값은 그 값을 밝혀 거절한다. 전송하면 선택은 기분 없음으로 돌아간다. Decision: 방은 기분을 별도 field가 아니라 글 속 emoji로 전한다. 모든 member CLI가 turn 줄의 글을 읽고, emoji는 room protocol에 규칙을 더할 필요가 없기 때문이다.
+composer에는 메시지 입력 왼쪽에 고르지 않아도 되는 기분 선택이 있다. 선택지는 기분 없음, 또는 `glad` 😊, `fine` 🙂, `worried` 😟, `upset` 😠, `thankful` 🙏, `excited` 🤩 중 하나다. `message.send`는 그 선택을 `mood`로 받아 그 emoji와 공백 하나를 글 앞에 붙인다. 그래서 방 기록, turn 줄, 각 member가 메시지와 함께 owner의 감정을 받는다. `mood`가 없거나 비어 있으면 글만 보내고, 다른 값은 그 값을 밝혀 거절한다. 전송하면 선택은 기분 없음으로 돌아간다. 전송 button과 입력창은 `{text, mood}`로 `message.send`를 실행한다. `message.send`는 자기의 거절과 실패를 창의 error display로 보이고, button과 입력창의 binding은 그 밖의 모든 거절, 예를 들어 `message.send`가 실행되기 전 registry의 거절을 `message.send: <reason>`으로 보인다. 그래서 보이는 결과 없이 끝나는 전송은 없다. Decision: 방은 기분을 별도 field가 아니라 글 속 emoji로 전한다. 모든 member CLI가 turn 줄의 글을 읽고, emoji는 room protocol에 규칙을 더할 필요가 없기 때문이다.
 
 ## Conversation
 

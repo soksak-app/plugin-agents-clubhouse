@@ -266,10 +266,7 @@
         },
         "result": {
           "type": "object",
-          "properties": {
-            "text": { "type": "string" },
-            "mood": { "type": "string", "enum": ["", "glad", "fine", "worried", "upset", "thankful", "excited"] }
-          },
+          "properties": { "text": { "type": "string" } },
           "required": ["text"]
         }
       },
@@ -320,7 +317,10 @@
         "description": "Relay a message to the members that it mentions and then to the leader of the group, or to the leader alone without a mention, put the emoji of an optional mood before the text, refuse it when one of them has no open session, let the members that answers mention take further turns up to the setting conversationTurns, and answer after the whole conversation with the answer of each member in turn order.",
         "params": {
           "type": "object",
-          "properties": { "text": { "type": "string" } },
+          "properties": {
+            "text": { "type": "string" },
+            "mood": { "type": "string", "enum": ["", "glad", "fine", "worried", "upset", "thankful", "excited"] }
+          },
           "required": ["text"]
         },
         "result": {

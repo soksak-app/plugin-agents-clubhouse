@@ -84,6 +84,22 @@ describe("the start of the room page (C96)", () => {
     const later = (await view.request("soksak-plugin-agents-clubhouse.state", {})) as State;
     expect(later.members).toEqual([{ id: "harness", leader: true }, { id: "reviewer", leader: false }]);
     expect({ errors: view.observed.errors, failures: view.observed.failures, tab: view.observed.tab.error }).toEqual({ errors: [], failures: [], tab: null });
+    // C159 (docs/spec/room.md#commands): the send button runs message.send, and its refusal of an empty text shows through the error
+    // display of the window.
+    (document.querySelector(".st-in button") as HTMLButtonElement).click();
+    for (let step = 0; step < 20; step += 1) await turn();
+    await view.settled();
+    expect(view.observed.tab.error).toBe('room relay: text must be a non-empty string, got ""');
+    // A refusal of the registry before message.send runs shows through the error display too (C159): a mood that the declaration does not
+    // list is refused by the schema of message.send.
+    const mood = document.querySelector(".st-mood") as HTMLSelectElement;
+    mood.append(new view.window.Option("x", "sleepy"));
+    mood.value = "sleepy";
+    (document.querySelector("textarea") as HTMLTextAreaElement).value = "hi";
+    (document.querySelector(".st-in button") as HTMLButtonElement).click();
+    for (let step = 0; step < 20; step += 1) await turn();
+    await view.settled();
+    expect(view.observed.tab.error).toBe("message.send: invalid params for soksak-plugin-agents-clubhouse.message.send");
     await view.close();
     delete (globalThis as { IntersectionObserver?: unknown }).IntersectionObserver;
   });
