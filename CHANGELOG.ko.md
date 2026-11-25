@@ -2,6 +2,7 @@
 
 ## 미출시
 
+- C134: 0.0.25 형식의 저장된 room state를 C120의 형식으로 고쳤고 `member`는 `checked`와 같아요. 그래서 room이 더 이상 `roster must be an array of {id, member, checked, role, leader}`로 거절하지 않아요.
 - C130: room은 member를 시작하기 전에 각 member의 home login을 그 CLI의 문서화된 status 명령으로 읽어요. `claude auth status --json`(program `claude-status`)은 `configDirectory`가 그 home이어야 하고, `codex login status`(program `codex-status`)도 써요. login이 없는 home의 member는 session을 열지 않고, card는 `로그인 필요: 에이전트 정의에서 계정에 로그인`과 `로그인 확인` 버튼을 보여요. 버튼은 `login.check`를 실행해서 member를 다시 summon해요. room은 login을 열지 않아요. agents plugin이 계정에 login하고 member는 그 login을 써요. 전에는 member가 CLI의 첫 시작(text style 선택과 login)에서 시작했고 room은 그 member에게 line을 보냈어요. Red: login module, card 상태, 선언된 command test가 실패했어요. Green: `npx vitest run`의 test 376개가 모두 통과하고 `npx tsc --noEmit`이 통과해요.
 - C129: version은 0.0.26이고, agents 0.0.5를 요구해요.
 - C128: maker 정의의 member는 agents 목록의 `launch`로 시작한다. home 변수 뒤에 `launch.env`의 변수, 계정 인자 뒤에 `launch.args`를 두므로 Claude Code member는 `--plugin-dir`과 `--add-dir`로 maker folder를 읽는다. `launch` 없이 `maker`만 있거나 다른 형식의 launch를 가진 정의는 거부한다.

@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- C134: The stored room states of the 0.0.25 form were edited into the form of C120, with `member` equal to `checked`, so the room no longer refuses them with `roster must be an array of {id, member, checked, role, leader}`.
 - C130: The room reads the login of the home of each member before it starts the member, with the documented status command of its CLI: `claude auth status --json` (program `claude-status`), whose `configDirectory` must be the home, and `codex login status` (program `codex-status`). A member of a home without a login opens no session, and its card shows `로그인 필요: 에이전트 정의에서 계정에 로그인` with the button `로그인 확인`, which runs `login.check` and summons the members again. The room opens no login: the agents plugin logs in to the account and the member uses that login. Before, the member started at the first start of its CLI, the text style choice and the login, and the room sent it lines. Red: the tests of the login module, the card state and the declared commands failed. Green: all 376 tests of `npx vitest run` pass and `npx tsc --noEmit` passes.
 - C129: The version is 0.0.26, and the plugin requires agents 0.0.5.
 - C128: A member of a maker definition starts with the `launch` of the agents listing: the variables of `launch.env` after the home variable and `launch.args` after the arguments of the account, so a Claude Code member loads the maker folder through `--plugin-dir` and `--add-dir`. A definition with `maker` and without `launch`, or with a launch of another form, is refused.
