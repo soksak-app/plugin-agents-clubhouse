@@ -50,6 +50,9 @@ describe("the start of the room page (C96)", () => {
     // The page reads the bare name, which the window of the view does not bind because jsdom does not define it.
     const observer = class { observe() {} unobserve() {} disconnect() {} takeRecords() { return []; } };
     Object.assign(globalThis, { IntersectionObserver: observer });
+    // The page module runs in the global of Node, whose navigator.language follows the locale of the run; the test fixes Korean, so the
+    // texts of the page do not depend on the machine (C160).
+    Object.defineProperty(globalThis.navigator, "language", { value: "ko-KR", configurable: true });
     await view.load(new URL("../ui/clubhouse.js", import.meta.url));
     for (let step = 0; step < 20; step += 1) await turn();
     await view.settled();
@@ -102,5 +105,6 @@ describe("the start of the room page (C96)", () => {
     expect(view.observed.tab.error).toBe("message.send: invalid params for soksak-plugin-agents-clubhouse.message.send");
     await view.close();
     delete (globalThis as { IntersectionObserver?: unknown }).IntersectionObserver;
+    delete (globalThis.navigator as { language?: string }).language;
   });
 });

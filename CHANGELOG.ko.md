@@ -2,6 +2,7 @@
 
 ## 미출시
 
+- C160: page start test가 언어를 한국어로 고정해 모든 locale에서 통과한다.
 - C157-1: room definitions의 dependency test가 `@soksak/plugin-agents` `>=0.0.10`을 기대한다.
 - C159: 전송 button과 입력창이 다시 메시지를 보낸다. `message.send`가 `mood`를 선언하고, `message.send` 실행 전의 거절은 `message.send: <reason>`으로 보인다.
 - C158: 방 specification의 command 목록이 `message.send {text, mood?}`를 밝힌다.
