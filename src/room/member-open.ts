@@ -29,3 +29,17 @@ export function createMemberOpen(deps: MemberOpenDeps): (member: { id: string; n
     return outcome.session;
   };
 }
+
+// The members of a relay with the session of each whose protocol turn ended (C153, docs/spec/room.md#receivers): a member with an open
+// session that has not received the protocol gets null, so the relay opens it at its own turn and a message waits for no protocol turn
+// of a member that takes no turn.
+export function relayGroup(
+  members: readonly { id: string; name: string }[],
+  open: readonly { id: string; name: string; session: string }[],
+  taught: ReadonlySet<string>,
+): { id: string; name: string; session: string | null }[] {
+  return members.map((entry) => {
+    const session = open.find((one) => one.id === entry.id)?.session;
+    return { id: entry.id, name: entry.name, session: session !== undefined && taught.has(session) ? session : null };
+  });
+}

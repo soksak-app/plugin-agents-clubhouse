@@ -31,7 +31,7 @@ import { createRoomRecord, leaderRoute, settledRelay } from "./room/room-record"
 import { agentFileText, agentNameOf, roleFileOf } from "./room/agent-file";
 import { createConversationStatus, waitLabel } from "./room/conversation-status";
 import { createRoomCheck, type RoomCheckValue } from "./room/check";
-import { createMemberOpen } from "./room/member-open";
+import { createMemberOpen, relayGroup } from "./room/member-open";
 import { MEMORY_INDEX_LIMIT, createProtocolInjector, type AgentPlace, type MemberWorktree } from "./room/protocol";
 import { parseRoomState, serializedRoomState, type RoomState as RoomTabState } from "./room/room-state";
 import { ownedSessionIds, sessionProgram, shownByOf } from "./room/session-channel";
@@ -684,7 +684,10 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
         for (const session of memberSessions.values()) roomSessions.add(session);
         persist();
       })
-      .then(teachMembers);
+      .then(() => {
+        // The protocol turns of the open members run without holding the summon; the open of a member waits for its own (C153).
+        void teachMembers();
+      });
   };
   const summon = (): void => {
     summonRun().catch((error: unknown) => report("room summon", String((error as Error)?.message ?? error)));
@@ -1013,9 +1016,9 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
     settledRelay(record, async (accepted) => {
       const leader = leaderEntry();
       if (leader === undefined) throw new Error("no group is assigned");
-      const taught = await taughtMembers(openMembers());
-      // A member without a session that received the room protocol opens it at its first turn (docs/spec/room.md#receivers).
-      const group = members.map((entry) => ({ id: entry.id, name: entry.name, session: taught.find((one) => one.id === entry.id)?.session ?? null }));
+      // A member without a session that received the room protocol opens it at its own turn, so a message waits for no protocol turn of
+      // another member (docs/spec/room.md#receivers, C153).
+      const group = relayGroup(members, openMembers(), taughtSessions);
       const answers = await relayToReceivers(relayPorts, group, text, record, {
         limit: conversationTurns, stopped, accepted, stopping, leader: leader.id,
       });

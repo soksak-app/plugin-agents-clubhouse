@@ -1,7 +1,7 @@
 // The open of a member at its first turn (docs/spec/room.md#receivers): it summons the member, refuses a member without a login, and
 // a stop of the owner during the open ends it as a stop, also when the summon itself waited for the protocol turn (C151).
 import { describe, expect, it } from "vitest";
-import { createMemberOpen } from "./member-open";
+import { createMemberOpen, relayGroup } from "./member-open";
 import { TurnStopped } from "./room-relay";
 import type { ProtocolOutcome } from "./protocol";
 
@@ -53,5 +53,20 @@ describe("createMemberOpen", () => {
     const t = setup([{ ok: true }], () => {}, "member a: /gone does not exist");
     await expect(t.open({ id: "a", name: "A" })).rejects.toThrow("member a: /gone does not exist");
     expect(t.calls).toEqual(["check a"]);
+  });
+});
+
+// C153 (docs/spec/room.md#receivers): a message waits only for the protocol turn of the members that take a turn.
+describe("relayGroup", () => {
+  it("gives a member its open session only after its protocol turn, and waits for no protocol turn of another member", async () => {
+    const members = [{ id: "a", name: "A" }, { id: "b", name: "B" }, { id: "c", name: "C" }];
+    const open = [{ id: "a", name: "A", session: "s-a" }, { id: "b", name: "B", session: "s-b" }];
+    const group = relayGroup(members, open, new Set(["s-b"]));
+    const result = await Promise.race([Promise.resolve(group), new Promise((resolve) => setTimeout(() => resolve("waited"), 50))]);
+    expect(result).toEqual([
+      { id: "a", name: "A", session: null },
+      { id: "b", name: "B", session: "s-b" },
+      { id: "c", name: "C", session: null },
+    ]);
   });
 });
