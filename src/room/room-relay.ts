@@ -282,7 +282,7 @@ async function runTurns(
       // (docs/spec/room.md#settling).
       const unanswered = members.filter(
         (member) => (turnStart.has(member.id) && turnStart.get(member.id)! <= lastOwner()) ||
-          // Only a member that took part in the relay: in facil the other members take no turn.
+          // Only a member that took part in the relay.
           ([...earlier, ...answers].some((answer) => answer.id === member.id) && unreceivedBesidesSettled(record, member, [...earlier, ...answers])),
       );
       if (open.length === 0 && unanswered.length === 0) {
@@ -424,8 +424,7 @@ const turnsOf = (members: NamedRelayMember[]): Turn[] => members.map((member) =>
 
 // Relays the last message of the owner in the record by the mode of the room (docs/spec/room.md#modes). The members that the message
 // mentions take their turns first in mention order, one after another, and the other members follow in member order: one after another
-// in turn and facil, at the same time in simul. Without a mention, turn relays to each member in roster order, facil to the first member
-// whose session is idle, and simul to every member at the same time. Each member receives the record lines that it has not received
+// in turn, at the same time in simul. Each member receives the record lines that it has not received
 // (docs/spec/room.md#room-record), and each answer is appended to the record. The answers that mention members start the turns of the
 // conversation, and the rounds continue while a member declares continue, within the bound (docs/spec/room.md#conversation).
 export async function relayInMode(
@@ -466,10 +465,5 @@ export async function relayInMode(
     for (const [index, answer] of answers.slice(first.length).entries()) queueMentions(queue, answer.text, targets[index], members);
     return [...answers, ...(await runTurns(ports, queue, members, record, bound, answers))];
   }
-  // An owner `@all` in facil runs every member in roster order without the idle choice, because the owner asked every member.
-  if (mode === "turn" || mentioned.length > 0 || mentionsAll(message)) return runTurns(ports, turnsOf([...mentioned, ...others]), members, record, bound);
-  const sessions = ports.sessions();
-  const idle = members.find((member) => sessionProgram(sessions, member.session) === "idle");
-  if (!idle) throw new Error("no member is idle");
-  return runTurns(ports, turnsOf([idle]), members, record, bound);
+  return runTurns(ports, turnsOf([...mentioned, ...others]), members, record, bound);
 }

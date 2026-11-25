@@ -11,6 +11,8 @@ export interface RoomState {
   // The members that the leader summoned, in summon order (docs/spec/room.md#team).
   team: TeamEntry[];
   mode: RoomMode;
+  // Whether the member grid of the header is folded to its first two rows (docs/spec/room.md#header).
+  folded: boolean;
   // The conversation as the room shows it: the owner or the member identifier, and the text.
   conversation: { speaker: string; text: string; at: number | null; elapsedMs: number | null }[];
   // The member sessions that this room opened; a tab of one of them whose session has ended is a tab of the room to close.
@@ -39,8 +41,8 @@ export function serializedRoomState(state: RoomState): string {
   return json;
 }
 
-const MODES: readonly string[] = ["facil", "turn", "simul"];
-const FIELDS: readonly string[] = ["roster", "team", "mode", "conversation", "sessions", "protocolSessions", "addressed", "delivered", "sent", "turns"];
+const MODES: readonly string[] = ["turn", "simul"];
+const FIELDS: readonly string[] = ["roster", "team", "mode", "folded", "conversation", "sessions", "protocolSessions", "addressed", "delivered", "sent", "turns"];
 
 const isText = (value: unknown): value is string => typeof value === "string" && value !== "";
 
@@ -67,8 +69,9 @@ export function parseRoomState(value: unknown): RoomState | null {
     throw new Error(`room tab state: team must be an array of {id, definition, role, directory, merged, agentSession, resume, agent, worktree}, got ${JSON.stringify(team)}`);
   }
   if (!MODES.includes(state.mode as string)) {
-    throw new Error(`room tab state: mode must be facil, turn or simul, got ${JSON.stringify(state.mode)}`);
+    throw new Error(`room tab state: mode must be turn or simul, got ${JSON.stringify(state.mode)}`);
   }
+  if (typeof state.folded !== "boolean") throw new Error(`room tab state: folded must be true or false, got ${JSON.stringify(state.folded)}`);
   const conversation = state.conversation;
   const timeOrNull = (value: unknown): boolean => value === null || (typeof value === "number" && Number.isFinite(value) && value >= 0);
   if (
@@ -132,6 +135,7 @@ export function parseRoomState(value: unknown): RoomState | null {
     roster: roster.map((entry) => ({ id: entry.id, member: entry.member, checked: entry.checked, role: entry.role, leader: entry.leader })),
     team: team.map((entry) => ({ id: entry.id, definition: entry.definition, role: entry.role, directory: entry.directory, merged: entry.merged, agentSession: entry.agentSession, resume: entry.resume, agent: entry.agent, worktree: entry.worktree })),
     mode: state.mode as RoomMode,
+    folded: state.folded,
     conversation: conversation.map((entry) => ({ speaker: entry.speaker, text: entry.text, at: entry.at, elapsedMs: entry.elapsedMs })),
     sessions: [...(state.sessions as string[])],
     protocolSessions: [...(state.protocolSessions as string[])],

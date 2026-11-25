@@ -1,40 +1,93 @@
-// The header of the room (docs/spec/room.md#header): the plugin name, the roster tabs, the mode buttons and the transport status
-// in one row, which wraps in a narrow card.
+// The header of the room (docs/spec/room.md#header): the first line holds the plugin name on the left and the count and the invite button
+// on the right; the member cards stand below in a grid of equal columns that uses the whole width, and a grid of three rows or more folds
+// to its first two rows. The mode bar, which the page puts directly above the composer, holds the mode buttons and the transport status.
+
+// The smallest width of a member card and the gap between the cards, in points.
+const CARD_MIN = 150;
+const GAP = 5;
+// The rows that a folded grid keeps, and the rows from which the grid can fold.
+const FOLDED_ROWS = 2;
+const FOLD_ROWS = 3;
 
 export const HEADER_CSS = `
-.st-bar{display:flex;align-items:center;gap:4px 8px;height:auto;min-height:var(--toolbar-h,28px);box-sizing:border-box;padding:3px var(--toolbar-pad-x,8px);border-bottom:1px solid rgba(127,127,127,.2);flex:0 0 auto;flex-wrap:wrap;min-width:0}
-.st-bar b{font-weight:700;letter-spacing:.02em;flex:0 0 auto;white-space:nowrap}
-.st-tabs{display:flex;align-items:center;gap:5px;flex-wrap:nowrap;flex:1 1 160px;min-width:120px;overflow-x:auto;scrollbar-width:none}
-.st-tabs::-webkit-scrollbar{display:none}
-.st-kib{margin-left:4px;display:inline-flex;border-radius:8px;overflow:hidden;border:1px solid rgba(127,127,127,.28);flex:0 0 auto}
+.st-bar{display:flex;flex-direction:column;gap:4px;box-sizing:border-box;padding:3px var(--toolbar-pad-x,8px);border-bottom:1px solid rgba(127,127,127,.2);flex:0 0 auto;min-width:0}
+.st-top{display:flex;align-items:center;gap:8px;min-height:var(--toolbar-h,28px);min-width:0}
+.st-top b{font-weight:700;letter-spacing:.02em;flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.st-actions{margin-left:auto;display:flex;align-items:center;gap:6px;flex:0 0 auto}
+.st-count{font-size:11px;color:var(--fg3,#888);white-space:nowrap}
+.st-grid{display:grid;grid-template-columns:repeat(var(--cols),minmax(0,1fr));grid-auto-rows:1fr;gap:${GAP}px;min-width:0}
+.st-grid:empty{display:none}
+.st-grid>[hidden]{display:none!important}
+.st-fold{align-self:flex-end;appearance:none;border:0;background:transparent;color:var(--fg3,#888);font:inherit;font-size:11px;padding:0 2px;cursor:pointer;white-space:nowrap}
+.st-modes{display:flex;align-items:center;gap:8px;padding:3px var(--toolbar-pad-x,8px);min-width:0;flex:0 0 auto}
+.st-kib{display:inline-flex;border-radius:8px;overflow:hidden;border:1px solid rgba(127,127,127,.28);flex:0 0 auto}
+.st-kib:empty{display:none}
 .st-kib button{appearance:none;border:0;background:transparent;color:inherit;opacity:.6;font:inherit;font-size:11px;padding:3px 9px;cursor:pointer;white-space:nowrap}
 .st-kib button.on{opacity:1;background:rgba(127,127,127,.2);font-weight:700}
 .st-status{margin-left:auto;font-size:11px;color:var(--fg3,#888);flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 `;
 
+// The columns of the member grid in a width: as many as cards of CARD_MIN points fit with their gaps, and at least one.
+export function gridColumns(width: number): number {
+  if (!Number.isFinite(width) || width < 0) throw new Error(`the member grid width must be a number of 0 or more, got ${width}`);
+  return Math.max(1, Math.floor((width + GAP) / (CARD_MIN + GAP)));
+}
+
+// The rows of the member grid for a number of cards in a number of columns.
+export function gridRows(cards: number, columns: number): number {
+  return Math.ceil(cards / columns);
+}
+
 export interface RoomHeader {
   bar: HTMLElement;
-  tabs: HTMLElement;
+  top: HTMLElement;
+  // The right end of the first line: the count, followed by the invite button that the page appends.
+  actions: HTMLElement;
+  count: HTMLElement;
+  grid: HTMLElement;
+  fold: HTMLButtonElement;
+  modeBar: HTMLElement;
   kib: HTMLElement;
   status: HTMLElement;
   // Shows the transport status.
   setStatus(text: string): void;
+  // Lays out the member cards of the grid for its width: the columns, the fold button and, while folded, the cards of the first two rows.
+  layout(width: number, folded: boolean): void;
 }
 
-export function createRoomHeader(name: string, status: string): RoomHeader {
+export function createRoomHeader(name: string, status: string, labels: { fold: string; unfold: string }): RoomHeader {
   const bar = part("div", "st-bar");
+  const top = part("div", "st-top");
   const title = part("b", "");
   title.textContent = name;
-  const tabs = part("div", "st-tabs");
+  const actions = part("div", "st-actions");
+  const count = part("span", "st-count");
+  actions.append(count);
+  top.append(title, actions);
+  const grid = part("div", "st-grid");
+  const fold = part("button", "st-fold") as HTMLButtonElement;
+  fold.type = "button";
+  fold.hidden = true;
+  bar.append(top, grid, fold);
+  const modeBar = part("div", "st-modes");
   const kib = part("div", "st-kib");
   const statusEl = part("span", "st-status");
-  bar.append(title, tabs, kib, statusEl);
+  modeBar.append(kib, statusEl);
   const setStatus = (text: string): void => {
     statusEl.textContent = text;
     statusEl.title = text;
   };
   setStatus(status);
-  return { bar, tabs, kib, status: statusEl, setStatus };
+  const layout = (width: number, folded: boolean): void => {
+    const columns = gridColumns(width);
+    grid.style.setProperty("--cols", String(columns));
+    const cards = [...grid.children] as HTMLElement[];
+    const foldable = gridRows(cards.length, columns) >= FOLD_ROWS;
+    fold.hidden = !foldable;
+    fold.textContent = folded ? labels.unfold : labels.fold;
+    for (const [index, card] of cards.entries()) card.hidden = foldable && folded && index >= FOLDED_ROWS * columns;
+  };
+  return { bar, top, actions, count, grid, fold, modeBar, kib, status: statusEl, setStatus, layout };
 }
 
 function part(tag: string, cls: string): HTMLElement {

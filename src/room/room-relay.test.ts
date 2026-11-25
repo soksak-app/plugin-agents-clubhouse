@@ -109,7 +109,7 @@ function roomRecord(...messages: string[]): RoomRecord {
 // Accepts the message as message.send does, then relays it.
 function send(
   core: { ports: RelayPorts; bound: { record: RoomRecord | null } },
-  mode: "turn" | "facil" | "simul",
+  mode: "turn" | "simul",
   members: typeof THREE,
   record: RoomRecord,
   message: string,
@@ -251,24 +251,8 @@ describe("relayInMode (docs/spec/room.md#modes)", () => {
     expect(core.submitted[1]).toEqual({ session: "s-2", text: "[@clubhouse] 네 차례야. 아래는 네가 아직 못 본 기록이야. | [@owner] hello | [@Claude] one two | [@clubhouse] answer through the room only: reply to the speakers, put a message to the owner in @owner:, end every step with the single text . and nothing else, also while background work runs | [@clubhouse] turn t-2" });
   });
 
-  it("facil: relays to the first idle member in roster order only", async () => {
-    const core = fakeCore([{ session: "s-1", program: { state: "working" } }, IDLE("s-2")]);
-    const answers = await relayInMode(core.ports, "facil", MEMBERS, "who takes this", roomRecord("who takes this"), OPEN);
-    expect(core.submitted).toEqual([{ session: "s-2", text: "[@clubhouse] 네 차례야. 아래는 네가 아직 못 본 기록이야. | [@owner] who takes this | [@clubhouse] answer through the room only: reply to the speakers, put a message to the owner in @owner:, end every step with the single text . and nothing else, also while background work runs | [@clubhouse] turn t-1" }]);
-    expect(answers.map((answer) => answer.id)).toEqual(["writer"]);
-  });
 
-  it("facil: a mentioned member takes the first turn and the other members follow", async () => {
-    const core = fakeCore([IDLE("s-1"), IDLE("s-2")]);
-    await relayInMode(core.ports, "facil", MEMBERS, "@Codex please", roomRecord("@Codex please"), OPEN);
-    expect(core.submitted.map((entry) => entry.session)).toEqual(["s-2", "s-1"]);
-  });
 
-  it("facil: refuses the send when no member is idle", async () => {
-    const core = fakeCore([{ session: "s-1", program: { state: "working" } }, { session: "s-2", program: null }]);
-    await expect(relayInMode(core.ports, "facil", MEMBERS, "hi", roomRecord("hi"), OPEN)).rejects.toThrow("no member is idle");
-    expect(core.submitted).toEqual([]);
-  });
 
   it("simul: submits to every member before any turn ends and keeps roster order in the answers", async () => {
     const core = fakeCore([IDLE("s-1"), IDLE("s-2")], { manual: true });
@@ -403,7 +387,7 @@ describe("the conversation of the members (docs/spec/room.md#conversation)", () 
     const record = roomRecord();
     record.append("owner", "@claude ping");
     const answers = await settledRelay(record, (accepted) =>
-      relayInMode(core.ports, "facil", MEMBERS, "@claude ping", record, { limit: 2, stopped: () => false, accepted }),
+      relayInMode(core.ports, "turn", MEMBERS, "@claude ping", record, { limit: 2, stopped: () => false, accepted }),
     );
     // Claude and then Codex take the turns of the message; the mentions of the answers start the turns that the limit counts.
     expect(answers.map((answer) => answer.text)).toEqual(["@codex 1", "@claude 2", "@codex 3", "@claude 4"]);
@@ -882,7 +866,7 @@ describe("@all", () => {
     });
   });
 
-  it("without a leader: simul runs every member at once, turn in roster order, facil every member without the idle choice", async () => {
+  it("without a leader: simul runs every member at once and turn in roster order", async () => {
     const simul = fakeCore([IDLE("s-1"), IDLE("s-2"), IDLE("s-3")], { manual: true });
     const record = roomRecord("@all report");
     simul.bound.record = record;
@@ -893,9 +877,6 @@ describe("@all", () => {
     const turn = fakeCore([IDLE("s-1"), IDLE("s-2"), IDLE("s-3")]);
     await relayInMode(turn.ports, "turn", THREE, "@all report", roomRecord("@all report"), OPEN);
     expect(turn.submitted.map((entry) => entry.session)).toEqual(["s-1", "s-2", "s-3"]);
-    const facil = fakeCore([WORKING_ALL("s-1"), WORKING_ALL("s-2"), WORKING_ALL("s-3")]);
-    await relayInMode(facil.ports, "facil", THREE, "@all report", roomRecord("@all report"), OPEN);
-    expect(facil.submitted.map((entry) => entry.session)).toEqual(["s-1", "s-2", "s-3"]);
   });
 });
 

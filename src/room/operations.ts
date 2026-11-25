@@ -4,12 +4,15 @@ import type { RoomMode } from "./commands";
 import type { RosterEntry } from "./roster";
 
 const P = "soksak-plugin-agents-clubhouse";
-const MODES: RoomMode[] = ["facil", "turn", "simul"];
+const MODES: RoomMode[] = ["turn", "simul"];
 
 export interface OperationDeps {
   roster: RosterEntry[];
   mode: () => RoomMode;
   setMode: (mode: RoomMode) => void;
+  // Whether the member grid of the header is folded, and its change (docs/spec/room.md#header).
+  folded: () => boolean;
+  setFolded: (folded: boolean) => void;
   // Redraws the roster and the mode after a change.
   changed: () => void;
   // Summons the members that have no open session.
@@ -142,12 +145,21 @@ export function createRoomOperations(deps: OperationDeps): Record<string, (param
     },
     [`${P}.mode.set`]: async (params) => {
       const mode = params?.mode;
-      if (!MODES.includes(mode)) throw new Error(`mode must be facil, turn or simul, got ${JSON.stringify(mode)}`);
+      if (!MODES.includes(mode)) throw new Error(`mode must be turn or simul, got ${JSON.stringify(mode)}`);
       if (deps.mode() !== mode) {
         deps.setMode(mode);
         deps.changed();
       }
       return { mode };
+    },
+    [`${P}.members.fold`]: async (params) => {
+      const folded = params?.folded;
+      if (typeof folded !== "boolean") throw new Error(`folded must be true or false, got ${JSON.stringify(folded)}`);
+      if (deps.folded() !== folded) {
+        deps.setFolded(folded);
+        deps.changed();
+      }
+      return { folded };
     },
     // conversation.stop ends the relay and its waiting turns and the waits of the kept tokens; a second call changes nothing.
     [`${P}.conversation.stop`]: async () => {

@@ -1,19 +1,32 @@
 // @vitest-environment jsdom
-// The header of the room lays out in a narrow card (C37, docs/spec/room.md#header): the row wraps, the roster keeps a visible
-// width, the buttons keep one line, and the transport status shrinks with an ellipsis and shows its whole text as its tooltip.
-// jsdom computes the cascade of the style sheet and lays out nothing, so the tests read the declared properties.
+// The header of the room (C37, C138, docs/spec/room.md#header): the first line holds the plugin name, the count and the invite button;
+// the member cards stand in a grid of equal columns that uses the whole width, and a grid of three rows or more folds to its first two
+// rows. The mode bar above the composer holds the mode buttons and the transport status, which shrinks with an ellipsis and shows its
+// whole text as its tooltip. jsdom computes the cascade of the style sheet and lays out nothing, so the tests read the declared
+// properties and pass the width of the grid.
 import { beforeEach, describe, expect, it } from "vitest";
-import { HEADER_CSS, createRoomHeader } from "./header";
+import { HEADER_CSS, createRoomHeader, gridColumns, gridRows } from "./header";
 
 const STATUS = "연결됨: 메시지는 열린 member session에 전달된다";
+const LABELS = { fold: "접기", unfold: "펼치기" };
 
 function header() {
-  const h = createRoomHeader("에이전트 클럽하우스", STATUS);
+  const h = createRoomHeader("에이전트 클럽하우스", STATUS, LABELS);
   const button = document.createElement("button");
-  button.textContent = "진행";
+  button.textContent = "순차";
   h.kib.append(button);
-  document.body.append(h.bar);
+  document.body.append(h.bar, h.modeBar);
   return { ...h, mode: button };
+}
+
+function cards(h: ReturnType<typeof header>, count: number): HTMLElement[] {
+  const all = Array.from({ length: count }, () => {
+    const card = document.createElement("span");
+    card.className = "st-tab";
+    return card;
+  });
+  h.grid.replaceChildren(...all);
+  return all;
 }
 
 beforeEach(() => {
@@ -24,16 +37,51 @@ beforeEach(() => {
   document.head.append(style);
 });
 
-describe("room header", () => {
-  it("wraps its row and lets the row grow", () => {
-    const bar = getComputedStyle(header().bar);
-    expect(bar.flexWrap).toBe("wrap");
-    expect(bar.height).toBe("auto");
+describe("grid of the member cards", () => {
+  it("has as many equal columns as cards of 150 points fit in the width, and at least one", () => {
+    expect(gridColumns(0)).toBe(1);
+    expect(gridColumns(149)).toBe(1);
+    expect(gridColumns(305)).toBe(2);
+    expect(gridColumns(620)).toBe(4);
+    expect(() => gridColumns(Number.NaN)).toThrow("the member grid width must be a number of 0 or more, got NaN");
+    expect(gridRows(0, 3)).toBe(0);
+    expect(gridRows(7, 3)).toBe(3);
   });
 
-  it("keeps a visible width for the roster tabs", () => {
-    const tabs = getComputedStyle(header().tabs);
-    expect(tabs.minWidth).toBe("120px");
+  it("uses the whole width with cards of one width and one height", () => {
+    const h = header();
+    cards(h, 3);
+    h.layout(620, false);
+    const grid = getComputedStyle(h.grid);
+    expect(grid.display).toBe("grid");
+    expect(h.grid.style.getPropertyValue("--cols")).toBe("4");
+    expect(HEADER_CSS).toContain("grid-template-columns:repeat(var(--cols),minmax(0,1fr))");
+    expect(HEADER_CSS).toContain("grid-auto-rows:1fr");
+  });
+
+  it("shows the fold button only while the grid has three rows or more, and folds to the first two rows", () => {
+    const h = header();
+    const all = cards(h, 5);
+    h.layout(305, false);
+    expect(h.fold.hidden).toBe(false);
+    expect(h.fold.textContent).toBe("접기");
+    expect(all.map((card) => card.hidden)).toEqual([false, false, false, false, false]);
+    h.layout(305, true);
+    expect(h.fold.textContent).toBe("펼치기");
+    expect(all.map((card) => card.hidden)).toEqual([false, false, false, false, true]);
+    h.layout(620, true);
+    expect(h.fold.hidden).toBe(true);
+    expect(all.map((card) => card.hidden)).toEqual([false, false, false, false, false]);
+  });
+});
+
+describe("first line and mode bar", () => {
+  it("puts the plugin name on the left and the count and the invite place on the right of the first line", () => {
+    const h = header();
+    expect(h.top.firstElementChild?.textContent).toBe("에이전트 클럽하우스");
+    expect(h.top.lastElementChild).toBe(h.actions);
+    expect(h.actions.firstElementChild).toBe(h.count);
+    expect(getComputedStyle(h.actions).marginLeft).toBe("auto");
   });
 
   it("keeps each mode button on one line", () => {

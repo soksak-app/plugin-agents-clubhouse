@@ -9,7 +9,7 @@
       "kind": "view",
       "page": "ui/clubhouse.html"
     },
-    "unload": { "format": 1, "maxBytes": 1048576 }
+    "unload": { "format": 2, "maxBytes": 1048576 }
   },
   "preview": {
     "ink": "--fg"
@@ -23,10 +23,10 @@
   "settings": {
     "kibitzDefault": {
       "label": "대화 기본 모드",
-      "description": "새 방의 대화 방식. 순차는 roster 순서로 member마다 차례로, 진행은 session이 idle인 첫 member가, 동시는 모든 member가 동시에 받는다. @이름 mention은 mention된 member에게만 보낸다.",
+      "description": "새 방의 대화 방식. 순차는 roster 순서로 member마다 차례로, 동시는 모든 member가 동시에 받는다. @이름 mention은 mention된 member에게만 보낸다.",
       "type": "enum",
-      "default": "facil",
-      "values": ["facil", "turn", "simul"]
+      "default": "turn",
+      "values": ["turn", "simul"]
     },
     "conversationTurns": {
       "label": "대화 turn 한도",
@@ -205,7 +205,7 @@
         "result": {
           "type": "object",
           "properties": {
-            "mode": { "type": "string", "enum": ["turn", "facil", "simul"] },
+            "mode": { "type": "string", "enum": ["turn", "simul"] },
             "roster": {
               "type": "array",
               "items": {
@@ -472,16 +472,30 @@
       },
       {
         "name": "soksak-plugin-agents-clubhouse.mode.set",
-        "description": "Set the conversation mode of the room: facil, turn or simul.",
+        "description": "Set the conversation mode of the room: turn or simul.",
         "params": {
           "type": "object",
-          "properties": { "mode": { "type": "string", "enum": ["turn", "facil", "simul"] } },
+          "properties": { "mode": { "type": "string", "enum": ["turn", "simul"] } },
           "required": ["mode"]
         },
         "result": {
           "type": "object",
-          "properties": { "mode": { "type": "string", "enum": ["turn", "facil", "simul"] } },
+          "properties": { "mode": { "type": "string", "enum": ["turn", "simul"] } },
           "required": ["mode"]
+        }
+      },
+      {
+        "name": "soksak-plugin-agents-clubhouse.members.fold",
+        "description": "Fold the member grid of the header to its first two rows, or unfold it; the fold is kept in the tab state of the room.",
+        "params": {
+          "type": "object",
+          "properties": { "folded": { "type": "boolean" } },
+          "required": ["folded"]
+        },
+        "result": {
+          "type": "object",
+          "properties": { "folded": { "type": "boolean" } },
+          "required": ["folded"]
         }
       },
       {
@@ -611,18 +625,16 @@
         "many": true
       },
       {
-        "name": "soksak-plugin-agents-clubhouse.login",
-        "description": "Login check button of a member card, shown while the home of the account of the member has no login: it runs login.check",
-        "many": true
-      },
-      {
         "name": "soksak-plugin-agents-clubhouse.role",
         "description": "Role input of a member card: a change runs member.role with the text of the input",
         "many": true
       },
       {
         "name": "soksak-plugin-agents-clubhouse.mode",
-        "description": "Conversation mode buttons (facilitator, sequential, simultaneous): each runs mode.set with its mode"
+        "description": "Conversation mode buttons above the composer (sequential, simultaneous), hidden while the room has a leader: each runs mode.set with its mode"},
+      {
+        "name": "soksak-plugin-agents-clubhouse.fold",
+        "description": "Fold button below the member grid, shown while the grid has three rows or more: it runs members.fold with the toggled fold"
       },
       {
         "name": "soksak-plugin-agents-clubhouse.question",

@@ -49,8 +49,7 @@ import { measuredCardSize } from "./room/card-size";
 import { createRoomOperations } from "./room/operations";
 import { ANSWER_COMMAND, createAnswerChannel } from "./room/answer";
 
-const MODES: { id: RoomMode; key: "modeFacil" | "modeTurn" | "modeSimul" }[] = [
-  { id: "facil", key: "modeFacil" },
+const MODES: { id: RoomMode; key: "modeTurn" | "modeSimul" }[] = [
   { id: "turn", key: "modeTurn" },
   { id: "simul", key: "modeSimul" },
 ];
@@ -63,7 +62,7 @@ const MEMBER_COLORS = 6;
 
 const CSS = `
 .st{position:absolute;inset:0;display:flex;flex-direction:column;background:var(--bg,#1e1e1e);color:var(--fg,#ddd);font:13px system-ui,-apple-system,sans-serif;overflow:hidden}
-.st-tab{flex:0 0 auto}
+.st-tab{min-width:0;box-sizing:border-box}
 .st-tab{display:inline-flex;align-items:center;gap:7px;padding:4px 9px 4px 5px;border-radius:9px;border:1px solid rgba(127,127,127,.28);background:rgba(127,127,127,.06);cursor:grab;font-size:12px;user-select:none;touch-action:none;transition:background .12s,border-color .12s}
 .st-tab.on{border-color:var(--accent,#4c8dff);background:color-mix(in srgb,var(--accent,#4c8dff) 18%,transparent)}
 .st-tab.none{border-style:dashed}
@@ -71,7 +70,7 @@ const CSS = `
 .st-tab .ini{width:24px;height:24px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;background:rgba(127,127,127,.22);flex:0 0 auto}
 .st-tab.on .ini{background:var(--accent,#4c8dff);color:#fff}
 .st-tab .txt{display:flex;flex-direction:column;min-width:0;line-height:1.25}
-.st-tab .nm{font-weight:600;white-space:nowrap}
+.st-tab .nm{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .st-tab .sub{display:flex;align-items:center;gap:4px;font-size:11px;color:var(--fg3,#888);white-space:nowrap}
 .st-label{font-size:11px;color:var(--fg3,#888);white-space:nowrap;flex:0 0 auto}
 .st-invite{appearance:none;flex:0 0 auto;width:26px;height:26px;border-radius:50%;border:1px dashed rgba(127,127,127,.5);background:transparent;color:inherit;font:inherit;font-size:15px;line-height:1;cursor:pointer}
@@ -198,8 +197,8 @@ const expose = createExpose(
 async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHandlers> {
   const lang = navigator.language.startsWith("ko") ? "ko" : "en";
   const modeSetting = settings.kibitzDefault;
-  if (modeSetting !== "facil" && modeSetting !== "turn" && modeSetting !== "simul") {
-    throw new Error(`settings.kibitzDefault must be facil, turn or simul, got ${JSON.stringify(modeSetting)}`);
+  if (modeSetting !== "turn" && modeSetting !== "simul") {
+    throw new Error(`settings.kibitzDefault must be turn or simul, got ${JSON.stringify(modeSetting)}`);
   }
   // The largest number of turns that answers start for one message (docs/spec/room.md#conversation).
   const conversationTurns = conversationTurnsOf(settings.conversationTurns);
@@ -213,6 +212,8 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   // The state of this room tab, which core keeps per tab across a restart (docs/spec/room.md#restart).
   const saved = parseRoomState(await bridge!.calls.request("tab.state.read", null));
   let mode: RoomMode = saved?.mode ?? modeSetting;
+  // default: a room tab without a state shows its member grid unfolded (docs/spec/room.md#restart).
+  let folded = saved?.folded ?? false;
   // The roster of the saved state orders and checks the first roster that the definitions give.
   let seed: RosterEntry[] = (saved?.roster ?? []).map((entry) => ({ id: entry.id, name: "", member: entry.member, checked: entry.checked, role: entry.role, leader: entry.leader }));
   // The members that the leader summoned (docs/spec/room.md#team).
@@ -237,6 +238,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
       roster: roster.map((entry) => ({ id: entry.id, member: entry.member, checked: entry.checked, role: entry.role, leader: entry.leader })),
       team: team.map((entry) => ({ ...entry })),
       mode,
+      folded,
       conversation,
       sessions: [...roomSessions],
       protocolSessions: [...taughtSessions],
@@ -286,8 +288,8 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   const style = document.createElement("style");
   style.textContent = HEADER_CSS + CSS;
   const root = el("div", "st");
-  const header = createRoomHeader(manifest.name, transport.reason);
-  const { bar, tabs: tabsEl, kib } = header;
+  const header = createRoomHeader(manifest.name, transport.reason, { fold: t("foldButton", lang), unfold: t("unfoldButton", lang) });
+  const { bar, grid: tabsEl, kib, modeBar } = header;
   const msgs = el("div", "st-msgs");
   // The view follows new entries only at the bottom; in reading mode the pill counts the unseen entries (docs/spec/room.md#follow-mode).
   const msgsBox = el("div", "st-msgs-box");
@@ -353,7 +355,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
     send.title = transport.reason;
     for (const listener of [...transportListeners]) listener({ ...transport });
   };
-  root.append(bar, msgsBox, composer);
+  root.append(bar, msgsBox, modeBar, composer);
   document.head.append(style);
   document.body.style.cssText = "margin:0;height:100%";
   document.body.replaceChildren(root);
@@ -365,17 +367,24 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   const bound = (binding: Promise<unknown>, where: string): void => void binding.catch(failed(`bind ${where}`));
   // The members that the room waits for an answer of; the conversation status gives them once it exists (docs/spec/room.md#header).
   let waitedMembers: () => ReadonlySet<string> = () => new Set();
-  // The member part of the header (C123): the label, the count, one card per member and the invite button.
-  const countEl = elText("span", "", "st-label");
+  // The member part of the header (C123, C138): the count and the invite button on the first line, and one card per member in the grid.
+  const countEl = header.count;
   const inviteButton = elText("button", "+", "st-invite") as HTMLButtonElement;
   inviteButton.type = "button";
   inviteButton.title = t("inviteTitle", lang);
   inviteButton.dataset.expose = `${EXPOSE}.invite`;
   bound(expose.bind(inviteButton, `${EXPOSE}.invite`, {}, { failed: failed("invite") }), "invite");
+  header.actions.append(inviteButton);
+  // The fold button runs members.fold with the toggled fold (docs/spec/room.md#header).
+  header.fold.dataset.expose = `${EXPOSE}.fold`;
+  bound(expose.bind(header.fold, `${EXPOSE}.members.fold`, () => ({ folded: !folded }), { failed: failed("members.fold") }), "members.fold");
+  // The grid lays out its cards again at each change of its width, which the observer reports, and at each draw of the cards.
+  const layoutGrid = (): void => header.layout(tabsEl.clientWidth, folded);
+  new ResizeObserver(layoutGrid).observe(tabsEl);
   function renderTabs(): void {
     const { checked, members } = memberCount(roster);
     countEl.textContent = tp("memberCount", lang, { checked: String(checked), members: String(members) });
-    tabsEl.replaceChildren(elText("span", t("membersLabel", lang), "st-label"), countEl);
+    tabsEl.replaceChildren();
     for (const entry of roster) {
       if (!entry.member) continue;
       const tab = el("span", `st-tab${entry.checked ? " on" : ""}`);
@@ -397,24 +406,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
         expose.bind(role, `${EXPOSE}.member.role`, () => ({ id: entry.id, role: role.value }), { event: "change", failed: failed("member.role") }),
         "member.role",
       );
-      // While the home of the account has no login, the login button reads the logins again after the person logs in to the account in
-      // the agents plugin (docs/spec/room.md#login).
-      const login = elText("button", t("loginButton", lang), "st-login");
-      (login as HTMLButtonElement).type = "button";
-      login.dataset.expose = `${EXPOSE}.login`;
-      login.hidden = true;
-      login.addEventListener("pointerdown", (event) => event.stopPropagation());
-      bound(
-        expose.bind(login, `${EXPOSE}.login.check`, {}, {
-          when: (event: Event) => {
-            event.stopPropagation();
-            return true;
-          },
-          failed: failed("login.check"),
-        }),
-        "login.check",
-      );
-      sub.append(role, elText("span", "", "state"), login);
+      sub.append(role, elText("span", "", "state"));
       // A press runs member.set with the toggled state; the click that ends a drag runs nothing (docs/spec/room.md#commands).
       bound(
         expose.bind(tab, `${EXPOSE}.member.set`, () => ({ id: entry.id, checked: !entry.checked }), {
@@ -456,26 +448,25 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
       });
       tabsEl.append(tab);
     }
-    tabsEl.append(inviteButton);
     showStates();
+    layoutGrid();
   }
   // Shows the state of each member card without drawing the cards again, so a role input keeps its focus and its text.
   function showStates(): void {
     const waited = waitedMembers();
     for (const tab of tabsEl.querySelectorAll<HTMLElement>(".st-tab")) {
       const id = tab.dataset.id!;
-      const state = memberState(memberSessions.has(id), waited.has(id), loginGate.needs(id));
-      tab.classList.toggle("none", state === "none" || state === "login");
-      tab.querySelector(".state")!.textContent = t(
-        state === "answering" ? "stateAnswering" : state === "idle" ? "stateIdle" : state === "login" ? "stateLogin" : "stateNone",
-        lang,
-      );
-      tab.querySelector<HTMLElement>(".st-login")!.hidden = state !== "login";
+      const state = memberState(memberSessions.has(id), waited.has(id));
+      tab.classList.toggle("none", state === "none");
+      tab.querySelector(".state")!.textContent = t(state === "answering" ? "stateAnswering" : state === "idle" ? "stateIdle" : "stateNone", lang);
     }
   }
 
+  // The mode buttons above the composer; a room with a leader shows none, because a message of the owner then starts the turn of the
+  // leader in every mode (docs/spec/room.md#header).
   function renderMode(): void {
     kib.replaceChildren();
+    if (roster.some((entry) => entry.leader && entry.checked)) return;
     for (const option of MODES) {
       const button = document.createElement("button");
       button.type = "button";
@@ -1145,6 +1136,10 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
     setMode: (next) => {
       mode = next;
     },
+    folded: () => folded,
+    setFolded: (next) => {
+      folded = next;
+    },
     changed: () => {
       renderTabs();
       renderMode();
@@ -1275,7 +1270,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
     [`${EXPOSE}.tab`]: tabTargets,
     [`${EXPOSE}.invite`]: inviteButton,
     [`${EXPOSE}.role`]: () => [...tabsEl.querySelectorAll<HTMLElement>(".st-role")],
-    [`${EXPOSE}.login`]: () => [...tabsEl.querySelectorAll<HTMLElement>(".st-login")],
+    [`${EXPOSE}.fold`]: header.fold,
     [`${EXPOSE}.mode`]: kib,
     [`${EXPOSE}.question`]: () => [...msgs.querySelectorAll<HTMLElement>(".st-question-answer")],
     [`${EXPOSE}.question.choice`]: () => [...msgs.querySelectorAll<HTMLElement>(".st-question-choice")],

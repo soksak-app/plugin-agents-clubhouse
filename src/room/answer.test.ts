@@ -108,7 +108,7 @@ describe("an answer across a reload of the room page", () => {
     let written = "";
     const before = createAnswerChannel({ newTurn: counter(), delivered: () => {}, restoredAnswer: () => {}, changed: () => {
       written = serializedRoomState({
-        roster: [], team: [], mode: "turn", conversation, sessions: ["s-1"], protocolSessions: ["s-1"],
+        roster: [], team: [], mode: "turn", folded: false, conversation, sessions: ["s-1"], protocolSessions: ["s-1"],
         addressed: { "s-1": [0] }, delivered: { "s-1": 0 }, sent: { "s-1": 1 }, turns: before.tokens(),
       });
     } });

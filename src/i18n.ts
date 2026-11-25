@@ -22,16 +22,12 @@ const strings = {
     en: "Working…",
     ko: "작업 중…",
   },
-  modeFacil: {
-    en: "Facil",
-    ko: "진행",
-  },
   modeTurn: {
-    en: "Turn",
+    en: "Sequential",
     ko: "순차",
   },
   modeSimul: {
-    en: "Simul",
+    en: "Simultaneous",
     ko: "동시",
   },
   termOpen: {
@@ -138,13 +134,17 @@ const strings = {
     en: "No member that receives a message has an open session. Invite a member with + or select one.",
     ko: "메시지를 받을 멤버의 열린 세션이 없습니다. +로 멤버를 초대하거나 멤버를 선택하세요.",
   },
-  membersLabel: {
-    en: "Receivers",
-    ko: "받는 멤버",
-  },
   memberCount: {
-    en: "{checked} / {members} selected",
-    ko: "{checked} / {members} 선택",
+    en: "{checked} / {members}",
+    ko: "{checked} / {members}",
+  },
+  foldButton: {
+    en: "Fold",
+    ko: "접기",
+  },
+  unfoldButton: {
+    en: "Unfold",
+    ko: "펼치기",
   },
   inviteTitle: {
     en: "Invite a member",
@@ -161,14 +161,6 @@ const strings = {
   stateNone: {
     en: "no session",
     ko: "세션 없음",
-  },
-  stateLogin: {
-    en: "login needed: log in to the account in the agent definitions",
-    ko: "로그인 필요: 에이전트 정의에서 계정에 로그인",
-  },
-  loginButton: {
-    en: "Check login",
-    ko: "로그인 확인",
   },
   transportReady: {
     en: "Connected: messages go to the checked members with an open session.",

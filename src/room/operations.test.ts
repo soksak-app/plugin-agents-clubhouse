@@ -12,13 +12,18 @@ function room(overrides: Partial<OperationDeps> = {}) {
     { id: "b", name: "B", member: true, checked: true, role: "", leader: false },
     { id: "c", name: "C", member: false, checked: false, role: "", leader: false },
   ];
-  let mode: RoomMode = "facil";
+  let mode: RoomMode = "turn";
+  let folded = false;
   const log: string[] = [];
   const deps: OperationDeps = {
     roster,
     mode: () => mode,
     setMode: (next) => {
       mode = next;
+    },
+    folded: () => folded,
+    setFolded: (next) => {
+      folded = next;
     },
     changed: () => void log.push("changed"),
     summon: () => void log.push("summon"),
@@ -32,7 +37,7 @@ function room(overrides: Partial<OperationDeps> = {}) {
     failed: (reason) => void log.push(`failed ${reason}`),
     ...overrides,
   };
-  return { roster, log, mode: () => mode, commands: createRoomOperations(deps) };
+  return { roster, log, mode: () => mode, folded: () => folded, commands: createRoomOperations(deps) };
 }
 
 describe("member.set", () => {
@@ -115,8 +120,22 @@ describe("mode.set", () => {
     expect(await r.commands[`${P}.mode.set`]({ mode: "simul" })).toEqual({ mode: "simul" });
     expect(r.mode()).toBe("simul");
     expect(r.log).toEqual(["changed"]);
-    await expect(r.commands[`${P}.mode.set`]({ mode: "solo" })).rejects.toThrow('mode must be facil, turn or simul, got "solo"');
+    await expect(r.commands[`${P}.mode.set`]({ mode: "solo" })).rejects.toThrow('mode must be turn or simul, got "solo"');
+    await expect(r.commands[`${P}.mode.set`]({ mode: "facil" })).rejects.toThrow('mode must be turn or simul, got "facil"');
     expect(r.mode()).toBe("simul");
+  });
+});
+
+describe("members.fold", () => {
+  it("folds and unfolds the member grid and redraws, and refuses a value that is not a boolean", async () => {
+    const r = room();
+    expect(await r.commands[`${P}.members.fold`]({ folded: true })).toEqual({ folded: true });
+    expect(r.folded()).toBe(true);
+    expect(await r.commands[`${P}.members.fold`]({ folded: true })).toEqual({ folded: true });
+    expect(r.log).toEqual(["changed"]);
+    await expect(r.commands[`${P}.members.fold`]({ folded: "yes" })).rejects.toThrow('folded must be true or false, got "yes"');
+    expect(await r.commands[`${P}.members.fold`]({ folded: false })).toEqual({ folded: false });
+    expect(r.folded()).toBe(false);
   });
 });
 

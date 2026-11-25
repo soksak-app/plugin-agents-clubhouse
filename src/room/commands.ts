@@ -1,6 +1,6 @@
 // The commands of the room (plugin.json exposes.commands). Each handler runs in the view page and answers with the result shape that plugin.json declares.
 
-export type RoomMode = "turn" | "facil" | "simul";
+export type RoomMode = "turn" | "simul";
 
 export interface RoomState {
   mode: RoomMode;

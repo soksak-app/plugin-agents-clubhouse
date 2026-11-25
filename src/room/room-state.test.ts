@@ -7,6 +7,7 @@ const state: RoomState = {
   roster: [{ id: "harness-harness", member: true, checked: true, role: "", leader: true }, { id: "moai-manager-lead", member: false, checked: false, role: "", leader: false }],
   team: [{ id: "claude-1", definition: "claude", role: "server", directory: "/work/game", merged: null, agentSession: "28e7fee6-d618-4598-b9a6-775f3053340e", resume: true, agent: "manager-develop", worktree: null }],
   mode: "turn",
+  folded: false,
   conversation: [
     { speaker: "owner", text: "한 문장씩만", at: null, elapsedMs: null },
     { speaker: "harness-harness", text: "여러분들, 저는 harness고\n커밋하는 일을 잘해요.", at: null, elapsedMs: null },
@@ -72,7 +73,11 @@ describe("parseRoomState", () => {
   });
 
   it("refuses a value of another form with the field and the value it found", () => {
-    expect(() => parseRoomState({ ...state, mode: "solo" })).toThrow('room tab state: mode must be facil, turn or simul, got "solo"');
+    expect(() => parseRoomState({ ...state, mode: "solo" })).toThrow('room tab state: mode must be turn or simul, got "solo"');
+    expect(() => parseRoomState({ ...state, mode: "facil" })).toThrow('room tab state: mode must be turn or simul, got "facil"');
+    expect(() => parseRoomState({ ...state, folded: "no" })).toThrow('room tab state: folded must be true or false, got "no"');
+    const { folded: _f, ...withoutFold } = state;
+    expect(() => parseRoomState(withoutFold)).toThrow("room tab state: folded must be true or false, got undefined");
     expect(() => parseRoomState({ ...state, roster: [{ id: 1 }] })).toThrow("room tab state: roster must be an array of {id, member, checked, role, leader}");
     expect(() => parseRoomState({ ...state, conversation: "x" })).toThrow("room tab state: conversation must be an array of {speaker, text, at, elapsedMs}");
     expect(() => parseRoomState({ ...state, protocolSessions: [3] })).toThrow(
