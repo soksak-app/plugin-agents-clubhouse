@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- C147: The restart recovery is verified in a running application: the published 0.0.28 kept a member tab of an ended session, and the C145 and C146 builds close it, also from the state that 0.0.28 left.
 - C146: The room counts a session of `protocolSessions` as its own, so it also closes the member tab of a session that an earlier start removed from `sessions`.
 - C145: The room closes every member tab whose session ended while the application was closed, read from `core.grid`, before it forgets the session.
 - C143-1: Each answer carries an index sentence: the answer command requires `index`, one line that is not empty after trimming, and refuses another value with `index must be one non-empty line, got <value>`. The record, the conversation status and the tab state keep it, `null` on lines of the owner and of the room, and the tab state format 3 holds it, so the release has one form after format 2. The protocol line states the rule in both forms of the command.

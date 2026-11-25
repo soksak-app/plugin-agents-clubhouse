@@ -2,6 +2,7 @@
 
 ## 미출시
 
+- C147: 재시작 복구를 실행 중인 애플리케이션에서 검증했다. 배포된 0.0.28은 끝난 session의 member tab을 남겼고, C145와 C146 build는 0.0.28이 남긴 상태에서도 그 tab을 닫는다.
 - C146: 방은 `protocolSessions`의 session도 자기 것으로 세므로, 이전 시작이 `sessions`에서 지운 session의 member tab도 닫는다.
 - C145: 방은 애플리케이션이 닫혀 있는 동안 session이 끝난 모든 member tab을 `core.grid`에서 읽어, session을 잊기 전에 닫는다.
 - C143-1: 각 답이 index 문장을 갖는다. answer command는 trim 후 비어 있지 않은 한 줄인 `index`를 요구하고, 다른 값은 `index must be one non-empty line, got <value>`로 거부한다. 기록, conversation status, tab state가 그것을 담고 owner와 방의 줄에서는 `null`이며, tab state format 3이 그것을 담아서 release에는 format 2 다음의 형식이 하나뿐이다. protocol 줄은 command의 두 형식 모두에 규칙을 적는다.
