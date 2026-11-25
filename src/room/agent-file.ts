@@ -1,4 +1,4 @@
-// The agent name of an agent file (docs/spec/room.md#roster): the `name` of its YAML frontmatter, by which Claude Code finds a project
+// The agent name of an agent file (docs/spec/room.md#group): the `name` of its YAML frontmatter, by which Claude Code finds a project
 // agent for `--agent`. The frontmatter is the text between a first line `---` and the next line `---`; the yaml library parses it.
 import { parse } from "yaml";
 
@@ -28,7 +28,7 @@ export function agentFileText(reply: ProgramReply, file: string): string {
 }
 
 // The agent file of a definition: the first file of its role in core.roles, because the role identifier of a definition equals its
-// identifier; null when core.roles lists no file for it (docs/spec/room.md#roster).
+// identifier; null when core.roles lists no file for it (docs/spec/room.md#group).
 export function roleFileOf(id: string, roles: unknown): string | null {
   const list = roles !== null && typeof roles === "object" && !Array.isArray(roles) ? (roles as { roles?: unknown }).roles : undefined;
   if (!Array.isArray(list) || !list.every((role) => role !== null && typeof role === "object" && typeof role.id === "string" && Array.isArray(role.files))) {

@@ -1,22 +1,21 @@
-// The commands of the room operations (C35, docs/spec/room.md#commands): member.set, member.move, mode.set and message.send.
+// The commands of the room operations (C35, C140, docs/spec/room.md#commands): group.set, mode.set, members.fold, message.send and conversation.stop.
 import { describe, expect, it } from "vitest";
 import { createRoomOperations, type OperationDeps } from "./operations";
-import type { RosterEntry } from "./roster";
 import type { RoomMode } from "./commands";
 
 const P = "soksak-plugin-agents-clubhouse";
 
 function room(overrides: Partial<OperationDeps> = {}) {
-  const roster: RosterEntry[] = [
-    { id: "a", name: "A", member: true, checked: false, role: "", leader: false },
-    { id: "b", name: "B", member: true, checked: true, role: "", leader: false },
-    { id: "c", name: "C", member: false, checked: false, role: "", leader: false },
-  ];
+  let group: string | null = "g1";
   let mode: RoomMode = "turn";
   let folded = false;
   const log: string[] = [];
   const deps: OperationDeps = {
-    roster,
+    group: () => group,
+    setGroup: (next) => {
+      group = next;
+    },
+    groupDefined: async (id) => id === "g1" || id === "g2",
     mode: () => mode,
     setMode: (next) => {
       mode = next;
@@ -27,7 +26,6 @@ function room(overrides: Partial<OperationDeps> = {}) {
     },
     changed: () => void log.push("changed"),
     summon: () => void log.push("summon"),
-    leave: async (id) => void log.push(`leave ${id}`),
     openMembers: () => 1,
     accept: (text) => void log.push(`accept ${text}`),
     busy: (value) => void log.push(`busy ${value}`),
@@ -37,80 +35,25 @@ function room(overrides: Partial<OperationDeps> = {}) {
     failed: (reason) => void log.push(`failed ${reason}`),
     ...overrides,
   };
-  return { roster, log, mode: () => mode, folded: () => folded, commands: createRoomOperations(deps) };
+  return { log, group: () => group, mode: () => mode, folded: () => folded, commands: createRoomOperations(deps) };
 }
 
-describe("member.set", () => {
-  it("checks a member and redraws without a summon, because the member has its session already", async () => {
+describe("group.set (docs/spec/room.md#group)", () => {
+  it("assigns a stored group, redraws and summons its members, and changes nothing for the assigned group", async () => {
     const r = room();
-    expect(await r.commands[`${P}.member.set`]({ id: "a", checked: true })).toEqual({ id: "a", checked: true });
-    expect(r.roster[0].checked).toBe(true);
-    expect(r.log).toEqual(["changed"]);
-    expect(await r.commands[`${P}.member.set`]({ id: "b", checked: false })).toEqual({ id: "b", checked: false });
-    expect(r.roster[1]).toMatchObject({ member: true, checked: false });
-  });
-
-  it("refuses an entry that is no member of the room", async () => {
-    const r = room();
-    await expect(r.commands[`${P}.member.set`]({ id: "c", checked: true })).rejects.toThrow("member c is not a member of the room");
-    expect(r.roster[2].checked).toBe(false);
-    expect(r.log).toEqual([]);
-  });
-
-  it("is idempotent: the current state changes nothing and summons nothing", async () => {
-    const r = room();
-    expect(await r.commands[`${P}.member.set`]({ id: "b", checked: true })).toEqual({ id: "b", checked: true });
-    expect(r.log).toEqual([]);
-  });
-
-  it("refuses an unknown id and a checked value that is not a boolean", async () => {
-    const r = room();
-    await expect(r.commands[`${P}.member.set`]({ id: "zz", checked: true, role: "" })).rejects.toThrow("member zz is not in the roster");
-    await expect(r.commands[`${P}.member.set`]({ id: "a", checked: "yes" })).rejects.toThrow('checked must be a boolean, got "yes"');
-    await expect(r.commands[`${P}.member.set`]({ checked: true, role: "" })).rejects.toThrow("id must be a non-empty string, got undefined");
-    expect(r.log).toEqual([]);
-  });
-});
-
-describe("member.join and member.leave (docs/spec/room.md#commands)", () => {
-  it("member.join makes an entry a checked member and summons it, idempotently", async () => {
-    const r = room();
-    expect(await r.commands[`${P}.member.join`]({ id: "c" })).toEqual({ id: "c" });
-    expect(r.roster[2]).toMatchObject({ member: true, checked: true });
+    expect(await r.commands[`${P}.group.set`]({ group: "g2" })).toEqual({ group: "g2" });
+    expect(r.group()).toBe("g2");
     expect(r.log).toEqual(["changed", "summon"]);
-    await r.commands[`${P}.member.join`]({ id: "c" });
-    await r.commands[`${P}.member.join`]({ id: "a" });
-    expect(r.roster[0]).toMatchObject({ member: true, checked: false });
+    expect(await r.commands[`${P}.group.set`]({ group: "g2" })).toEqual({ group: "g2" });
     expect(r.log).toEqual(["changed", "summon"]);
-    await expect(r.commands[`${P}.member.join`]({ id: "zz" })).rejects.toThrow("member zz is not in the roster");
   });
 
-  it("member.leave clears the membership, the check and the leader and ends the session, idempotently", async () => {
+  it("refuses a group that the agents plugin does not store and a value that is no group identifier", async () => {
     const r = room();
-    r.roster[1].leader = true;
-    expect(await r.commands[`${P}.member.leave`]({ id: "b" })).toEqual({ id: "b" });
-    expect(r.roster[1]).toMatchObject({ member: false, checked: false, leader: false });
-    expect(r.log).toEqual(["changed", "leave b"]);
-    await r.commands[`${P}.member.leave`]({ id: "b" });
-    await r.commands[`${P}.member.leave`]({ id: "c" });
-    expect(r.log).toEqual(["changed", "leave b"]);
-    await expect(r.commands[`${P}.member.leave`]({ id: "zz" })).rejects.toThrow("member zz is not in the roster");
-  });
-});
-
-describe("member.move", () => {
-  it("moves a member to the index and redraws", async () => {
-    const r = room();
-    expect(await r.commands[`${P}.member.move`]({ id: "c", index: 0 })).toEqual({ id: "c", index: 0 });
-    expect(r.roster.map((e) => e.id)).toEqual(["c", "a", "b"]);
-    expect(r.log).toEqual(["changed"]);
-  });
-
-  it("refuses an index outside the roster and an unknown id", async () => {
-    const r = room();
-    await expect(r.commands[`${P}.member.move`]({ id: "a", index: 3 })).rejects.toThrow("index must be an integer from 0 to 2, got 3");
-    await expect(r.commands[`${P}.member.move`]({ id: "zz", index: 0 })).rejects.toThrow("member zz is not in the roster");
-    expect(r.roster.map((e) => e.id)).toEqual(["a", "b", "c"]);
+    await expect(r.commands[`${P}.group.set`]({ group: "g9" })).rejects.toThrow("group g9 is not defined");
+    await expect(r.commands[`${P}.group.set`]({ group: "" })).rejects.toThrow('group must be a group identifier, got ""');
+    expect(r.group()).toBe("g1");
+    expect(r.log).toEqual([]);
   });
 });
 
@@ -151,10 +94,11 @@ describe("message.send", () => {
     await expect(empty.commands[`${P}.message.send`]({ text: " " })).rejects.toThrow('text must be a non-empty string, got " "');
     expect(empty.log).toEqual(['failed text must be a non-empty string, got " "']);
     const closed = room({ openMembers: () => 0 });
-    await expect(closed.commands[`${P}.message.send`]({ text: "hi" })).rejects.toThrow(
-      "no member session is open: check a member of the roster",
-    );
-    expect(closed.log).toEqual(["failed no member session is open: check a member of the roster"]);
+    await expect(closed.commands[`${P}.message.send`]({ text: "hi" })).rejects.toThrow("no member session is open");
+    expect(closed.log).toEqual(["failed no member session is open"]);
+    const groupless = room({ group: () => null });
+    await expect(groupless.commands[`${P}.message.send`]({ text: "hi" })).rejects.toThrow("no group is assigned");
+    expect(groupless.log).toEqual(["failed no group is assigned"]);
     let finish: () => void = () => {};
     const r = room({ relay: () => new Promise((resolve) => (finish = () => resolve([]))) });
     const first = r.commands[`${P}.message.send`]({ text: "one" });
@@ -206,21 +150,5 @@ describe("conversation.stop (docs/spec/room.md#conversation)", () => {
     expect(seen[1]()).toBe(false);
     finish();
     await second;
-  });
-});
-
-describe("member.leader (docs/spec/room.md#leader)", () => {
-  it("makes one entry the leader, checks it and clears the leader of every other entry, idempotently", async () => {
-    const r = room();
-    r.roster[1].leader = true;
-    expect(await r.commands[`${P}.member.leader`]({ id: "a", leader: true })).toEqual({ id: "a", leader: true });
-    expect(r.roster.map((entry) => [entry.id, entry.checked, entry.leader])).toEqual([["a", true, true], ["b", true, false], ["c", false, false]]);
-    expect(r.log).toEqual(["changed"]);
-    await r.commands[`${P}.member.leader`]({ id: "a", leader: true });
-    expect(r.log).toEqual(["changed"]);
-    await expect(r.commands[`${P}.member.leader`]({ id: "c", leader: true })).rejects.toThrow("member c is not a member of the room");
-    await r.commands[`${P}.member.leader`]({ id: "a", leader: false });
-    expect(r.roster.every((entry) => !entry.leader)).toBe(true);
-    await expect(r.commands[`${P}.member.leader`]({ id: "a", leader: "yes" })).rejects.toThrow('leader must be a boolean, got "yes"');
   });
 });

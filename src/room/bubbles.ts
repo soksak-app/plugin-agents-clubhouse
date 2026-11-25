@@ -1,5 +1,5 @@
 // The view of the conversation (docs/spec/room.md#conversation-view). The room draws each record entry as a bubble: the owner on the
-// right, a member on the left with the color of its place in the roster, so the color of a member stays the same while the roster keeps
+// right, a member on the left with the color of its place in the group, so the color of a member stays the same while the group keeps
 // its order. A line of the room is a centered system line. A claim or a report of a member comes in its open turn before the answer of
 // that turn: it is a compact note at its place in the record until that answer arrives, and then under that answer. A release follows
 // the answer at the close of a turn, so it goes under the last answer of its member. A divider with the round number goes
@@ -20,7 +20,7 @@ export type ViewItem =
       index: number;
       side: "right" | "left";
       speaker: string;
-      // The place of the member in the roster, null for the owner and for a speaker outside the roster.
+      // The place of the member in the group, null for the owner and for a speaker outside the group.
       color: number | null;
       text: string;
       sections: AnswerSection[];
@@ -32,7 +32,7 @@ type Bubble = Extract<ViewItem, { kind: "bubble" }>;
 type Notes = Extract<ViewItem, { kind: "notes" }>;
 const NOTE = /^\((report|claim|release)\) ([\s\S]*)$/;
 
-export function conversationView(entries: readonly StatusEntry[], roster: readonly string[]): ViewItem[] {
+export function conversationView(entries: readonly StatusEntry[], order: readonly string[]): ViewItem[] {
   const items: ViewItem[] = [];
   const last = new Map<string, Bubble>();
   // The notes item of the open turn of each member, removed from the items when the answer of that turn takes its notes.
@@ -50,7 +50,7 @@ export function conversationView(entries: readonly StatusEntry[], roster: readon
       spoken = new Set();
       continue;
     }
-    const place = roster.indexOf(entry.speaker);
+    const place = order.indexOf(entry.speaker);
     const note = NOTE.exec(entry.text);
     if (note) {
       const kind = note[1] as NoteKind;

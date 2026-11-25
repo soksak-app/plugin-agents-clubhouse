@@ -46,7 +46,7 @@ describe("conversation status", () => {
   });
 
   it("carries the delivery entries of the members (docs/spec/room.md#conversation-status)", () => {
-    const entry = { member: "reviewer", name: "Claude", role: "review", session: "s-1", sent: 1, delivered: 1, length: 2, unreceived: 1 };
+    const entry = { member: "reviewer", name: "Claude", session: "s-1", sent: 1, delivered: 1, length: 2, unreceived: 1 };
     const status = createConversationStatus([], () => [], () => [entry]);
     expect(status.read().delivery).toEqual([entry]);
   });

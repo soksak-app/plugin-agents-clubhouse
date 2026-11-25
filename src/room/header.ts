@@ -1,5 +1,5 @@
-// The header of the room (docs/spec/room.md#header): the first line holds the plugin name on the left and the count and the invite button
-// on the right; the member cards stand below in a grid of equal columns that uses the whole width, and a grid of three rows or more folds
+// The header of the room (docs/spec/room.md#header): the first line holds the plugin name on the left and the group select on the
+// right; the member cards stand below in a grid of equal columns that uses the whole width, and a grid of three rows or more folds
 // to its first two rows. The mode bar, which the page puts directly above the composer, holds the mode buttons and the transport status.
 
 // The smallest width of a member card and the gap between the cards, in points.
@@ -14,7 +14,7 @@ export const HEADER_CSS = `
 .st-top{display:flex;align-items:center;gap:8px;min-height:var(--toolbar-h,28px);min-width:0}
 .st-top b{font-weight:700;letter-spacing:.02em;flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .st-actions{margin-left:auto;display:flex;align-items:center;gap:6px;flex:0 0 auto}
-.st-count{font-size:11px;color:var(--fg3,#888);white-space:nowrap}
+.st-group{font:inherit;font-size:11px;max-width:180px;color:inherit;background:transparent;border:1px solid rgba(127,127,127,.28);border-radius:6px;padding:1px 4px}
 .st-grid{display:grid;grid-template-columns:repeat(var(--cols),minmax(0,1fr));grid-auto-rows:1fr;gap:${GAP}px;min-width:0}
 .st-grid:empty{display:none}
 .st-grid>[hidden]{display:none!important}
@@ -41,9 +41,9 @@ export function gridRows(cards: number, columns: number): number {
 export interface RoomHeader {
   bar: HTMLElement;
   top: HTMLElement;
-  // The right end of the first line: the count, followed by the invite button that the page appends.
+  // The right end of the first line, which holds the group select (C140).
   actions: HTMLElement;
-  count: HTMLElement;
+  group: HTMLSelectElement;
   grid: HTMLElement;
   fold: HTMLButtonElement;
   modeBar: HTMLElement;
@@ -61,8 +61,8 @@ export function createRoomHeader(name: string, status: string, labels: { fold: s
   const title = part("b", "");
   title.textContent = name;
   const actions = part("div", "st-actions");
-  const count = part("span", "st-count");
-  actions.append(count);
+  const group = part("select", "st-group") as HTMLSelectElement;
+  actions.append(group);
   top.append(title, actions);
   const grid = part("div", "st-grid");
   const fold = part("button", "st-fold") as HTMLButtonElement;
@@ -87,11 +87,28 @@ export function createRoomHeader(name: string, status: string, labels: { fold: s
     fold.textContent = folded ? labels.unfold : labels.fold;
     for (const [index, card] of cards.entries()) card.hidden = foldable && folded && index >= FOLDED_ROWS * columns;
   };
-  return { bar, top, actions, count, grid, fold, modeBar, kib, status: statusEl, setStatus, layout };
+  return { bar, top, actions, group, grid, fold, modeBar, kib, status: statusEl, setStatus, layout };
 }
 
 function part(tag: string, cls: string): HTMLElement {
   const node = document.createElement(tag);
   node.className = cls;
   return node;
+}
+
+// Fills the group select with the groups of the agents plugin in identifier order, each by its name, after the placeholder option, which
+// is selected while the room has no assigned group and cannot be chosen (docs/spec/room.md#header).
+export function fillGroupSelect(select: HTMLSelectElement, groups: Readonly<Record<string, { name: string }>>, assigned: string | null, placeholder: string): void {
+  const first = document.createElement("option");
+  first.value = "";
+  first.textContent = placeholder;
+  first.disabled = true;
+  const options = Object.keys(groups).sort().map((id) => {
+    const option = document.createElement("option");
+    option.value = id;
+    option.textContent = groups[id].name;
+    return option;
+  });
+  select.replaceChildren(first, ...options);
+  select.value = assigned !== null && assigned in groups ? assigned : "";
 }

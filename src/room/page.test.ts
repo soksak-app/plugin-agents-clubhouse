@@ -4,7 +4,6 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { startRoomPage } from "./page";
-import { INVITE_DIALOG_ENTRIES } from "./invite";
 
 const manifest = JSON.parse(readFileSync(join(process.cwd(), "plugin.json"), "utf8")) as {
   exposes: { commands: { name: string }[]; element: { name: string }[]; status: { name: string }[] };
@@ -48,14 +47,14 @@ function fakeCommands() {
   };
 }
 
-// The names that the room page registers: every declared entry except those of the invite dialog page (docs/spec/room.md#invite).
-const room = (items: { name: string }[]) => items.map((item) => item.name).filter((name) => !INVITE_DIALOG_ENTRIES.has(name)).sort();
+// The names that the room page registers: every declared entry.
+const room = (items: { name: string }[]) => items.map((item) => item.name).sort();
 
 function buildRoom() {
   const commands: Record<string, () => unknown> = {};
-  for (const c of manifest.exposes.commands) if (!INVITE_DIALOG_ENTRIES.has(c.name)) commands[c.name] = () => ({ ok: true });
+  for (const c of manifest.exposes.commands) commands[c.name] = () => ({ ok: true });
   const elements: Record<string, object> = {};
-  for (const e of manifest.exposes.element) if (!INVITE_DIALOG_ENTRIES.has(e.name)) elements[e.name] = { dataset: {} };
+  for (const e of manifest.exposes.element) elements[e.name] = { dataset: {} };
   const statuses: Record<string, { read: () => unknown; subscribe: () => () => void }> = {};
   for (const s of manifest.exposes.status) statuses[s.name] = { read: () => null, subscribe: () => () => {} };
   return { commands, elements, statuses };

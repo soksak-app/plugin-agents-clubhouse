@@ -4,7 +4,9 @@ export type RoomMode = "turn" | "simul";
 
 export interface RoomState {
   mode: RoomMode;
-  roster: { id: string; member: boolean; checked: boolean }[];
+  // The assigned group and its members in the order of the group (docs/spec/room.md#group).
+  group: string | null;
+  members: { id: string; leader: boolean }[];
   transport: { state: "unavailable" | "ready"; reason?: string; notIsolated: string[] };
 }
 

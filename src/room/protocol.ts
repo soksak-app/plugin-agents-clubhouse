@@ -75,9 +75,9 @@ export function roomProtocolLine(self: string, surface: string, mcp = true, plac
     'Before and after changing a file, a contract or an API, report it: report {"turn":"<token>","text":"<what and why>","paths":["<claimed path>"]}.',
     "A line starting [@clubhouse] 방장의 새 지시야. is an owner instruction: apply it and answer it next.",
     ...(place === null ? [] : placeRules(place)),
-    // The line names no peer and no role, so it holds its bound at any number of members; each turn line states the roles
+    // The line names no peer and no role, so it holds its bound at any number of members; the role of each member is the role of its definition
     // (docs/spec/room.md#room-protocol).
-    `Members and roles: sok status soksak-plugin-agents-clubhouse.conversation --surface ${surface}.`,
+    `Members: sok status soksak-plugin-agents-clubhouse.conversation --surface ${surface}.`,
     "This protocol line takes no answer.",
   ].join(" ");
 }

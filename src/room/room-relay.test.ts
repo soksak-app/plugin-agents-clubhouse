@@ -226,7 +226,7 @@ describe("relayInMode waiting (docs/spec/room.md#conversation-status)", () => {
 });
 
 describe("relayInMode (docs/spec/room.md#modes)", () => {
-  it("turn: relays to each member one after another in roster order, labeled with the owner, with the earlier answers", async () => {
+  it("turn: relays to each member one after another in the order of the group, labeled with the owner, with the earlier answers", async () => {
     const core = fakeCore([IDLE("s-1"), IDLE("s-2")]);
     const answers = await relayInMode(core.ports, "turn", MEMBERS, "hello", roomRecord("hello"), OPEN);
     expect(core.submitted).toEqual([
@@ -254,7 +254,7 @@ describe("relayInMode (docs/spec/room.md#modes)", () => {
 
 
 
-  it("simul: submits to every member before any turn ends and keeps roster order in the answers", async () => {
+  it("simul: submits to every member before any turn ends and keeps the order of the group in the answers", async () => {
     const core = fakeCore([IDLE("s-1"), IDLE("s-2")], { manual: true });
     const relay = relayInMode(core.ports, "simul", MEMBERS, "all at once", roomRecord("all at once"), OPEN);
     await core.submits(2);
@@ -307,7 +307,7 @@ describe("the room record across turns (docs/spec/room.md#room-record)", () => {
     ]);
   });
 
-  it("the owner mentions B: B takes the first turn, then A and C in roster order, and A reads the answer of B (docs/spec/room.md#mentions)", async () => {
+  it("the owner mentions B: B takes the first turn, then A and C in the order of the group, and A reads the answer of B (docs/spec/room.md#mentions)", async () => {
     const core = fakeCore([IDLE("s-1"), IDLE("s-2"), IDLE("s-3")]);
     const record = roomRecord();
     await send(core, "turn", THREE, record, "@Codex 정리해 줘. 나머지는 보태 줘.");
@@ -441,16 +441,8 @@ describe("the conversation of the members (docs/spec/room.md#conversation)", () 
   });
 });
 
-describe("roles in the turn lines (docs/spec/room.md#roles)", () => {
-  it("states the role of the member and the roles of the others in each turn line", async () => {
-    const core = fakeCore([IDLE("s-1"), IDLE("s-2"), IDLE("s-3")]);
-    const roles = THREE.map((member, index) => ({ ...member, role: ["frontend", "server", "server"][index] }));
-    await send(core, "turn", roles, roomRecord(), "build it");
-    expect(core.submitted[0].text).toBe("[@clubhouse] 네 차례야. 아래는 네가 아직 못 본 기록이야. | [@owner] build it | [@clubhouse] roles: you are frontend; Codex: server, Tester: server | [@clubhouse] answer through the room only: reply to the speakers, put a message to the owner in @owner:, end every step with the single text . and nothing else, also while background work runs | [@clubhouse] turn t-1");
-    expect(core.submitted[1].text).toContain("[@clubhouse] roles: you are server; Claude: frontend, Tester: server | [@clubhouse] answer through the room only: reply to the speakers, put a message to the owner in @owner:, end every step with the single text . and nothing else, also while background work runs | [@clubhouse] turn t-2");
-  });
-
-  it("states no roles when no member has one", async () => {
+describe("the turn line names no roles (C140, docs/spec/room.md#group)", () => {
+  it("states no roles, because the role of each member is the role of its definition", async () => {
     const core = fakeCore([IDLE("s-1")]);
     await send(core, "turn", [MEMBERS[0]], roomRecord(), "hi");
     expect(core.submitted[0].text).toBe("[@clubhouse] 네 차례야. 아래는 네가 아직 못 본 기록이야. | [@owner] hi | [@clubhouse] answer through the room only: reply to the speakers, put a message to the owner in @owner:, end every step with the single text . and nothing else, also while background work runs | [@clubhouse] turn t-1");
@@ -873,7 +865,7 @@ describe("@all", () => {
     });
   });
 
-  it("without a leader: simul runs every member at once and turn in roster order", async () => {
+  it("without a leader: simul runs every member at once and turn in the order of the group", async () => {
     const simul = fakeCore([IDLE("s-1"), IDLE("s-2"), IDLE("s-3")], { manual: true });
     const record = roomRecord("@all report");
     simul.bound.record = record;

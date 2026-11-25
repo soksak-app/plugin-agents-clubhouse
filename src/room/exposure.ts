@@ -1,7 +1,5 @@
 // Registration of the room's exposed commands, elements and statuses (core docs/spec/exposure.md). The names come from the
-// exposes of plugin.json; each declared name needs exactly one handler, and a handler for an undeclared name is refused. The entries
-// that the invite dialog page serves are left to that page (docs/spec/room.md#invite).
-import { INVITE_DIALOG_ENTRIES } from "./invite";
+// exposes of plugin.json; each declared name needs exactly one handler, and a handler for an undeclared name is refused.
 
 export type CommandHandler = (params: any) => unknown;
 
@@ -55,8 +53,8 @@ export async function registerExposure(
   manifest: ExposesManifest,
   handlers: RoomHandlers,
 ): Promise<void> {
-  const commandNames = manifest.exposes.commands.map((c) => c.name).filter((name) => !INVITE_DIALOG_ENTRIES.has(name));
-  const elementNames = manifest.exposes.element.map((e) => e.name).filter((name) => !INVITE_DIALOG_ENTRIES.has(name));
+  const commandNames = manifest.exposes.commands.map((c) => c.name);
+  const elementNames = manifest.exposes.element.map((e) => e.name);
   const statusNames = manifest.exposes.status.map((s) => s.name);
   checkHandlers("command", commandNames, handlers.commands);
   checkHandlers("element", elementNames, handlers.elements);

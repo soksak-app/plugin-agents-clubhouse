@@ -1,5 +1,5 @@
-// The member cards of the header (docs/spec/room.md#header): the initials of a member name, the state of a member and the count of the
-// checked members. The page draws the cards from these values.
+// The member cards of the header (docs/spec/room.md#header): the initials of a member name and the state of a member. The page draws
+// the cards from these values.
 
 export type MemberState = "answering" | "idle" | "none";
 
@@ -19,8 +19,3 @@ export function memberState(open: boolean, waited: boolean): MemberState {
   return waited ? "answering" : "idle";
 }
 
-// The count of the member part, the checked members over the members of the room.
-export function memberCount(entries: readonly { member: boolean; checked: boolean }[]): { checked: number; members: number } {
-  const members = entries.filter((entry) => entry.member);
-  return { checked: members.filter((entry) => entry.checked).length, members: members.length };
-}

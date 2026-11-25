@@ -1,4 +1,4 @@
-// The tab title of a room (C119, docs/spec/room.md#header): the names of its checked members in roster order, or the plugin name
+// The tab title of a room (C119, docs/spec/room.md#header): the names of its members in the order of the group, or the plugin name
 // while no member is checked. tab.title takes 1 to 256 characters without control characters (core docs/spec/plugins.md), so the
 // names lose their control characters and a longer title ends with an ellipsis at 256 characters.
 const CONTROL = /[\u0000-\u001f\u007f-\u009f]/g;

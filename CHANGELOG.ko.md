@@ -2,6 +2,7 @@
 
 ## 미출시
 
+- C140: 방은 `group.set`으로 agents plugin의 group 하나를 지정받는다. header는 group select와 member마다 card를 보이고 leader에는 별을 붙이며, tab state는 `group`을 유지하고, roster, check, role, 초대 dialog는 없어진다.
 - C147: 재시작 복구를 실행 중인 애플리케이션에서 검증했다. 배포된 0.0.28은 끝난 session의 member tab을 남겼고, C145와 C146 build는 0.0.28이 남긴 상태에서도 그 tab을 닫는다.
 - C146: 방은 `protocolSessions`의 session도 자기 것으로 세므로, 이전 시작이 `sessions`에서 지운 session의 member tab도 닫는다.
 - C145: 방은 애플리케이션이 닫혀 있는 동안 session이 끝난 모든 member tab을 `core.grid`에서 읽어, session을 잊기 전에 닫는다.

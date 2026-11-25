@@ -1,25 +1,26 @@
 // The operations of the room as declared commands (C35, docs/spec/room.md#commands). The elements of the page are bound to these
 // commands, so a click and a command call run the same path. Each command refuses an invalid parameter with an explicit error.
 import type { RoomMode } from "./commands";
-import type { RosterEntry } from "./roster";
 
 const P = "soksak-plugin-agents-clubhouse";
 const MODES: RoomMode[] = ["turn", "simul"];
 
 export interface OperationDeps {
-  roster: RosterEntry[];
+  // The assigned group of the agents plugin, or null, and its change (docs/spec/room.md#group).
+  group: () => string | null;
+  setGroup: (group: string) => void;
+  // Whether the agents plugin stores the group.
+  groupDefined: (group: string) => Promise<boolean>;
   mode: () => RoomMode;
   setMode: (mode: RoomMode) => void;
   // Whether the member grid of the header is folded, and its change (docs/spec/room.md#header).
   folded: () => boolean;
   setFolded: (folded: boolean) => void;
-  // Redraws the roster and the mode after a change.
+  // Redraws the members and the mode after a change.
   changed: () => void;
   // Summons the members that have no open session.
   summon: () => void;
-  // Ends the open session of an entry that left the room and lets the arrangement close its tab (docs/spec/room.md#commands).
-  leave: (id: string) => Promise<void>;
-  // The number of checked members whose session is open.
+  // The number of members whose session is open.
   openMembers: () => number;
   // Shows the accepted text in the conversation and clears the input.
   accept: (text: string) => void;
@@ -35,113 +36,22 @@ export interface OperationDeps {
   failed: (reason: string) => void;
 }
 
-function idOf(params: any): string {
-  const id = params?.id;
-  if (typeof id !== "string" || id === "") throw new Error(`id must be a non-empty string, got ${JSON.stringify(id)}`);
-  return id;
-}
-
-function entryOf(roster: RosterEntry[], id: string): RosterEntry {
-  const entry = roster.find((one) => one.id === id);
-  if (!entry) throw new Error(`member ${id} is not in the roster`);
-  return entry;
-}
-
-function memberOf(roster: RosterEntry[], id: string): RosterEntry {
-  const entry = entryOf(roster, id);
-  if (!entry.member) throw new Error(`member ${id} is not a member of the room`);
-  return entry;
-}
-
 export function createRoomOperations(deps: OperationDeps): Record<string, (params: any) => Promise<any>> {
   let relaying = false;
   // Whether conversation.stop ended the conversation of the current relay.
   let stopped = false;
   return {
-    [`${P}.member.set`]: async (params) => {
-      const id = idOf(params);
-      const checked = params?.checked;
-      if (typeof checked !== "boolean") throw new Error(`checked must be a boolean, got ${JSON.stringify(checked)}`);
-      const entry = memberOf(deps.roster, id);
-      if (entry.checked !== checked) {
-        entry.checked = checked;
-        deps.changed();
-      }
-      return { id, checked };
-    },
-    // member.join makes the entry a checked member and summons it; a member stays as it is (docs/spec/room.md#commands).
-    [`${P}.member.join`]: async (params) => {
-      const id = idOf(params);
-      const entry = entryOf(deps.roster, id);
-      if (!entry.member) {
-        entry.member = true;
-        entry.checked = true;
-        deps.changed();
-        deps.summon();
-      }
-      return { id };
-    },
-    // member.leave clears the membership, the check and the leader of the entry and ends its session; an entry that is no member
-    // changes nothing (docs/spec/room.md#commands).
-    [`${P}.member.leave`]: async (params) => {
-      const id = idOf(params);
-      const entry = entryOf(deps.roster, id);
-      if (entry.member) {
-        entry.member = false;
-        entry.checked = false;
-        entry.leader = false;
-        deps.changed();
-        await deps.leave(id);
-      }
-      return { id };
-    },
-    // member.role sets the role of a roster entry, a text of 0 to 200 characters without control characters (docs/spec/room.md#roles).
-    [`${P}.member.role`]: async (params) => {
-      const id = idOf(params);
-      const role = params?.role;
-      if (typeof role !== "string" || [...role].length > 200 || /[\u0000-\u001f\u007f-\u009f]/.test(role)) {
-        throw new Error(`role must be a text of 0 to 200 characters without control characters, got ${JSON.stringify(role)}`);
-      }
-      const entry = entryOf(deps.roster, id);
-      const next = role.trim();
-      if (entry.role !== next) {
-        entry.role = next;
-        deps.changed();
-      }
-      return { id, role: next };
-    },
-    // member.leader makes an entry the leader, checks it and clears every other leader, or clears it (docs/spec/room.md#leader).
-    [`${P}.member.leader`]: async (params) => {
-      const id = idOf(params);
-      const leader = params?.leader;
-      if (typeof leader !== "boolean") throw new Error(`leader must be a boolean, got ${JSON.stringify(leader)}`);
-      const entry = memberOf(deps.roster, id);
-      let change = entry.leader !== leader || (leader && !entry.checked);
-      for (const other of deps.roster) {
-        if (other === entry || !other.leader || !leader) continue;
-        other.leader = false;
-        change = true;
-      }
-      entry.leader = leader;
-      if (leader) entry.checked = true;
-      if (change) deps.changed();
-      return { id, leader };
-    },
-    [`${P}.member.move`]: async (params) => {
-      const id = idOf(params);
-      const index = params?.index;
-      const last = deps.roster.length - 1;
-      if (!Number.isInteger(index) || index < 0 || index > last) {
-        throw new Error(`index must be an integer from 0 to ${last}, got ${JSON.stringify(index)}`);
-      }
-      const entry = entryOf(deps.roster, id);
-      const from = deps.roster.indexOf(entry);
-      if (from !== index) {
-        deps.roster.splice(from, 1);
-        deps.roster.splice(index, 0, entry);
-        deps.changed();
-      }
-      return { id, index };
+    // group.set assigns a group of the agents plugin to the room and summons its members; the assigned group changes nothing
+    // (docs/spec/room.md#commands).
+    [`${P}.group.set`]: async (params) => {
+      const group = params?.group;
+      if (typeof group !== "string" || group === "") throw new Error(`group must be a group identifier, got ${JSON.stringify(group)}`);
+      if (deps.group() === group) return { group };
+      if (!(await deps.groupDefined(group))) throw new Error(`group ${group} is not defined`);
+      deps.setGroup(group);
+      deps.changed();
+      deps.summon();
+      return { group };
     },
     [`${P}.mode.set`]: async (params) => {
       const mode = params?.mode;
@@ -188,7 +98,8 @@ export function createRoomOperations(deps: OperationDeps): Record<string, (param
       deps.followUp();
       return { answers: [] };
     }
-    if (deps.openMembers() === 0) throw new Error("no member session is open: check a member of the roster");
+    if (deps.group() === null) throw new Error("no group is assigned");
+    if (deps.openMembers() === 0) throw new Error("no member session is open");
     relaying = true;
     stopped = false;
     deps.busy(true);

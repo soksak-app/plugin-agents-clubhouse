@@ -1,6 +1,6 @@
 // The values of the member cards (C123, docs/spec/room.md#header): initials, state and count.
 import { describe, expect, it } from "vitest";
-import { initialsOf, memberCount, memberState } from "./member-card";
+import { initialsOf, memberState } from "./member-card";
 
 describe("initialsOf", () => {
   it("takes the first character of the first two words, or the first two characters of one word, in upper case", () => {
@@ -24,9 +24,3 @@ describe("memberState", () => {
 
 });
 
-describe("memberCount", () => {
-  it("counts the checked members over the members and leaves out the entries that are no member", () => {
-    expect(memberCount([{ member: true, checked: true }, { member: true, checked: false }, { member: false, checked: false }])).toEqual({ checked: 1, members: 2 });
-    expect(memberCount([])).toEqual({ checked: 0, members: 0 });
-  });
-});

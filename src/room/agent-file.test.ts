@@ -1,4 +1,4 @@
-// The agent name of an agent file (C97-1, docs/spec/room.md#roster): the `name` of its YAML frontmatter, by which Claude Code finds the agent.
+// The agent name of an agent file (C97-1, docs/spec/room.md#group): the `name` of its YAML frontmatter, by which Claude Code finds the agent.
 import { describe, expect, it } from "vitest";
 import { agentFileText, agentNameOf, roleFileOf } from "./agent-file";
 

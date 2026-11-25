@@ -1,4 +1,4 @@
-// The summon trigger of the room (C3-1) and the arrangement after it (C4): a check of the roster summons the checked members, and the
+// The summon trigger of the room (C3-1) and the arrangement after it (C4): a change of the members summons the starting members, and the
 // members that open are arranged. The room port double answers with the declared shapes; the session store is the real one over an
 // in-memory data API. Calls of the trigger run one after the other.
 import { describe, expect, it } from "vitest";
@@ -68,7 +68,7 @@ function deps(room: ReturnType<typeof fakeRoom>["room"]) {
 }
 
 describe("summonAndArrange", () => {
-  it("summons only the checked members in definition order and arranges the members that opened", async () => {
+  it("summons only the starting members in definition order and arranges the members that opened", async () => {
     const fake = fakeRoom();
     const d = deps(fake.room);
     const result = await summonAndArrange(d, DEFINITIONS, ["writer", "reviewer"]);
@@ -92,7 +92,7 @@ describe("summonAndArrange", () => {
     expect(tabs).toEqual([{ name: "core.layout.open", params: { card: "current", plugin: "terminal", params: { session: "s-1", title: "harness" } } }]);
   });
 
-  it("with no checked member, summons nothing and leaves the arrangement idle", async () => {
+  it("with no starting member, summons nothing and leaves the arrangement idle", async () => {
     const fake = fakeRoom();
     const d = deps(fake.room);
     expect(await summonAndArrange(d, DEFINITIONS, [])).toEqual({ state: "idle" });

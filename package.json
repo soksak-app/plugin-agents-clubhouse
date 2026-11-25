@@ -20,8 +20,6 @@
     "plugin.json",
     "ui/clubhouse.html",
     "ui/clubhouse.js",
-    "ui/invite.html",
-    "ui/invite.js",
     "bin/first-start.mjs"
   ],
   "scripts": {

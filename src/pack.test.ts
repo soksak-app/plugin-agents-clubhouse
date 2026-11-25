@@ -14,7 +14,7 @@ const manifest = JSON.parse(read("plugin.json")) as {
 };
 
 describe("core range", () => {
-  // The room opens its invite dialog with runtime.dialog, which core 0.0.52 provides (docs/spec/room.md#invite).
+  // The room declares the core range that C120 set.
   it("declares engines.soksak ^0.0.52", () => {
     expect(pkg.engines).toEqual({ soksak: "^0.0.52" });
   });

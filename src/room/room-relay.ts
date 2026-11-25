@@ -18,13 +18,10 @@ export interface RelayMember {
 }
 
 export interface NamedRelayMember extends RelayMember {
-  // The name of the member in the roster, which a mention may use.
+  // The name of the definition of the member, which a mention may use.
   name: string;
-  // The role of the member in the roster, "" without one (docs/spec/room.md#roles).
-  role?: string;
 }
 
-// The roles that a turn line states to its member when a member of the relay has a role: its own role and the roles of the others.
 // The rule of each turn line (docs/spec/room.md#room-protocol): the room cannot read the terminal of a member.
 // The preface of a turn line, before the record lines that the member has not received, and the room line of a turn of a member that
 // has received every record line, which still runs and takes an answer with a status (docs/spec/room.md#modes).
@@ -33,13 +30,6 @@ export const EMPTY_TURN_TEXT = "네 차례야. 네가 아직 못 본 기록은 �
 // A member that writes a note while its background agents run spends tokens on text that nobody reads, so the rule names that case
 // (docs/spec/room.md#room-protocol).
 export const TURN_RULE = "answer through the room only: reply to the speakers, put a message to the owner in @owner:, end every step with the single text . and nothing else, also while background work runs";
-
-export function rolesLine(member: NamedRelayMember, members: NamedRelayMember[]): string | null {
-  if (!members.some((entry) => (entry.role ?? "") !== "")) return null;
-  const roleOf = (entry: NamedRelayMember): string => (entry.role ?? "") || "no role";
-  const others = members.filter((entry) => entry.id !== member.id).map((entry) => `${entry.name}: ${roleOf(entry)}`);
-  return `[@clubhouse] roles: you are ${roleOf(member)}${others.length > 0 ? `; ${others.join(", ")}` : ""}`;
-}
 
 export interface MemberAnswer {
   id: string;
@@ -128,7 +118,6 @@ async function relayToMember(
   member: RelayMember,
   record: RoomRecord,
   accepted: () => void,
-  roles: string | null = null,
   stopping?: ConversationBound["stopping"],
 ): Promise<MemberAnswer> {
   if (!(await lineFree(ports, member, stopping))) throw new TurnStopped();
@@ -146,7 +135,7 @@ async function relayToMember(
     turn.close();
     throw new Error(`member ${member.id}: the tab state with its turn token was not written: ${messageOf(error)}`);
   }
-  const end = `${roles === null ? "" : `${roles} | `}[@clubhouse] ${TURN_RULE} | [@clubhouse] turn ${turn.turn}`;
+  const end = `[@clubhouse] ${TURN_RULE} | [@clubhouse] turn ${turn.turn}`;
   let submittedAt = 0;
   // The room waits for the answer of the member from the submit of its line until the turn ends.
   const endWait = ports.waiting(member, "answer");
@@ -315,7 +304,7 @@ async function runTurns(
     turnStart.set(turn.member.id, record.lines.length);
     let answer: MemberAnswer;
     try {
-      answer = await relayToMember(ports, turn.member, record, bound.accepted, rolesLine(turn.member, members), bound.stopping);
+      answer = await relayToMember(ports, turn.member, record, bound.accepted, bound.stopping);
     } catch (error) {
       if (!(error instanceof TurnStopped)) throw error;
       record.append("clubhouse", "the conversation ended: the owner stopped it");
@@ -390,7 +379,7 @@ async function runLeader(
     const arrived: MemberAnswer[] = [];
     const results = await Promise.allSettled(
       batch.members.map((member) =>
-        relayToMember(ports, member, record, bound.accepted, rolesLine(member, members), bound.stopping).then((answer) => {
+        relayToMember(ports, member, record, bound.accepted, bound.stopping).then((answer) => {
           appendAnswer(record, answer);
           answers.push(answer);
           arrived.push(answer);
@@ -450,7 +439,7 @@ export async function relayInMode(
     const targets = others;
     if (targets.length === 0) return [...first, ...(await runTurns(ports, [], members, record, bound, first))];
     const results = await Promise.allSettled(
-      targets.map((member) => relayToMember(ports, member, record, bound.accepted, rolesLine(member, members), bound.stopping)),
+      targets.map((member) => relayToMember(ports, member, record, bound.accepted, bound.stopping)),
     );
     // The answers that arrived are record lines in member order, also when another turn failed.
     for (const [index, result] of results.entries()) if (result.status === "fulfilled") appendAnswer(record, result.value);

@@ -84,7 +84,7 @@ export function leaderRoute(
 
 const oneLine = (text: string): string => text.replace(/\r\n|\r|\n/g, " ");
 
-// `nameOf` gives the label of a speaker: `owner` for the owner and the roster name of a member. `changed` runs after each change.
+// `nameOf` gives the label of a speaker: `owner` for the owner and the name of the definition of a member. `changed` runs after each change.
 export function createRoomRecord(
   lines: RecordLine[],
   delivered: Record<string, number>,

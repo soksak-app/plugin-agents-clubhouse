@@ -1,5 +1,5 @@
 // The view of the conversation (docs/spec/room.md#conversation-view): owner bubbles on the right, member bubbles on the left with a
-// stable color by roster order, room lines as centered system lines, reports, claims and releases as notes under the bubble of their
+// stable color by the order of the group, room lines as centered system lines, reports, claims and releases as notes under the bubble of their
 // member, sections as blocks of the bubble, and a divider with the round number before each round of the members.
 import { describe, expect, it } from "vitest";
 import { conversationView, elapsedLabel, nextLabelChange } from "./bubbles";
@@ -15,7 +15,7 @@ const entry = (speaker: string, text: string, elapsedMs: number | null = null, s
 });
 
 describe("conversationView", () => {
-  it("draws owner bubbles on the right, member bubbles on the left with the color of their roster place, and room lines as system lines", () => {
+  it("draws owner bubbles on the right, member bubbles on the left with the color of their place in the group, and room lines as system lines", () => {
     const view = conversationView([entry("owner", "build it"), entry("b", "plan", 12400), entry("clubhouse", "the conversation settled")], ["a", "b"]);
     expect(view).toEqual([
       { kind: "bubble", index: 0, side: "right", speaker: "owner", color: null, text: "build it", sections: [], elapsedMs: null, notes: [] },

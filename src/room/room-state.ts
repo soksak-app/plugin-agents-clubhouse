@@ -1,12 +1,12 @@
 // The state of a room tab (docs/spec/room.md#restart). The room writes it through the tab state of its view (core
 // docs/spec/plugins.md#memory-saver, `surface.unload`), which core stores per tab and gives back after a restart, so the room shows
-// the same roster checks, mode and conversation without input. The reader accepts only this form and names what it found otherwise.
+// the same group, mode and conversation without input. The reader accepts only this form and names what it found otherwise.
 import type { RoomMode } from "./commands";
 import { isIndexSentence, type OpenToken } from "./answer";
 
 export interface RoomState {
-  // The roster order, the membership, the checked state, the role of each entry and the leader, at most one (docs/spec/room.md#leader).
-  roster: { id: string; member: boolean; checked: boolean; role: string; leader: boolean }[];
+  // The identifier of the assigned group of the agents plugin, or null without one (docs/spec/room.md#group).
+  group: string | null;
   mode: RoomMode;
   // Whether the member grid of the header is folded to its first two rows (docs/spec/room.md#header).
   folded: boolean;
@@ -39,7 +39,7 @@ export function serializedRoomState(state: RoomState): string {
 }
 
 const MODES: readonly string[] = ["turn", "simul"];
-const FIELDS: readonly string[] = ["roster", "mode", "folded", "conversation", "sessions", "protocolSessions", "addressed", "delivered", "sent", "turns"];
+const FIELDS: readonly string[] = ["group", "mode", "folded", "conversation", "sessions", "protocolSessions", "addressed", "delivered", "sent", "turns"];
 
 const isText = (value: unknown): value is string => typeof value === "string" && value !== "";
 
@@ -48,16 +48,8 @@ export function parseRoomState(value: unknown): RoomState | null {
   if (typeof value !== "object" || Array.isArray(value)) throw new Error(`room tab state must be an object, got ${JSON.stringify(value)}`);
   const state = value as Record<string, unknown>;
   for (const field of Object.keys(state)) if (!FIELDS.includes(field)) throw new Error(`room tab state: unknown field ${field}`);
-  const roster = state.roster;
-  if (
-    !Array.isArray(roster) ||
-    !roster.every((entry) => isText(entry?.id) && typeof entry?.member === "boolean" && typeof entry?.checked === "boolean" && typeof entry?.role === "string" && typeof entry?.leader === "boolean")
-  ) {
-    throw new Error("room tab state: roster must be an array of {id, member, checked, role, leader}");
-  }
-  const outside = roster.find((entry) => !entry.member && (entry.checked || entry.leader));
-  if (outside !== undefined) throw new Error(`room tab state: roster entry ${outside.id} is checked or the leader but no member`);
-  if (roster.filter((entry) => entry.leader).length > 1) throw new Error("room tab state: roster has more than one leader");
+  const group = state.group;
+  if (!(group === null || isText(group))) throw new Error(`room tab state: group must be a group identifier or null, got ${JSON.stringify(group)}`);
   if (!MODES.includes(state.mode as string)) {
     throw new Error(`room tab state: mode must be turn or simul, got ${JSON.stringify(state.mode)}`);
   }
@@ -122,7 +114,7 @@ export function parseRoomState(value: unknown): RoomState | null {
     }
   }
   return {
-    roster: roster.map((entry) => ({ id: entry.id, member: entry.member, checked: entry.checked, role: entry.role, leader: entry.leader })),
+    group,
     mode: state.mode as RoomMode,
     folded: state.folded,
     conversation: conversation.map((entry) => ({ speaker: entry.speaker, text: entry.text, at: entry.at, elapsedMs: entry.elapsedMs, index: entry.index })),

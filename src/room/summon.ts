@@ -1,4 +1,4 @@
-// Summoning (C3): starts each checked member as an owned session of the room surface (core docs/spec/plugins.md#owned-sessions).
+// Summoning (C3): starts each starting member as an owned session of the room surface (core docs/spec/plugins.md#owned-sessions).
 // The room calls core.session.open {plugin, params, size} and stores the member-to-session relation in project data, so the
 // relation survives a restart. A stored session is reused only while core.sessions lists it as open. The room holds no plugin
 // identifier in its code: the member definitions, with the plugin that runs each member, come from the caller, which reads them
@@ -61,8 +61,8 @@ export interface SessionSize {
 
 export interface SummonRequest {
   definitions: MemberDefinition[];
-  // The identifiers of the checked members of the roster.
-  checked: string[];
+  // The identifiers of the members that start: the members of the room whose account can start them (docs/spec/room.md#login).
+  starting: string[];
   // The measured card size; read only before the first session that opens, so a reattach needs no laid-out card.
   size: () => Promise<SessionSize>;
 }
@@ -74,7 +74,7 @@ export interface SummonedMember {
   opened: boolean;
 }
 
-// Opens the sessions of the checked members in definition order. Each failure rejects with its text; the members opened before
+// Opens the sessions of the starting members in definition order. Each failure rejects with its text; the members opened before
 // it keep their stored relation, and the refused member stores nothing.
 export async function summonMembers(deps: SummonDeps, request: SummonRequest): Promise<SummonedMember[]> {
   let size: SessionSize | null = null;
@@ -93,7 +93,7 @@ export async function summonMembers(deps: SummonDeps, request: SummonRequest): P
   const summoned: SummonedMember[] = [];
   const open = new Set([...(await deps.openSessions()), ...deps.opened.unlisted()]);
   for (const definition of request.definitions) {
-    if (!request.checked.includes(definition.id)) continue;
+    if (!request.starting.includes(definition.id)) continue;
     const stored = await deps.sessions.get(definition.id);
     if (stored && open.has(stored.sessionId)) {
       summoned.push({ id: definition.id, session: stored.sessionId, opened: false });

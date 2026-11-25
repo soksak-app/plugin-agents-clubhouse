@@ -4,7 +4,7 @@ import { roomTitle } from "./title";
 // C119: the tab of a room shows the names of its checked members, so two rooms are told apart, and the plugin name while no member
 // is checked; core shows its default title only when the room reports none (docs/spec/room.md#header).
 describe("roomTitle", () => {
-  it("joins the names of the checked members in roster order", () => {
+  it("joins the names of the members in the order of the group", () => {
     expect(roomTitle(["claude-lead", "codex"], "에이전트 클럽하우스")).toBe("claude-lead · codex");
   });
 

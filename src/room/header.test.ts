@@ -1,11 +1,11 @@
 // @vitest-environment jsdom
-// The header of the room (C37, C138, docs/spec/room.md#header): the first line holds the plugin name, the count and the invite button;
+// The header of the room (C37, C138, C140, docs/spec/room.md#header): the first line holds the plugin name and the group select;
 // the member cards stand in a grid of equal columns that uses the whole width, and a grid of three rows or more folds to its first two
 // rows. The mode bar above the composer holds the mode buttons and the transport status, which shrinks with an ellipsis and shows its
 // whole text as its tooltip. jsdom computes the cascade of the style sheet and lays out nothing, so the tests read the declared
 // properties and pass the width of the grid.
 import { beforeEach, describe, expect, it } from "vitest";
-import { HEADER_CSS, createRoomHeader, gridColumns, gridRows } from "./header";
+import { HEADER_CSS, createRoomHeader, fillGroupSelect, gridColumns, gridRows } from "./header";
 
 const STATUS = "연결됨: 메시지는 열린 member session에 전달된다";
 const LABELS = { fold: "접기", unfold: "펼치기" };
@@ -76,12 +76,23 @@ describe("grid of the member cards", () => {
 });
 
 describe("first line and mode bar", () => {
-  it("puts the plugin name on the left and the count and the invite place on the right of the first line", () => {
+  it("puts the plugin name on the left and the group select on the right of the first line (C140)", () => {
     const h = header();
     expect(h.top.firstElementChild?.textContent).toBe("에이전트 클럽하우스");
     expect(h.top.lastElementChild).toBe(h.actions);
-    expect(h.actions.firstElementChild).toBe(h.count);
+    expect(h.actions.firstElementChild).toBe(h.group);
+    expect(h.group.tagName).toBe("SELECT");
     expect(getComputedStyle(h.actions).marginLeft).toBe("auto");
+  });
+
+  it("lists the groups by identifier with their names, selects the assigned group and shows the placeholder without one (C140)", () => {
+    const h = header();
+    const groups = { g2: { name: "Two", members: [], leader: null }, g1: { name: "One", members: ["a"], leader: "a" } };
+    fillGroupSelect(h.group, groups, null, "그룹 선택");
+    expect([...h.group.options].map((option) => [option.value, option.textContent, option.disabled])).toEqual([["", "그룹 선택", true], ["g1", "One", false], ["g2", "Two", false]]);
+    expect(h.group.value).toBe("");
+    fillGroupSelect(h.group, groups, "g2", "그룹 선택");
+    expect(h.group.value).toBe("g2");
   });
 
   it("keeps each mode button on one line", () => {

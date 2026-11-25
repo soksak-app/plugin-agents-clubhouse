@@ -39,9 +39,8 @@ export interface WaitingMember {
 // (docs/spec/room.md#conversation-status).
 export interface DeliveryEntry {
   member: string;
-  // The name and the role of the member, which its protocol line points to (docs/spec/room.md#room-protocol).
+  // The name of the member, which its protocol line points to (docs/spec/room.md#room-protocol).
   name: string;
-  role: string;
   session: string;
   // The record lines that the room submitted to the session (docs/spec/room.md#work-reports).
   sent: number;

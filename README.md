@@ -4,9 +4,8 @@
 
 A soksak plugin that holds one conversation room for several coding agents of a project.
 
-The room reads the agent definitions that the agents plugin stores in its project data (`definitions` and `accounts`) and lists them in its roster. Each checked member starts in an owned terminal session (`core.session.open`), and the room arranges the member cards. A message from the composer is submitted to each checked member with an open session in roster order (`core.session.submit`); the room waits for the end of each turn from the program state of the session and shows the reply rows of the member's screen as the answer; each later member of a turn receives the earlier answers with the message. The room tab keeps its roster checks, mode and conversation across a restart and reattaches to its member sessions.
+A room is assigned one group of the agents plugin, and its members are the members of that group, each started in an owned terminal session (`core.session.open`). A message of the composer goes to the members by the mode of the room, `turn` or `simul`, and a mention `@name` gives the mentioned member the first turn; the leader of the group receives every line. Each member answers through the declared answer command, and the room shows the conversation and keeps the group, the mode and the conversation of its tab across a restart ([room](docs/spec/room.md)).
 
-The mode of the room decides who receives a message ([room relay](docs/spec/room.md)): `turn` sends it to each member one after another in roster order, `facil` to the first member whose session is idle, and `simul` to every member at the same time. A message with `@name` goes only to the mentioned members, in the order of their first mention. Each line that the room submits names its speaker (`[@owner]` for the person, `[@<member>]` for a member), and each member session first receives a one-line room protocol that states these labels and the turn rule. After a mention exchange, the members outside it receive its record as one line, and the room shows none of their output.
 ## Development
 
 ```

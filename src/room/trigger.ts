@@ -1,4 +1,4 @@
-// The summon trigger of the room (C3-1) and the arrangement after it (C4). A change of the roster summons the checked members with
+// The summon trigger of the room (C3-1) and the arrangement after it (C4). A change of the members summons the starting members with
 // summonMembers, then arranges the members that opened with arrangeMembers. The plugin of each member is the plugin of its definition.
 import { arrangeMembers, type ArrangementPort, type ArrangementState, type ArrangementStatus, type Member } from "./arrangement";
 import { summonMembers, type MemberDefinition, type SessionSize, type SummonDeps } from "./summon";
@@ -12,13 +12,13 @@ export interface TriggerDeps {
   size: () => Promise<SessionSize>;
 }
 
-// Summons the checked members and arranges the opened ones. A refused summon rejects with its text and arranges nothing.
+// Summons the starting members and arranges the opened ones. A refused summon rejects with its text and arranges nothing.
 export async function summonAndArrange(
   deps: TriggerDeps,
   definitions: MemberDefinition[],
-  checked: string[],
+  starting: string[],
 ): Promise<ArrangementState> {
-  const summoned = await summonMembers(deps.summon, { definitions, checked, size: deps.size });
+  const summoned = await summonMembers(deps.summon, { definitions, starting, size: deps.size });
   const members: Member[] = summoned.map((member) => {
     const definition = definitions.find((entry) => entry.id === member.id);
     if (definition === undefined) throw new Error(`summoned member ${member.id} has no definition`);
@@ -31,7 +31,7 @@ export async function summonAndArrange(
   return arrangeMembers(deps.arrange, members, deps.status);
 }
 
-// Runs each task after the previous one has settled, so two checks of the roster never interleave their summons and arrangements.
+// Runs each task after the previous one has settled, so two changes of the members never interleave their summons and arrangements.
 // A failed task does not stop the next one.
 export function serialRunner(): <T>(task: () => Promise<T>) => Promise<T> {
   let tail: Promise<unknown> = Promise.resolve();

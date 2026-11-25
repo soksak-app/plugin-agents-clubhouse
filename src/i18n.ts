@@ -114,10 +114,6 @@ const strings = {
     en: "Conversation",
     ko: "대화",
   },
-  rolePlaceholder: {
-    en: "role",
-    ko: "역할",
-  },
   waitingFor: {
     en: "waiting for {name}: {step}, program {program}",
     ko: "{name} 기다리는 중: {step}, program {program}",
@@ -131,12 +127,12 @@ const strings = {
     ko: "{name} 탭에서 답하기",
   },
   transportUnavailable: {
-    en: "No member that receives a message has an open session. Invite a member with + or select one.",
-    ko: "메시지를 받을 멤버의 열린 세션이 없습니다. +로 멤버를 초대하거나 멤버를 선택하세요.",
+    en: "No member of the room has an open session.",
+    ko: "열린 세션이 있는 방 멤버가 없습니다.",
   },
-  memberCount: {
-    en: "{checked} / {members}",
-    ko: "{checked} / {members}",
+  groupChoose: {
+    en: "Choose a group",
+    ko: "그룹 선택",
   },
   foldButton: {
     en: "Fold",
@@ -145,10 +141,6 @@ const strings = {
   unfoldButton: {
     en: "Unfold",
     ko: "펼치기",
-  },
-  inviteTitle: {
-    en: "Invite a member",
-    ko: "멤버 초대",
   },
   stateAnswering: {
     en: "answering",

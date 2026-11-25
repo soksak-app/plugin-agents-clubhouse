@@ -52,7 +52,7 @@ describe("roomProtocolLine", () => {
   it("is one line with the speaker labels, the mention rule, the turn rule and the other members", () => {
     const line = roomProtocolLine("Claude", "room-1");
     expect(line).not.toMatch(/[\r\n]/);
-    for (const part of ["[@owner]", "[@<member>]", "[@clubhouse]", "@<name>", "@Claude", "Members and roles: sok status", "quoted data"]) {
+    for (const part of ["[@owner]", "[@<member>]", "[@clubhouse]", "@<name>", "@Claude", "Members: sok status", "quoted data"]) {
       expect(line).toContain(part);
     }
   });
@@ -326,7 +326,7 @@ describe("the protocol line bound at the largest configuration", () => {
       const worker = roomProtocolLine(`${name}-16`, "tab-2fm4e7", mcp, { leader: name });
       expect(leader.length, `leader mcp=${mcp}`).toBeLessThanOrEqual(3500);
       expect(worker.length, `worker mcp=${mcp}`).toBeLessThanOrEqual(3500);
-      expect(leader).toContain("Members and roles: sok status soksak-plugin-agents-clubhouse.conversation --surface tab-2fm4e7.");
+      expect(leader).toContain("Members: sok status soksak-plugin-agents-clubhouse.conversation --surface tab-2fm4e7.");
     }
   });
 });

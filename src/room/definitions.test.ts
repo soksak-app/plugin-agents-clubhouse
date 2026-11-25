@@ -117,7 +117,7 @@ describe("toMemberDefinition", () => {
     expect(toMemberDefinition(bare!).params.program).toBe("env");
   });
 
-  it("starts a member with the agent of its definition when one is given (C101, docs/spec/room.md#roster)", async () => {
+  it("starts a member with the agent of its definition when one is given (C101, docs/spec/room.md#group)", async () => {
     const [definition] = await readAgentDefinitions(storeOf({ definitions: { reviewer: DEFINITIONS.reviewer }, accounts: ACCOUNTS }).get, fail);
     expect(toMemberDefinition(definition!, "manager-lead").params.args).toEqual([
       "CLAUDE_CONFIG_DIR=/c/plugin-data/agents/accounts/claude-main", "claude", "--verbose", "--setting-sources", "project,local", "--settings", '{"env":{"CLAUDE_CODE_SHELL":"/bin/bash"}}', "--agent", "manager-lead",

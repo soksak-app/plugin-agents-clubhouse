@@ -14,16 +14,13 @@
   "preview": {
     "ink": "--fg"
   },
-  "dialogs": {
-    "invite": { "page": "ui/invite.html" }
-  },
   "dependencies": {
     "@soksak/plugin-agents": ">=0.0.5"
   },
   "settings": {
     "kibitzDefault": {
       "label": "대화 기본 모드",
-      "description": "새 방의 대화 방식. 순차는 roster 순서로 member마다 차례로, 동시는 모든 member가 동시에 받는다. @이름 mention은 mention된 member에게만 보낸다.",
+      "description": "새 방의 대화 방식. 순차는 group 순서로 member마다 차례로, 동시는 모든 member가 동시에 받는다. @이름 mention된 member가 먼저 받는다.",
       "type": "enum",
       "default": "turn",
       "values": ["turn", "simul"]
@@ -175,22 +172,19 @@
     "commands": [
       {
         "name": "soksak-plugin-agents-clubhouse.state",
-        "description": "Return the live state of the room: the conversation mode, the roster with the membership and the check state of each entry, and the transport status.",
+        "description": "Return the live state of the room: the conversation mode, the assigned group or null, the members in the order of the group with whether each is the leader, and the transport status.",
         "params": { "type": "object", "properties": {} },
         "result": {
           "type": "object",
           "properties": {
             "mode": { "type": "string", "enum": ["turn", "simul"] },
-            "roster": {
+            "group": { "type": ["string", "null"] },
+            "members": {
               "type": "array",
               "items": {
                 "type": "object",
-                "properties": {
-                  "id": { "type": "string" },
-                  "member": { "type": "boolean" },
-                  "checked": { "type": "boolean" }
-                },
-                "required": ["id", "member", "checked"]
+                "properties": { "id": { "type": "string" }, "leader": { "type": "boolean" } },
+                "required": ["id", "leader"]
               }
             },
             "transport": {
@@ -203,45 +197,21 @@
               "required": ["state", "notIsolated"]
             }
           },
-          "required": ["mode", "roster", "transport"]
+          "required": ["mode", "group", "members", "transport"]
         }
       },
       {
-        "name": "soksak-plugin-agents-clubhouse.member.set",
-        "description": "Check or uncheck the member id of the room: a checked member receives the next message, and an unchecked member keeps its session and receives no line. Refused for an entry that is no member of the room. Setting the current state changes nothing.",
+        "name": "soksak-plugin-agents-clubhouse.group.set",
+        "description": "Assign the group of the agents plugin with the identifier group to the room and keep it in the tab state; the members of the room are the members of that group in its order. Assigning the assigned group changes nothing; a group that the agents plugin does not store is refused. Returns {group}.",
         "params": {
           "type": "object",
-          "properties": { "id": { "type": "string" }, "checked": { "type": "boolean" } },
-          "required": ["id", "checked"]
+          "properties": { "group": { "type": "string" } },
+          "required": ["group"]
         },
         "result": {
           "type": "object",
-          "properties": { "id": { "type": "string" }, "checked": { "type": "boolean" } },
-          "required": ["id", "checked"]
-        }
-      },
-      {
-        "name": "soksak-plugin-agents-clubhouse.invite",
-        "description": "Open the invite dialog over the window and invite the definitions that the person picks there with member.join. The result names the invited identifiers, empty when the person cancels.",
-        "params": { "type": "object", "properties": {} },
-        "result": {
-          "type": "object",
-          "properties": { "invited": { "type": "array", "items": { "type": "string" } } },
-          "required": ["invited"]
-        }
-      },
-      {
-        "name": "soksak-plugin-agents-clubhouse.member.join",
-        "description": "Make the roster entry id a checked member of the room and summon its session. A member stays as it is.",
-        "params": {
-          "type": "object",
-          "properties": { "id": { "type": "string" } },
-          "required": ["id"]
-        },
-        "result": {
-          "type": "object",
-          "properties": { "id": { "type": "string" } },
-          "required": ["id"]
+          "properties": { "group": { "type": "string" } },
+          "required": ["group"]
         }
       },
       {
@@ -249,54 +219,6 @@
         "description": "Read the login of the account homes again and summon the members, after the person logs in to an account in the agents plugin. The room opens no login: a member uses the login of its account.",
         "params": { "type": "object", "properties": {} },
         "result": { "type": "null" }
-      },
-      {
-        "name": "soksak-plugin-agents-clubhouse.member.leave",
-        "description": "Remove the member id from the room: clear its membership, its check and its leader, end its session and let the arrangement close its tab. An entry that is no member changes nothing.",
-        "params": {
-          "type": "object",
-          "properties": { "id": { "type": "string" } },
-          "required": ["id"]
-        },
-        "result": {
-          "type": "object",
-          "properties": { "id": { "type": "string" } },
-          "required": ["id"]
-        }
-      },
-      {
-        "name": "soksak-plugin-agents-clubhouse.invite.pick",
-        "description": "Served by the invite dialog: close the dialog with ids, the definitions that are no member, which the room invites in roster order.",
-        "params": {
-          "type": "object",
-          "properties": { "ids": { "type": "array", "items": { "type": "string" } } },
-          "required": ["ids"]
-        },
-        "result": {
-          "type": "object",
-          "properties": { "ids": { "type": "array", "items": { "type": "string" } } },
-          "required": ["ids"]
-        }
-      },
-      {
-        "name": "soksak-plugin-agents-clubhouse.invite.cancel",
-        "description": "Served by the invite dialog: close the dialog without an invite. The result is null.",
-        "params": { "type": "object", "properties": {} },
-        "result": { "type": "null" }
-      },
-      {
-        "name": "soksak-plugin-agents-clubhouse.member.leader",
-        "description": "Make the member id the leader when leader is true, check it and clear the leader of every other member, or clear it when leader is false. The leader receives every record line and settles the conversation.",
-        "params": {
-          "type": "object",
-          "properties": { "id": { "type": "string" }, "leader": { "type": "boolean" } },
-          "required": ["id", "leader"]
-        },
-        "result": {
-          "type": "object",
-          "properties": { "id": { "type": "string" }, "leader": { "type": "boolean" } },
-          "required": ["id", "leader"]
-        }
       },
       {
         "name": "soksak-plugin-agents-clubhouse.mention.insert",
@@ -338,34 +260,6 @@
           "type": "object",
           "properties": { "member": { "type": "string" }, "choice": { "type": "string" } },
           "required": ["member", "choice"]
-        }
-      },
-      {
-        "name": "soksak-plugin-agents-clubhouse.member.role",
-        "description": "Set the role of the roster member id, a text of 0 to 200 characters without control characters; the protocol line and each turn line state the roles. Setting the current role changes nothing.",
-        "params": {
-          "type": "object",
-          "properties": { "id": { "type": "string" }, "role": { "type": "string" } },
-          "required": ["id", "role"]
-        },
-        "result": {
-          "type": "object",
-          "properties": { "id": { "type": "string" }, "role": { "type": "string" } },
-          "required": ["id", "role"]
-        }
-      },
-      {
-        "name": "soksak-plugin-agents-clubhouse.member.move",
-        "description": "Move the roster member id to the place index, counted from 0.",
-        "params": {
-          "type": "object",
-          "properties": { "id": { "type": "string" }, "index": { "type": "integer" } },
-          "required": ["id", "index"]
-        },
-        "result": {
-          "type": "object",
-          "properties": { "id": { "type": "string" }, "index": { "type": "integer" } },
-          "required": ["id", "index"]
         }
       },
       {
@@ -520,17 +414,16 @@
       },
       {
         "name": "soksak-plugin-agents-clubhouse.tab",
-        "description": "Member card of the header: a press outside the role input runs member.set with the toggled state, a drag over another card runs member.move and a right click runs member.leave",
-        "many": true
-      },
-      {
-        "name": "soksak-plugin-agents-clubhouse.role",
-        "description": "Role input of a member card: a change runs member.role with the text of the input",
+        "description": "Member card of the header: the initials, the name after a star for the leader, and the state of the member; it runs no command",
         "many": true
       },
       {
         "name": "soksak-plugin-agents-clubhouse.mode",
         "description": "Conversation mode buttons above the composer (sequential, simultaneous), hidden while the room has a leader: each runs mode.set with its mode"},
+      {
+        "name": "soksak-plugin-agents-clubhouse.group",
+        "description": "Group select at the right end of the first header line: lists the groups of the agents plugin by name and runs group.set with the chosen group"
+      },
       {
         "name": "soksak-plugin-agents-clubhouse.fold",
         "description": "Fold button below the member grid, shown while the grid has three rows or more: it runs members.fold with the toggled fold"
@@ -545,24 +438,7 @@
       },
       {
         "name": "soksak-plugin-agents-clubhouse.mention",
-        "description": "Items of the mention hint list above the composer, shown while the word before the caret starts with @: all and the names of the checked roster members that start with its text; a click runs mention.insert with the name of the item"
-      },
-      {
-        "name": "soksak-plugin-agents-clubhouse.invite",
-        "description": "The + button at the end of the member cards: runs invite, which opens the invite dialog."
-      },
-      {
-        "name": "soksak-plugin-agents-clubhouse.invite-dialog.definition",
-        "description": "Check box of a definition row in the invite dialog; a member of the room is checked and disabled.",
-        "many": true
-      },
-      {
-        "name": "soksak-plugin-agents-clubhouse.invite-dialog.pick",
-        "description": "The 초대 button of the invite dialog: runs invite.pick with the picked definitions. Disabled while none is picked."
-      },
-      {
-        "name": "soksak-plugin-agents-clubhouse.invite-dialog.cancel",
-        "description": "The 취소 button of the invite dialog: runs invite.cancel."
+        "description": "Items of the mention hint list above the composer, shown while the word before the caret starts with @: all and the names of the members that start with its text; a click runs mention.insert with the name of the item"
       }
     ]
   }

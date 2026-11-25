@@ -1,11 +1,11 @@
-// The state of a room tab (docs/spec/room.md#restart): the roster order and checks, the mode, the conversation, the sessions that the
+// The state of a room tab (docs/spec/room.md#restart): the assigned group, the mode, the conversation, the sessions that the
 // room opened, the sessions that received the room protocol and the delivered numbers of the room record, written through the tab state of the view and read back at start.
 import { describe, expect, it } from "vitest";
 import manifest from "../../plugin.json";
 import { parseRoomState, serializedRoomState, type RoomState } from "./room-state";
 
 const state: RoomState = {
-  roster: [{ id: "harness-harness", member: true, checked: true, role: "", leader: true }, { id: "moai-manager-lead", member: false, checked: false, role: "", leader: false }],
+  group: "group-1",
   mode: "turn",
   folded: false,
   conversation: [
@@ -21,17 +21,16 @@ const state: RoomState = {
 };
 
 describe("parseRoomState", () => {
-  it("reads the leader and the addressed lists (docs/spec/room.md#leader)", () => {
+  it("reads the group and the addressed lists (docs/spec/room.md#group)", () => {
     expect(parseRoomState(JSON.parse(serializedRoomState(state)))).toEqual(state);
   });
 
-  it("refuses two leaders, a roster entry without leader and an addressed list out of order", () => {
-    const both = state.roster.map((entry) => ({ ...entry, member: true, leader: true }));
-    expect(() => parseRoomState({ ...state, roster: both })).toThrow("room tab state: roster has more than one leader");
-    expect(() => parseRoomState({ ...state, roster: [{ id: "a", checked: true, role: "" }] })).toThrow("roster must be an array of {id, member, checked, role, leader}");
-    expect(() => parseRoomState({ ...state, roster: [{ id: "a", checked: true, role: "", leader: false }] })).toThrow("roster must be an array of {id, member, checked, role, leader}");
-    expect(() => parseRoomState({ ...state, roster: [{ id: "a", member: false, checked: true, role: "", leader: false }] })).toThrow("room tab state: roster entry a is checked or the leader but no member");
-    expect(() => parseRoomState({ ...state, roster: [{ id: "a", member: false, checked: false, role: "", leader: true }] })).toThrow("room tab state: roster entry a is checked or the leader but no member");
+  it("refuses the roster of the earlier form, a group that is no identifier and an addressed list out of order (docs/spec/room.md#group)", () => {
+    const { group: _group, ...rest } = state;
+    expect(() => parseRoomState({ ...rest, roster: [] })).toThrow("room tab state: unknown field roster");
+    expect(() => parseRoomState(rest)).toThrow("room tab state: group must be a group identifier or null, got undefined");
+    expect(() => parseRoomState({ ...state, group: "" })).toThrow('room tab state: group must be a group identifier or null, got ""');
+    expect(parseRoomState({ ...state, group: null })?.group).toBeNull();
     expect(() => parseRoomState({ ...state, addressed: { "owned-1": [1, 0] } })).toThrow("room tab state: addressed owned-1 must hold increasing record indexes below 2");
   });
 
@@ -74,7 +73,6 @@ describe("parseRoomState", () => {
     expect(() => parseRoomState({ ...state, folded: "no" })).toThrow('room tab state: folded must be true or false, got "no"');
     const { folded: _f, ...withoutFold } = state;
     expect(() => parseRoomState(withoutFold)).toThrow("room tab state: folded must be true or false, got undefined");
-    expect(() => parseRoomState({ ...state, roster: [{ id: 1 }] })).toThrow("room tab state: roster must be an array of {id, member, checked, role, leader}");
     expect(() => parseRoomState({ ...state, conversation: "x" })).toThrow("room tab state: conversation must be an array of {speaker, text, at, elapsedMs, index}");
     expect(() => parseRoomState({ ...state, protocolSessions: [3] })).toThrow(
       "room tab state: protocolSessions must be an array of session identifiers",
