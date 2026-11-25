@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- C152: The room checks each member before its session opens and on `room.check`, refuses a member whose folder or program is missing, and shows the problems on the cards and in the status `check`, including a home without a login and a session that reports no program state.
 - C151-1: A stop during the summon of a member ends its open, so no second protocol wait holds the conversation.
 - C151: `conversation.stop` ends a protocol turn that waits for the first idle of a session, so a member whose program never reports idle holds no conversation.
 - C149: The tab of the room shows the plugin name and the name of its group; the header has no line of the plugin name, and the group select stands in the status bar above the composer.

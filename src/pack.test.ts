@@ -28,7 +28,7 @@ describe("first start program", () => {
     expect(programs["project-trust"]!.program).toBe("plugin:bin/first-start.mjs");
     expect(programs["team-worktree"]).toBeUndefined();
     // C148 (docs/spec/room.md#worktrees): the worktree commands of the same program.
-    for (const name of ["member-worktree", "member-root", "member-worktree-remove", "member-memory"]) expect(programs[name]!.program).toBe("plugin:bin/first-start.mjs");
+    for (const name of ["member-worktree", "member-root", "member-worktree-remove", "member-memory", "member-check"]) expect(programs[name]!.program).toBe("plugin:bin/first-start.mjs");
     expect(pkg.files).toContain("bin/first-start.mjs");
     expect(Object.values((pkg as unknown as { bin: Record<string, string> }).bin)).toEqual(["bin/first-start.mjs"]);
   });
@@ -62,13 +62,14 @@ describe("ACP removal", () => {
     expect(existsSync(join(root, "src/room/acp-shapes.ts"))).toBe(false);
   });
 
-  it("exposes no ask, converse or send command, and declares the arrangement, conversation, view and transport statuses", () => {
+  it("exposes no ask, converse or send command, and declares the arrangement, check, conversation, view and transport statuses", () => {
     const names = manifest.exposes.commands.map((c) => c.name);
     for (const removed of ["ask", "converse", "send"]) {
       expect(names).not.toContain(`soksak-plugin-agents-clubhouse.${removed}`);
     }
     expect(manifest.exposes.status.map((s) => s.name)).toEqual([
       "soksak-plugin-agents-clubhouse.arrangement",
+      "soksak-plugin-agents-clubhouse.check",
       "soksak-plugin-agents-clubhouse.conversation",
       "soksak-plugin-agents-clubhouse.view",
       "soksak-plugin-agents-clubhouse.transport",

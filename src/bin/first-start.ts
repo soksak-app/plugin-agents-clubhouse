@@ -5,6 +5,7 @@
 //   first-start worktree <folder> <room> <member>                creates the worktree of a member of a room (docs/spec/room.md#worktrees)
 //   first-start remove <root> <room> <member> <integration>      removes that worktree and its merged branch
 //   first-start memory <folder>                                   creates the memory of the project in the folder (docs/spec/room.md#memory)
+//   first-start check <folder> <cli>                              names why a member cannot start there (docs/spec/room.md#check)
 //   first-start root <folder>                                     names the root of the main checkout of the folder, or null outside git
 // Each command writes one JSON object on its standard output and exits with 0, or writes its error on its standard error and exits
 // with 1.
@@ -17,9 +18,10 @@
 // file while it runs.
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmdirSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmdirSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, join } from "node:path";
+import which from "which";
 import lockfile from "proper-lockfile";
 
 function git(directory: string, args: string[]): string {
@@ -179,6 +181,20 @@ function memoryOf(folder: string): Record<string, unknown> {
   return { memory, indexLines };
 }
 
+// The reasons why a member cannot start: a folder that does not exist or is no folder, and a program that PATH of this program does not
+// hold or that is no executable file; null for each part without a reason. which resolves a name in PATH as a shell does.
+function checkOf(folder: string, cli: string, env: NodeJS.ProcessEnv): Record<string, unknown> {
+  const folderReason = !existsSync(folder) ? `${folder} does not exist` : statSync(folder).isDirectory() ? null : `${folder} is not a folder`;
+  let cliReason: string | null = null;
+  if (cli.includes("/")) {
+    if (!existsSync(cli)) cliReason = `the program ${cli} is not found`;
+    else if (which.sync(cli, { nothrow: true }) === null) cliReason = `the program ${cli} is not an executable file`;
+  } else if (which.sync(cli, { nothrow: true, path: env.PATH ?? "" }) === null) {
+    cliReason = `the program ${cli} is not found in PATH`;
+  }
+  return { folder: folderReason, cli: cliReason };
+}
+
 function absolute(name: string, value: string | undefined): string {
   if (value === undefined || !value.startsWith("/")) throw new Error(`${name} must be an absolute path, got ${JSON.stringify(value)}`);
   return value;
@@ -198,6 +214,10 @@ export async function run(args: string[], home: string, env: NodeJS.ProcessEnv):
   if (command === "worktree" && args.length === 4) {
     return addWorktree(home, absolute("folder", args[1]), segment("room", args[2]), segment("member", args[3]));
   }
+  if (command === "check" && args.length === 3) {
+    if (typeof args[2] !== "string" || args[2] === "") throw new Error(`cli must be a program name or path, got ${JSON.stringify(args[2])}`);
+    return checkOf(absolute("folder", args[1]), args[2], env);
+  }
   if (command === "memory" && args.length === 2) return memoryOf(absolute("folder", args[1]));
   if (command === "root" && args.length === 2) {
     const folder = absolute("folder", args[1]);
@@ -206,7 +226,7 @@ export async function run(args: string[], home: string, env: NodeJS.ProcessEnv):
   if (command === "remove" && args.length === 5) {
     return removeWorktree(home, absolute("root", args[1]), segment("room", args[2]), segment("member", args[3]), args[4]);
   }
-  throw new Error(`command must be trust, start, worktree, root, memory or remove, got ${JSON.stringify(command)}`);
+  throw new Error(`command must be trust, start, worktree, root, memory, check or remove, got ${JSON.stringify(command)}`);
 }
 
 if (process.argv[1] !== undefined && /first-start(\.mjs)?$/.test(process.argv[1])) {

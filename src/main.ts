@@ -30,10 +30,11 @@ import { answerSections } from "./room/sections";
 import { createRoomRecord, leaderRoute, settledRelay } from "./room/room-record";
 import { agentFileText, agentNameOf, roleFileOf } from "./room/agent-file";
 import { createConversationStatus, waitLabel } from "./room/conversation-status";
+import { createRoomCheck, type RoomCheckValue } from "./room/check";
 import { createMemberOpen } from "./room/member-open";
 import { MEMORY_INDEX_LIMIT, createProtocolInjector, type AgentPlace, type MemberWorktree } from "./room/protocol";
 import { parseRoomState, serializedRoomState, type RoomState as RoomTabState } from "./room/room-state";
-import { ownedSessionIds, shownByOf } from "./room/session-channel";
+import { ownedSessionIds, sessionProgram, shownByOf } from "./room/session-channel";
 import { answerQuestion, questionChoices, readQuestion, showMember } from "./room/question";
 import { insertMention, mentionCandidates, mentionQuery } from "./room/mention-hint";
 import { groupMembers, readGroups, type AgentGroup, type RoomMember } from "./room/members";
@@ -60,6 +61,7 @@ const CSS = `
 .st-tab .ini{width:24px;height:24px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;background:rgba(127,127,127,.22);flex:0 0 auto}
 .st-tab .txt{display:flex;flex-direction:column;min-width:0;line-height:1.25}
 .st-tab .nm{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.st-tab.problem .state{white-space:normal}
 .st-tab .sub{display:flex;align-items:center;gap:4px;font-size:11px;color:var(--fg3,#888);white-space:nowrap}
 .st-msgs-box{position:relative;flex:1;min-height:0;display:flex;flex-direction:column}
 .st-pill{position:absolute;left:50%;bottom:10px;transform:translateX(-50%);padding:3px 12px;border-radius:999px;border:1px solid rgba(127,127,127,.35);background:var(--card,#2a2a2a);color:var(--fg,#ddd);font-size:11.5px;cursor:pointer}
@@ -247,6 +249,43 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   type Transport = { state: "unavailable" | "ready"; reason: string; notIsolated: string[] };
   const transport: Transport = { state: "unavailable", reason: t("transportUnavailable", lang), notIsolated: [] };
   const transportListeners = new Set<(value: Transport) => void>();
+  // The check of the members (C152, docs/spec/room.md#check), published as the status check.
+  const checkListeners = new Set<(value: RoomCheckValue) => void>();
+  const roomCheck = createRoomCheck({
+    run: async (folder, cli) => {
+      const reply = await bridge!.runtime.program.run("member-check", ["check", folder, cli]);
+      if (reply.code !== 0) throw new Error(`member-check ${folder} ${cli} exited with ${reply.code}: ${reply.stderr.trim()}`);
+      const answer = JSON.parse(reply.stdout) as { folder: unknown; cli: unknown };
+      const reason = (one: unknown): string | null => {
+        if (one === null || typeof one === "string") return one;
+        throw new Error(`member-check answered ${reply.stdout.trim()}`);
+      };
+      return { folder: reason(answer.folder), cli: reason(answer.cli) };
+    },
+    loginProblem: (id) => {
+      const home = definitions.find((one) => one.id === id)?.home;
+      return loginGate.needs(id) && home ? `the home ${home.folder} has no login` : null;
+    },
+    session: (id) => {
+      const session = memberSessions.get(id);
+      // A session that core.sessions no longer lists is no open session; a program state of another form fails the check.
+      if (session === undefined || !Array.isArray(sessionsValue) || !sessionsValue.some((entry) => entry?.session === session)) return null;
+      return { session, reports: sessionProgram(sessionsValue, session) !== null };
+    },
+    publish: (value) => {
+      for (const listener of [...checkListeners]) listener(value);
+    },
+  });
+  const checkedMembers = () =>
+    members.flatMap((entry) => {
+      const definition = definitions.find((one) => one.id === entry.id);
+      return definition === undefined ? [] : [{ id: definition.id, cwd: definition.cwd, program: definition.program }];
+    });
+  const checkAll = async () => {
+    const value = await roomCheck.all(checkedMembers());
+    showStates();
+    return value;
+  };
   // Whether the isolation table isolates the CLI of the member (docs/spec/room.md#isolation).
   const isolatedMember = (id: string): boolean => {
     const definition = definitions.find((entry) => entry.id === id);
@@ -384,7 +423,10 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
       const state = memberState(memberSessions.has(id), waited.has(id));
       tab.classList.toggle("none", state === "none");
       tab.querySelector<HTMLButtonElement>(".end")!.hidden = !memberSessions.has(id);
-      tab.querySelector(".state")!.textContent = t(state === "answering" ? "stateAnswering" : state === "idle" ? "stateIdle" : "stateNone", lang);
+      // A member with a problem of the last check shows it in its state line (docs/spec/room.md#check).
+      const problem = roomCheck.problemOf(id);
+      tab.querySelector(".state")!.textContent = problem ?? t(state === "answering" ? "stateAnswering" : state === "idle" ? "stateIdle" : "stateNone", lang);
+      tab.classList.toggle("problem", problem !== null);
     }
   }
 
@@ -694,6 +736,16 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
     // The first turn of a member without a session summons it, which arranges its tab, and submits the room protocol before the turn line
     // (docs/spec/room.md#receivers).
     open: createMemberOpen({
+      check: async (id) => {
+        const member = checkedMembers().find((one) => one.id === id);
+        if (member === undefined) throw new Error(`member ${id} is not a member of the group`);
+        try {
+          await roomCheck.beforeOpen(member);
+        } catch (error) {
+          await checkAll();
+          throw error;
+        }
+      },
       summon: (id) => summonRun([id]),
       needsLogin: (id) => loginGate.needs(id),
       protocol: async (id) => {
@@ -1136,12 +1188,20 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
       [CLAIM_COMMAND]: async (params: unknown) => work!.claim(params),
       [RELEASE_COMMAND]: async (params: unknown) => work!.release(params),
       [`${EXPOSE}.conversation.scroll.bottom`]: async () => follow.bottom(),
+      [`${EXPOSE}.room.check`]: async () => checkAll(),
     },
     elements,
     statuses: {
       [`${EXPOSE}.arrangement`]: {
         read: () => arrangement.read(),
         subscribe: (listener) => arrangement.subscribe(listener).dispose,
+      },
+      [`${EXPOSE}.check`]: {
+        read: () => roomCheck.read(),
+        subscribe: (listener) => {
+          checkListeners.add(listener);
+          return () => void checkListeners.delete(listener);
+        },
       },
       [`${EXPOSE}.conversation`]: {
         read: () => conversationStatus.read(),

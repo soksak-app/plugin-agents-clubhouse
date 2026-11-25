@@ -194,9 +194,33 @@ describe("first-start memory", () => {
   });
 });
 
+// C152 (docs/spec/room.md#check): the folder and the program of a member before its session opens.
+describe("first-start check", () => {
+  it("answers null for an existing folder and a program found in PATH or by its path", async () => {
+    const { home, repo } = setup();
+    expect(await run(["check", repo, "git"], home, { PATH: "/usr/bin:/bin" })).toEqual({ folder: null, cli: null });
+    expect(await run(["check", repo, "/bin/sh"], home, { PATH: "" })).toEqual({ folder: null, cli: null });
+  });
+
+  it("names a missing folder, a file that is no folder, a program not in PATH and a file that is not executable", async () => {
+    const { home, repo } = setup();
+    const file = join(home, "file.txt");
+    writeFileSync(file, "x");
+    expect(await run(["check", join(home, "gone"), "no-such-cli-c152"], home, { PATH: "/usr/bin:/bin" })).toEqual({
+      folder: `${join(home, "gone")} does not exist`,
+      cli: "the program no-such-cli-c152 is not found in PATH",
+    });
+    expect(await run(["check", file, file], home, { PATH: "/usr/bin" })).toEqual({
+      folder: `${file} is not a folder`,
+      cli: `the program ${file} is not an executable file`,
+    });
+    expect(await run(["check", repo, "git"], home, { PATH: "" })).toEqual({ folder: null, cli: "the program git is not found in PATH" });
+  });
+});
+
 describe("first-start commands", () => {
   it("refuses another command", async () => {
     const { home, repo } = setup();
-    await expect(run(["add", repo, "dev-1"], home, {})).rejects.toThrow('command must be trust, start, worktree, root, memory or remove, got "add"');
+    await expect(run(["add", repo, "dev-1"], home, {})).rejects.toThrow('command must be trust, start, worktree, root, memory, check or remove, got "add"');
   });
 });

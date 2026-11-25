@@ -5,6 +5,8 @@ import type { ProtocolOutcome } from "./protocol";
 import { TurnStopped } from "./room-relay";
 
 export interface MemberOpenDeps {
+  // The check of the member before its session opens, which rejects with its reasons (docs/spec/room.md#check).
+  check: (id: string) => Promise<void>;
   summon: (id: string) => Promise<void>;
   needsLogin: (id: string) => boolean;
   // The protocol turn of the open session of the member, or undefined when the member has no open session.
@@ -15,6 +17,7 @@ export interface MemberOpenDeps {
 
 export function createMemberOpen(deps: MemberOpenDeps): (member: { id: string; name: string }) => Promise<string> {
   return async (member) => {
+    await deps.check(member.id);
     const stops = deps.stops();
     await deps.summon(member.id);
     if (deps.stops() !== stops) throw new TurnStopped();
