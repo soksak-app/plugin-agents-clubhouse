@@ -2,6 +2,7 @@
 
 [English](features.md)
 
+- [o] C165 — P0: `room.check`는 실행할 때 각 home의 login을 읽는다. Input: 계정 `claude`에 login이 없는 application에서 `room.check`는 member 11명 모두 문제 없음으로 답했고, 이어서 `message.send`는 member를 `the account claude has no login`으로 거절했다. Behavior: check는 마지막 open이 읽은 login을 주었고, 시작 뒤에는 빈 집합이었다. Expected: check는 problem을 나열하기 전에 CLI의 status command로 member home의 login을 읽는다([check](spec/room.md#check)). Red: `src/room/check.test.ts`의 `reads the login of the homes of the members before it lists their problems`가 실패했다. Green: `src/room/check.test.ts`가 4개 중 4개 통과하고 `pnpm run typecheck`가 통과한다.
 - [~] C164 — P0, C131 다음: C131, C132, C133을 게시하는 0.0.31을 release하고, 설치하는 application에 저장된 방 tab state를 백업한 뒤 `conversations: {}`가 있는 format 4로 고친다. 남은 일: release 실행과 고치기.
 - [o] C163 — P0, C162에 이어서: C162를 게시하는 0.0.30을 release한다.
 - [o] C162 — P0, C161과 agents A26-2 다음: login이 없는 member의 거부가 agents plugin의 설정을 login 장소로 지정한다. Input: 계정 home에 login이 없는 member에게 보낸 메시지. Behavior: turn이 `log in to it in the agent definitions`로 실패했지만, agents plugin은 login을 자기 settings view에서 실행한다. Expected: turn이 `member <id>: the account <account> has no login; log in to it in the settings of the agents plugin and send again`으로 실패한다. Red: `member-open.test.ts`가 옛 text로 실패했다. Green: `member-open.test.ts`와 `room-relay.test.ts`의 test 68개 중 68개가 통과한다.

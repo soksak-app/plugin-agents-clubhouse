@@ -9,6 +9,7 @@ function setup() {
   const published: unknown[] = [];
   const check = createRoomCheck({
     run: async (folder, cli) => (folder === "/gone" ? { folder: "/gone does not exist", cli: null } : { folder: null, cli: cli === "nope" ? "the program nope is not found in PATH" : null }),
+    readLogins: async () => {},
     loginProblem: (id) => (id === "a" ? "the home /h/a has no login" : null),
     session: (id) => (id === "a" ? { session: "s-1", reports: false } : null),
     publish: (value) => void published.push(value),
@@ -36,6 +37,24 @@ describe("createRoomCheck", () => {
     });
     expect(check.read()).toEqual(value);
     expect(published).toEqual([value]);
+  });
+
+  // C165: room.check reads the login of each home when it runs, not the login that the last open read.
+  it("reads the login of the homes of the members before it lists their problems", async () => {
+    const without = new Set<string>();
+    const read: string[][] = [];
+    const check = createRoomCheck({
+      run: async () => ({ folder: null, cli: null }),
+      readLogins: async (ids) => {
+        read.push([...ids]);
+        without.add("a");
+      },
+      loginProblem: (id) => (without.has(id) ? `the home /h/${id} has no login` : null),
+      session: () => null,
+      publish: () => {},
+    });
+    expect(await check.all([A, B])).toEqual({ members: [{ member: "a", problems: ["the home /h/a has no login"] }, { member: "b", problems: [] }] });
+    expect(read).toEqual([["a", "b"]]);
   });
 
   it("gives the first problem of a member for its card", async () => {

@@ -13,6 +13,8 @@ export interface RoomCheckValue {
 export interface RoomCheckDeps {
   // Runs the declared program member-check with the folder and the program of a definition.
   run: (folder: string, cli: string) => Promise<{ folder: string | null; cli: string | null }>;
+  // Reads the login of the homes of the members, which loginProblem then gives (C165).
+  readLogins: (ids: readonly string[]) => Promise<void>;
   // The login problem of the home of a member, or null.
   loginProblem: (id: string) => string | null;
   // The open session of a member and whether its program reports a program state, or null without an open session.
@@ -40,6 +42,8 @@ export function createRoomCheck(deps: RoomCheckDeps): RoomCheck {
     },
     async all(members) {
       const next: RoomCheckValue = { members: [] };
+      // The check reads the login of each home when it runs, because a login can end or begin after the last open read it.
+      await deps.readLogins(members.map((member) => member.id));
       for (const member of members) {
         const problems = await reasons(member);
         const login = deps.loginProblem(member.id);

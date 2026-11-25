@@ -275,6 +275,9 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
       };
       return { folder: reason(answer.folder), cli: reason(answer.cli) };
     },
+    readLogins: async (ids) => {
+      await loginGate.startable(definitions.filter((one) => ids.includes(one.id)));
+    },
     loginProblem: (id) => {
       const home = definitions.find((one) => one.id === id)?.home;
       return loginGate.needs(id) && home ? `the home ${home.folder} has no login` : null;
