@@ -2,6 +2,7 @@
 // received (docs/spec/room.md#room-record), the next member starts after the previous turn has ended, and each member delivers its answer with the declared answer command
 // (docs/spec/room.md#answer). The room port double answers with the declared shapes and moves a session through idle, working and idle
 // as core would; the member of a session runs the answer command during its turn, before its program reports idle.
+import { formatISO } from "date-fns";
 import { describe, expect, it } from "vitest";
 import { EMPTY_TURN_TEXT, TURN_RULE, conversationTurnsOf, relayMessage, type ConversationBound, type RelayGroupMember, type RelayPorts } from "./room-relay";
 import { createRoomRecord, leaderRoute, settledRelay, type RoomRecord } from "./room-record";
@@ -322,6 +323,24 @@ describe("relayMessage (docs/spec/room.md#receivers)", () => {
     await expect(send(core, [MEMBERS[0], { ...MEMBERS[1], session: null }], record, "hi")).rejects.toThrow("member writer: the home of its account has no login");
     expect(core.submitted).toEqual([]);
     expect(record.lines).toEqual([]);
+  });
+});
+
+// C143-2 (docs/spec/room.md#mentions): a turn line whose unreceived lines exceed the bound names the left-out lines and where to read them.
+describe("a turn line over the bound", () => {
+  it("states the left-out lines with their entry positions and times before the newest lines", async () => {
+    const core = fakeCore([IDLE("s-1")]);
+    const at = Date.parse("2026-11-26T09:00:00Z");
+    const record = createRoomRecord([], {}, nameOf, () => {}, {}, () => at);
+    const long = "x".repeat(60_000);
+    record.append("owner", long);
+    record.append("owner", long);
+    record.append("owner", "now this");
+    await relayMessage(core.ports, [MEMBERS[0]], "now this", record, open("reviewer"));
+    const time = formatISO(at);
+    expect(core.submitted[0].text).toBe(
+      `[@clubhouse] 네 차례야. 아래는 네가 아직 못 본 기록이야. | [@clubhouse] 1 earlier lines for you, entries 0 to 0 of the conversation from ${time} to ${time}, are not in this line; read them with sok status soksak-plugin-agents-clubhouse.conversation --surface room-1 | [@owner] ${long} | [@owner] now this | [@clubhouse] ${TURN_RULE} | [@clubhouse] turn t-1`,
+    );
   });
 });
 

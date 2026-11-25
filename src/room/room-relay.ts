@@ -3,6 +3,7 @@
 // its turn, and the member delivers its answer with the declared answer command (docs/spec/room.md#answer); the turn ends when the
 // answer arrives (docs/spec/room.md#turn-end). Each turn line carries every line of the room record that its member has not received, and
 // the record reaches a member in no other line (docs/spec/room.md#conversation-first).
+import { formatISO } from "date-fns";
 import { sessionProgram, type SessionCommandPort } from "./session-channel";
 import { mentionedMembers, mentionsAll } from "./mention";
 import type { AnswerChannel, AnswerStatus } from "./answer";
@@ -167,8 +168,13 @@ async function relayToMember(
       .submit(member.session, () => {
         const lines = record.pending(member.session, member.id);
         const count = lines === null ? record.length(member.session) : lines.count;
+        // The lines that the bound left out are named, so the member reads them from the conversation status (docs/spec/room.md#mentions).
+        const left = lines?.left ?? null;
+        const time = (at: number | null): string => (at === null ? "-" : formatISO(at));
+        const note = left === null ? "" :
+          `[@clubhouse] ${left.count} earlier lines for you, entries ${left.first} to ${left.last} of the conversation from ${time(left.firstAt)} to ${time(left.lastAt)}, are not in this line; read them with sok status soksak-plugin-agents-clubhouse.conversation --surface ${ports.surface} | `;
         return {
-          text: `[@clubhouse] ${lines === null ? EMPTY_TURN_TEXT : `${TURN_TEXT} | ${lines.text}`} | ${end}`,
+          text: `[@clubhouse] ${lines === null ? EMPTY_TURN_TEXT : `${TURN_TEXT} | ${note}${lines.text}`} | ${end}`,
           accepted: () => {
             submittedAt = record.now();
             record.markSent(member.session, count);

@@ -2,7 +2,7 @@
 // that a member session has not received, the delivered number of each session, which never falls, and the withdrawal of an owner line
 // that no session received.
 import { describe, expect, it } from "vitest";
-import { createRoomRecord, leaderRoute, settledRelay } from "./room-record";
+import { TURN_RECORD_LIMIT, createRoomRecord, leaderRoute, settledRelay } from "./room-record";
 
 const nameOf = (speaker: string): string => ({ owner: "owner", a: "Alpha", b: "Beta" })[speaker] ?? speaker;
 
@@ -12,7 +12,7 @@ describe("createRoomRecord", () => {
     record.append("owner", "hi\nall");
     record.append("a", "hello");
     record.append("b", "hey");
-    expect(record.pending("s-a", "a")).toEqual({ text: "[@owner] hi all | [@Beta] hey", speakers: ["owner", "b"], count: 3 });
+    expect(record.pending("s-a", "a")).toEqual({ text: "[@owner] hi all | [@Beta] hey", speakers: ["owner", "b"], count: 3, left: null });
     record.markDelivered("s-a", 3);
     expect(record.pending("s-a", "a")).toBeNull();
     record.append("owner", "next");
@@ -56,6 +56,33 @@ describe("createRoomRecord", () => {
     record.markDelivered("s-a", 1);
     expect(() => record.markDelivered("s-a", 3)).toThrow("delivered s-a must be an integer from 0 to 2, got 3");
     expect(record.delivered()).toEqual({ "s-a": 2 });
+  });
+});
+
+// C143-2 (docs/spec/room.md#mentions): the record lines of one turn line hold at most TURN_RECORD_LIMIT characters.
+describe("the bound of the record lines of a turn line", () => {
+  it("keeps the newest lines that fit and names the left-out lines by their positions and times", () => {
+    const record = createRoomRecord([], {}, nameOf, () => {}, {}, () => 1_700_000_000_000);
+    const long = "x".repeat(60_000);
+    for (const speaker of ["owner", "b", "owner"]) record.append(speaker, long);
+    record.append("b", "short");
+    const pending = record.pending("s-a", "a")!;
+    expect(pending.text).toBe(`[@owner] ${long} | [@Beta] short`);
+    expect(pending.text.length).toBeLessThanOrEqual(TURN_RECORD_LIMIT);
+    expect(pending.left).toEqual({ count: 2, first: 0, last: 1, firstAt: 1_700_000_000_000, lastAt: 1_700_000_000_000 });
+    expect(pending.count).toBe(4);
+  });
+
+  it("carries the newest line whole when it alone is longer than the bound, and leaves nothing out below the bound", () => {
+    const record = createRoomRecord([], {}, nameOf, () => {});
+    record.append("owner", "first");
+    record.append("b", "y".repeat(TURN_RECORD_LIMIT + 10));
+    const pending = record.pending("s-a", "a")!;
+    expect(pending.text).toBe(`[@Beta] ${"y".repeat(TURN_RECORD_LIMIT + 10)}`);
+    expect(pending.left).toMatchObject({ count: 1, first: 0, last: 0 });
+    const small = createRoomRecord([], {}, nameOf, () => {});
+    small.append("owner", "hi");
+    expect(small.pending("s-a", "a")!.left).toBeNull();
   });
 });
 

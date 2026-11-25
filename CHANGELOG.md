@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- C143-2: A turn line carries at most 100,000 characters of record lines and names the left-out lines by their entry positions and times in the conversation status; the times are formatted with date-fns.
 - C148: A member whose definition folder is in a git repository works in its own worktree `<home>/soksak/worktrees/<repository>-<hash>/<room>/<member>` on the branch `clubhouse/<room>/<member>`, created when its session opens; a worktree line after the room protocol states the merge order; `member.end` and the card button `끝내기` remove the worktree, refusing changes that are not committed and an unmerged branch, and end the session; the tab state keeps `worktrees`.
 - C142: A member opens its session at its first turn: assigning or changing a group opens no session and reattaches the open sessions of the room, the relay summons a member without a session, arranges its tab and submits the room protocol before its turn line, and the composer takes input while the assigned group has a member.
 - C141: A message of the owner goes to the members that it mentions and then to the leader of the group, and a message without a mention goes to the leader alone; `message.send` refuses a message whose receiver has no open session with `member <name> has no open session`. The conversation modes `turn` and `simul`, `mode.set`, the mode buttons and the setting `kibitzDefault` are removed, and the tab state has no `mode`.

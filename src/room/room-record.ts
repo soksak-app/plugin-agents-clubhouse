@@ -31,7 +31,13 @@ export interface PendingLines {
   speakers: string[];
   // The length of the addressed list of the session when the text was built: the sent and delivered position after the line.
   count: number;
+  // The lines that the bound left out of the text, oldest first: their number, the record positions and times of the first and the
+  // last; null when the text holds every line (docs/spec/room.md#mentions).
+  left: { count: number; first: number; last: number; firstAt: number | null; lastAt: number | null } | null;
 }
+
+// The largest number of characters of the record lines of one turn line (docs/spec/room.md#mentions).
+export const TURN_RECORD_LIMIT = 100_000;
 
 export interface RoomRecord {
   readonly lines: readonly RecordLine[];
@@ -138,12 +144,23 @@ export function createRoomRecord(
       changed();
     },
     pending(session, self) {
-      const own = unsent(session, self).map((index) => lines[index]);
-      if (own.length === 0) return null;
+      const indexes = unsent(session, self);
+      if (indexes.length === 0) return null;
+      // The newest lines that fit the bound, and at least the newest line whole.
+      const texts = indexes.map((index) => `[@${nameOf(lines[index].speaker)}] ${oneLine(lines[index].text)}`);
+      let from = indexes.length - 1;
+      let size = texts[from].length;
+      while (from > 0 && size + 3 + texts[from - 1].length <= TURN_RECORD_LIMIT) {
+        from -= 1;
+        size += 3 + texts[from].length;
+      }
+      const kept = indexes.slice(from);
+      const out = indexes.slice(0, from);
       return {
-        text: own.map((line) => `[@${nameOf(line.speaker)}] ${oneLine(line.text)}`).join(" | "),
-        speakers: [...new Set(own.map((line) => line.speaker))],
+        text: texts.slice(from).join(" | "),
+        speakers: [...new Set(kept.map((index) => lines[index].speaker))],
         count: listOf(session).length,
+        left: out.length === 0 ? null : { count: out.length, first: out[0], last: out.at(-1)!, firstAt: lines[out[0]].at, lastAt: lines[out.at(-1)!].at },
       };
     },
     unsent,
