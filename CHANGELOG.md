@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- C157-1: The dependency test of the room definitions expects `@soksak/plugin-agents` `>=0.0.10`.
 - C159: The send button and the input send a message again: `message.send` declares `mood`, and a refusal before `message.send` runs shows as `message.send: <reason>`.
 - C158: The command list of the room specification states `message.send {text, mood?}`.
 - C157: The manifest requires `@soksak/plugin-agents` `>=0.0.10`, whose stored groups hold a leader.
