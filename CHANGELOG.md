@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- C136: The invite page `invite.html` take the text, line and error colors from the theme tokens `--fg`, `--edge` and `--fail` instead of a palette of the system color scheme, so a dark window draws them light on its dark card.
 - C135-1: `member-start` also writes `claudeInChromeDefaultEnabled` `false` into a home without that answer, so a member does not stop at the question whether the Chrome extension is its default browser.
 - C135: Before a Claude Code member starts, the room writes `hasCompletedOnboarding` and the trust of its start folder and of each `--add-dir` folder into the configuration file of the home of its account with the declared program `member-start`, each only when it is missing, so the member opens without the text style choice, the security notes or a folder trust question. `project-trust` takes the folder and serves a definition without a home, and `team-worktree add` no longer writes trust.
 - C134: The stored room states of the 0.0.25 form were edited into the form of C120, with `member` equal to `checked`, so the room no longer refuses them with `roster must be an array of {id, member, checked, role, leader}`.

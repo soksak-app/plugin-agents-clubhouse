@@ -2,6 +2,7 @@
 
 [English](features.md)
 
+- [o] C136 — P0: 초대 page `invite.html`가 window theme의 색을 쓴다. Input: system appearance가 light인 상태에서 dark theme인 window. Behavior: dialog의 제목, label, button이 theme의 어두운 card 위 어두운 글자였다. View bridge는 theme의 card를 설정하는데, page는 글자, 선, 오류 색을 system color scheme에서 골랐기 때문이다. Expected: page는 view bridge가 root에 설정하는 theme token인 `--fg`에서 글자, `--edge`에서 선, `--fail`에서 오류 색을 쓰고(core docs/spec/native-surfaces.md, Theme), 자기 palette를 고르지 않는다. Red: `src/page-theme.test.ts`의 test가 이전 page에서 실패했다. Green: 통과한다.
 - [o] C1 — P1: plugin의 manifest가 현재 core 형식이다. 입력: `plugin.json`이 제거된 멤버 `permissions`, `entry`, `configuration`, `contributes`, `programs`와 이전 형식의 `views`, `commands`를 썼으므로 core 검사가 `plugin.json: unknown field configuration`으로 거부했다. 기대: 현재 형식(`docs/spec/plugins.md#pluginjson`, core)의 멤버를 쓴다. view `surface`와 그 page, `mark`, `icon`, `preview`, 형식이 정해진 `settings`, 방의 커맨드와 element를 담은 `exposes`를 두고, `soksak-plugin-agents-acp` 의존은 C6까지 유지한다. 결과: core 검사(`validateManifest`)가 파일을 받아들인다. `src/host-contract.test.ts`의 manifest 시험은 현재 형식을 확인하며, 현재 형식에 `permissions` 멤버가 없으므로 `permissions` 게이트 시험은 지운다. `npm test`와 `npm run typecheck`가 통과한다. page `ui/clubhouse.html`은 아직 저장소에 없으며 C2가 만든다.
   - 커맨드 결과 스키마는 지금 `{type: "object"}`이다. C2가 각 결과의 정확한 형태를 정한다.
   - 이전 `configuration`의 enum 이름(`enumLabels`)은 현재 형식에 없다. 그 한국어 이름은 설정 설명에 적었다.
