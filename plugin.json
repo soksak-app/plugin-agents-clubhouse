@@ -269,18 +269,10 @@
         }
       },
       {
-        "name": "soksak-plugin-agents-clubhouse.member.login",
-        "description": "Open the login of the account of member id, whose home has no login, as a session owned by the room in a tab of the current card. When the login session ends the room summons the members again. A member whose home has a login, or whose account has no home, is refused.",
-        "params": {
-          "type": "object",
-          "properties": { "id": { "type": "string" } },
-          "required": ["id"]
-        },
-        "result": {
-          "type": "object",
-          "properties": { "id": { "type": "string" }, "session": { "type": "string" } },
-          "required": ["id", "session"]
-        }
+        "name": "soksak-plugin-agents-clubhouse.login.check",
+        "description": "Read the login of the account homes again and summon the members, after the person logs in to an account in the agents plugin. The room opens no login: a member uses the login of its account.",
+        "params": { "type": "object", "properties": {} },
+        "result": { "type": "null" }
       },
       {
         "name": "soksak-plugin-agents-clubhouse.member.leave",
@@ -619,7 +611,7 @@
       },
       {
         "name": "soksak-plugin-agents-clubhouse.login",
-        "description": "Login button of a member card, shown while the home of the account of the member has no login: it runs member.login",
+        "description": "Login check button of a member card, shown while the home of the account of the member has no login: it runs login.check",
         "many": true
       },
       {

@@ -80,16 +80,3 @@ describe("ownedSessionIds (docs/spec/room.md#restart)", () => {
     expect(() => ownedSessionIds({}, "tab-room")).toThrow("core.sessions is not a list");
   });
 });
-
-describe("ownedSessionEntries (docs/spec/room.md#login)", () => {
-  it("lists the sessions of the surface with their showing tab, null for a session that no tab shows, and their params", async () => {
-    const { ownedSessionEntries } = await import("./session-channel");
-    const value = [
-      { session: "owned-a", owner: "tab-room", shownBy: "tab-1", params: { program: "env" } },
-      { session: "owned-b", owner: "tab-room", shownBy: null, params: null },
-      { session: "owned-c", owner: "tab-other", shownBy: "tab-2" },
-    ];
-    expect(ownedSessionEntries(value, "tab-room")).toEqual([{ session: "owned-a", shownBy: "tab-1", params: { program: "env" } }, { session: "owned-b", shownBy: null, params: null }]);
-    expect(() => ownedSessionEntries({}, "tab-room")).toThrow("core.sessions is not a list");
-  });
-});

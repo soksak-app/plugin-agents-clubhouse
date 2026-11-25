@@ -37,7 +37,7 @@ import { summonableDefinitions } from "./room/summonable";
 import { createConversationStatus, waitLabel } from "./room/conversation-status";
 import { createProtocolInjector, type AgentPlace } from "./room/protocol";
 import { parseRoomState, serializedRoomState, type RoomState as RoomTabState } from "./room/room-state";
-import { ownedSessionEntries, ownedSessionIds, shownByOf } from "./room/session-channel";
+import { ownedSessionIds, shownByOf } from "./room/session-channel";
 import { answerQuestion, questionChoices, readQuestion, showMember } from "./room/question";
 import { insertMention, mentionCandidates, mentionQuery } from "./room/mention-hint";
 import { reattachedChecks, rosterFrom, type RosterEntry } from "./room/roster";
@@ -262,14 +262,8 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
   let definitions: AgentDefinition[] = [];
   // The open session of each member of the room and of each team member, read again after each change of core.sessions (C3).
   let memberSessions = new Map<string, string>();
-  // The members that wait for the login of their home and the login sessions of the room (docs/spec/room.md#login); the size of a login
-  // session is the measured card size of the summon.
-  const loginGate = createLoginGate({
-    definitions: () => definitions,
-    run: async (program, args) => bridge!.runtime.program.run(program, args),
-    commands: room.commands,
-    size: () => trigger.size(),
-  });
+  // The members that wait for the login of their home (docs/spec/room.md#login).
+  const loginGate = createLoginGate({ run: async (program, args) => bridge!.runtime.program.run(program, args) });
   // The ids of the sessions that core.sessions lists as open, and the summons that run one after the other (C3, C4).
   const openSessionIds = new Set<string>();
   const runTrigger = serialRunner();
@@ -403,21 +397,22 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
         expose.bind(role, `${EXPOSE}.member.role`, () => ({ id: entry.id, role: role.value }), { event: "change", failed: failed("member.role") }),
         "member.role",
       );
-      // The login button opens the login of the account while the home of the account has no login (docs/spec/room.md#login).
+      // While the home of the account has no login, the login button reads the logins again after the person logs in to the account in
+      // the agents plugin (docs/spec/room.md#login).
       const login = elText("button", t("loginButton", lang), "st-login");
       (login as HTMLButtonElement).type = "button";
       login.dataset.expose = `${EXPOSE}.login`;
       login.hidden = true;
       login.addEventListener("pointerdown", (event) => event.stopPropagation());
       bound(
-        expose.bind(login, `${EXPOSE}.member.login`, () => ({ id: entry.id }), {
+        expose.bind(login, `${EXPOSE}.login.check`, {}, {
           when: (event: Event) => {
             event.stopPropagation();
             return true;
           },
-          failed: failed("member.login"),
+          failed: failed("login.check"),
         }),
-        "member.login",
+        "login.check",
       );
       sub.append(role, elText("span", "", "state"), login);
       // A press runs member.set with the toggled state; the click that ends a drag runs nothing (docs/spec/room.md#commands).
@@ -585,13 +580,6 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
       done();
     }
     sessionsValue = value;
-    // A login session that ended summons the members again, which reads the login of their homes (docs/spec/room.md#login).
-    Promise.resolve()
-      .then(() => loginGate.sessionsChanged(ownedSessionEntries(value, surface)))
-      .then((ended) => {
-        if (ended) summon();
-      })
-      .catch((error: unknown) => report("room login", String((error as Error)?.message ?? error)));
     for (const listener of [...sessionListeners]) listener(value);
     refreshReported();
   })).catch((error: unknown) => report("core.sessions", `status watch: ${String((error as Error)?.message ?? error)}`));
@@ -653,14 +641,11 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
     const entry = team.find((one) => one.id === id);
     return definitions.find((one) => one.id === (entry === undefined ? id : entry.definition));
   };
-  // member.login opens the login of the account of a member whose home has no login as an owned session, shown as a tab of the current
-  // card (docs/spec/room.md#login).
-  const loginMember = async (params: unknown): Promise<{ id: string; session: string }> => {
-    const id = (params as { id?: unknown } | null)?.id;
-    if (typeof id !== "string" || id === "") throw new Error("member.login id must be a non-empty text");
-    const definition = memberDefinitionOf(id);
-    if (definition === undefined) throw new Error(`member ${id} is not defined`);
-    return loginGate.open({ ...definition, id });
+  // login.check summons the members again, which reads the login of their homes, after the person logs in to an account in the agents
+  // plugin (docs/spec/room.md#login).
+  const checkLogins = async (): Promise<null> => {
+    await summonRun();
+    return null;
   };
   const summonRun = (): Promise<void> => {
     // The members of the room and the team members have sessions; a member that is not checked keeps its session (docs/spec/room.md#roster).
@@ -1293,7 +1278,7 @@ async function buildRoom({ settings, collections }: RoomContext): Promise<RoomHa
       ...operations,
       [ANSWER_COMMAND]: async (params: unknown) => answers.deliver(params),
       [`${EXPOSE}.member.summon`]: async (params: unknown) => summonMember(params),
-      [`${EXPOSE}.member.login`]: async (params: unknown) => loginMember(params),
+      [`${EXPOSE}.login.check`]: async () => checkLogins(),
       // invite opens the invite dialog and joins the picked definitions in roster order (docs/spec/room.md#invite).
       [`${EXPOSE}.invite`]: async () => {
         const result = await bridge!.runtime.dialog("invite", inviteParams(roster, await agentData("groups")));

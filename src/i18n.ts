@@ -163,12 +163,12 @@ const strings = {
     ko: "세션 없음",
   },
   stateLogin: {
-    en: "login needed",
-    ko: "로그인 필요",
+    en: "login needed: log in to the account in the agent definitions",
+    ko: "로그인 필요: 에이전트 정의에서 계정에 로그인",
   },
   loginButton: {
-    en: "Log in",
-    ko: "로그인",
+    en: "Check login",
+    ko: "로그인 확인",
   },
   transportReady: {
     en: "Connected: messages go to the checked members with an open session.",

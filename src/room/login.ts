@@ -1,16 +1,17 @@
 // The login of the account home of a member (C130, docs/spec/room.md#login). An agent CLI in a home without a login shows its first
 // start and answers no line of the room, so the room reads the login of each home with the status command of the CLI before it starts a
-// member, and opens the login of the account as the agents plugin opens it (agents docs/spec/definitions.md#account-homes).
+// member. The room opens no login: the agents plugin logs in to an account, and a member uses the login of its account
+// (agents docs/spec/definitions.md#account-homes).
 import type { AgentDefinition } from "./definitions";
 
-// The declared status program and the login arguments of each CLI, by the last path segment of its program: claude auth status --json
+// The declared status program and the status arguments of each CLI, by the last path segment of its program: claude auth status --json
 // prints {loggedIn, configDirectory, loginExpiresAt}, and codex login status exits 0 or 1 (agents docs/spec/definitions.md#account-homes).
-const CLIS: Record<string, { program: string; status: string[]; login: string[] }> = {
-  claude: { program: "claude-status", status: ["auth", "status", "--json"], login: [] },
-  codex: { program: "codex-status", status: ["login", "status"], login: ["login"] },
+const CLIS: Record<string, { program: string; status: string[] }> = {
+  claude: { program: "claude-status", status: ["auth", "status", "--json"] },
+  codex: { program: "codex-status", status: ["login", "status"] },
 };
 
-function cliOf(definition: AgentDefinition): { program: string; status: string[]; login: string[] } {
+function cliOf(definition: AgentDefinition): { program: string; status: string[] } {
   const name = definition.program.split("/").at(-1) ?? "";
   const cli = CLIS[name];
   if (cli === undefined) throw new Error(`member ${definition.id}: the cli ${name} has no login status command`);
@@ -74,80 +75,25 @@ export async function membersWithoutLogin(
   return without;
 }
 
-// The params of the owned session that opens the login of the account of the member in its home and in the working folder of the
-// member: the first start of claude asks the text style, the login and the trust of that folder, which the person answers once.
-export function loginSession(definition: AgentDefinition): { program: string; args: string[]; directory: string; title: string } {
-  if (definition.home === null) throw new Error(`member ${definition.id} needs no login`);
-  return {
-    program: "env",
-    args: [`${definition.home.variable}=${definition.home.folder}`, definition.program, ...cliOf(definition).login],
-    directory: definition.cwd,
-    title: `${definition.account} 로그인`,
-  };
-}
-
 export interface LoginGateDeps {
-  // The definitions of the room, whose login sessions the gate adopts after a restart.
-  definitions: () => readonly AgentDefinition[];
   // Runs the declared status program with the arguments and gives its reply.
   run: (program: string, args: string[]) => Promise<ProgramReply>;
-  commands: { execute: (name: string, params: Record<string, unknown>) => Promise<unknown> };
-  // The size of an opened session, the measured card size of the room.
-  size: () => Promise<{ width: number; height: number; scale: number }>;
 }
 
-// The members that wait for the login of their home and the login sessions that the room opened (docs/spec/room.md#login).
+// The members that wait for the login of their home (docs/spec/room.md#login).
 export interface LoginGate {
   // Reads the login of the homes of the members that would start, and gives the identifiers of those that start, in their order.
   startable(definitions: readonly AgentDefinition[]): Promise<string[]>;
   needs(id: string): boolean;
-  // member.login: opens the login of the account of the member as an owned session shown in a tab of the current card.
-  open(definition: AgentDefinition): Promise<{ id: string; session: string }>;
-  // Takes the open sessions of the room from core.sessions with their showing tab, ends a listed login session whose tab closed, and
-  // gives whether a login session that core.sessions listed has ended.
-  sessionsChanged(open: readonly { session: string; shownBy: string | null; params: unknown }[]): Promise<boolean>;
 }
 
 export function createLoginGate(deps: LoginGateDeps): LoginGate {
   let needed = new Set<string>();
-  // Each login session with whether core.sessions has listed it.
-  const sessions = new Map<string, boolean>();
   return {
     async startable(definitions) {
       needed = await membersWithoutLogin(definitions, deps.run);
       return definitions.map((definition) => definition.id).filter((id) => !needed.has(id));
     },
     needs: (id) => needed.has(id),
-    async open(definition) {
-      const login = loginSession(definition);
-      if (!needed.has(definition.id)) throw new Error(`member ${definition.id} needs no login`);
-      const reply = await deps.commands.execute("core.session.open", { plugin: definition.plugin, params: login, size: await deps.size() });
-      const session = (reply as { session?: unknown } | null | undefined)?.session;
-      if (typeof session !== "string" || session === "") throw new Error("core.session.open reply has no session");
-      sessions.set(session, false);
-      await deps.commands.execute("core.layout.open", { card: "current", plugin: definition.plugin, params: { session, title: login.title } });
-      return { id: definition.id, session };
-    },
-    async sessionsChanged(open) {
-      // An owned session whose params open the login of the account of a definition is a login session of the room, also one that a
-      // page before a restart opened (docs/spec/room.md#login).
-      const logins = deps.definitions().flatMap((definition) => (definition.home === null ? [] : [JSON.stringify(loginSession(definition))]));
-      for (const entry of open) if (!sessions.has(entry.session) && logins.includes(JSON.stringify(entry.params))) sessions.set(entry.session, true);
-      let ended = false;
-      for (const [session, listed] of [...sessions]) {
-        const entry = open.find((one) => one.session === session);
-        if (entry !== undefined) {
-          sessions.set(session, true);
-          // An owned session stays open when its tab closes; the CLI of a claude login stays at its prompt after the login, so the
-          // room ends the login session when the person closes its tab.
-          if (listed && entry.shownBy === null) await deps.commands.execute("core.session.end", { session });
-        } else if (listed) {
-          sessions.delete(session);
-          ended = true;
-        }
-      }
-      return ended;
-    },
-
   };
 }

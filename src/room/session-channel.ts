@@ -33,14 +33,6 @@ export function ownedSessionIds(sessions: unknown, surface: string): Set<string>
   return new Set(sessions.filter((entry) => entry?.owner === surface).map((entry) => String(entry.session)));
 }
 
-// The sessions that surface owns in a value of core.sessions, each with its showing tab or null and the params of its open.
-export function ownedSessionEntries(sessions: unknown, surface: string): { session: string; shownBy: string | null; params: unknown }[] {
-  if (!Array.isArray(sessions)) throw new Error("core.sessions is not a list");
-  return sessions
-    .filter((entry) => entry?.owner === surface)
-    .map((entry) => ({ session: String(entry.session), shownBy: typeof entry.shownBy === "string" ? entry.shownBy : null, params: entry.params }));
-}
-
 // The program state of session in a value of core.sessions, the list of open sessions. A session that the list does not hold is
 // refused, and null means that the sidecar has reported no state yet.
 export function sessionProgram(sessions: unknown, session: string): ProgramState | null {

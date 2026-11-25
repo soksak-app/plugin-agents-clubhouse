@@ -1,9 +1,10 @@
 // The login of the account home of a member (C130, docs/spec/room.md#login): the declared status program of the CLI in the home, the
-// reading of its reply, the members whose home has no login, and the session that opens the login of the account.
+// reading of its reply and the members whose home has no login. The room opens no login: the agents plugin logs in to an account and the
+// member uses that login.
 import { describe, expect, it } from "vitest";
 import manifest from "../../plugin.json";
 import type { AgentDefinition } from "./definitions";
-import { createLoginGate, loginCheck, loginOf, loginSession, membersWithoutLogin } from "./login";
+import { createLoginGate, loginCheck, loginOf, membersWithoutLogin } from "./login";
 
 const CLAUDE_HOME = { variable: "CLAUDE_CONFIG_DIR", folder: "/c/plugin-data/agents/accounts/claude-main" };
 const CODEX_HOME = { variable: "CODEX_HOME", folder: "/c/plugin-data/agents/accounts/codex-main" };
@@ -77,86 +78,36 @@ describe("membersWithoutLogin", () => {
   });
 });
 
-describe("loginSession", () => {
-  it("opens the cli of the account in its home and in the working folder of the member, titled by the account", () => {
-    expect(loginSession(REVIEWER)).toEqual({ program: "env", args: ["CLAUDE_CONFIG_DIR=/c/plugin-data/agents/accounts/claude-main", "claude"], directory: "/work", title: "claude-main 로그인" });
-    expect(loginSession(WRITER)).toEqual({ program: "env", args: ["CODEX_HOME=/c/plugin-data/agents/accounts/codex-main", "/opt/bin/codex", "login"], directory: "/work", title: "codex-main 로그인" });
-  });
-
-  it("refuses a member whose account has no home", () => {
-    expect(() => loginSession(PLAIN)).toThrow("member plain needs no login");
-  });
-});
-
 describe("createLoginGate", () => {
-  function gateOf(codes: Record<string, number>) {
-    const calls: [string, unknown][] = [];
-    const gate = createLoginGate({
-      definitions: () => [REVIEWER, WRITER, PLAIN],
-      run: async (_program, args) => (codes[args[0]] === 0 ? reply(0, claudeStatus(true)) : reply(codes[args[0]], claudeStatus(false))),
-      commands: {
-        execute: async (name, params) => {
-          calls.push([name, params]);
-          return name === "core.session.open" ? { session: "s-login" } : {};
-        },
-      },
-      size: async () => ({ width: 800, height: 600, scale: 2 }),
-    });
-    return { gate, calls };
-  }
   const NO_LOGIN = { [loginCheck(REVIEWER)!.args[0]]: 1, [loginCheck(WRITER)!.args[0]]: 0 };
+  const gateOf = (codes: Record<string, number>) =>
+    createLoginGate({ run: async (_program, args) => (codes[args[0]] === 0 ? reply(0, claudeStatus(true)) : reply(codes[args[0]], claudeStatus(false))) });
 
   it("keeps the members of a home without a login out of the summon and names them as needing a login", async () => {
-    const { gate } = gateOf(NO_LOGIN);
+    const gate = gateOf(NO_LOGIN);
     expect(await gate.startable([REVIEWER, WRITER, PLAIN])).toEqual(["writer", "plain"]);
     expect(gate.needs("reviewer")).toBe(true);
     expect(gate.needs("writer")).toBe(false);
   });
 
-  it("opens the login of a member that needs one as an owned session in a tab of the current card", async () => {
-    const { gate, calls } = gateOf(NO_LOGIN);
-    await gate.startable([REVIEWER]);
-    expect(await gate.open(REVIEWER)).toEqual({ id: "reviewer", session: "s-login" });
-    expect(calls).toEqual([
-      ["core.session.open", { plugin: "terminal", params: loginSession(REVIEWER), size: { width: 800, height: 600, scale: 2 } }],
-      ["core.layout.open", { card: "current", plugin: "terminal", params: { session: "s-login", title: "claude-main 로그인" } }],
-    ]);
+  it("reads the logins again at each summon, so a member starts after its account logs in through the agents plugin", async () => {
+    const codes = { ...NO_LOGIN };
+    const gate = gateOf(codes);
+    expect(await gate.startable([REVIEWER])).toEqual([]);
+    codes[loginCheck(REVIEWER)!.args[0]] = 0;
+    expect(await gate.startable([REVIEWER])).toEqual(["reviewer"]);
+    expect(gate.needs("reviewer")).toBe(false);
   });
 
-  it("refuses the login of a member whose home has a login or whose account has no home", async () => {
-    const { gate, calls } = gateOf(NO_LOGIN);
-    await gate.startable([REVIEWER, WRITER, PLAIN]);
-    await expect(gate.open(WRITER)).rejects.toThrow("member writer needs no login");
-    await expect(gate.open(PLAIN)).rejects.toThrow("member plain needs no login");
-    expect(calls).toEqual([]);
+  it("opens no login of an account: the gate only reads logins", () => {
+    expect(Object.keys(gateOf(NO_LOGIN)).sort()).toEqual(["needs", "startable"]);
   });
+});
 
-  it("reports the end of a login session only after core.sessions has listed it", async () => {
-    const { gate } = gateOf(NO_LOGIN);
-    await gate.startable([REVIEWER]);
-    await gate.open(REVIEWER);
-    expect(await gate.sessionsChanged([])).toBe(false);
-    expect(await gate.sessionsChanged([{ session: "s-login", shownBy: "tab-1", params: null }])).toBe(false);
-    expect(await gate.sessionsChanged([])).toBe(true);
-    expect(await gate.sessionsChanged([])).toBe(false);
-  });
-
-  it("ends a login session whose tab the person closed, so the login is read again", async () => {
-    const { gate, calls } = gateOf(NO_LOGIN);
-    await gate.startable([REVIEWER]);
-    await gate.open(REVIEWER);
-    calls.length = 0;
-    expect(await gate.sessionsChanged([{ session: "s-login", shownBy: "tab-1", params: null }])).toBe(false);
-    expect(await gate.sessionsChanged([{ session: "s-login", shownBy: null, params: null }])).toBe(false);
-    expect(calls).toEqual([["core.session.end", { session: "s-login" }]]);
-    expect(await gate.sessionsChanged([])).toBe(true);
-  });
-
-  it("adopts an owned session that opens the login of a member account, so a login session from before a restart ends with its tab", async () => {
-    const { gate, calls } = gateOf(NO_LOGIN);
-    const params = loginSession(REVIEWER);
-    expect(await gate.sessionsChanged([{ session: "s-old", shownBy: null, params }, { session: "s-member", shownBy: null, params: { program: "claude", args: [] } }])).toBe(false);
-    expect(calls).toEqual([["core.session.end", { session: "s-old" }]]);
-    expect(await gate.sessionsChanged([{ session: "s-member", shownBy: null, params: { program: "claude", args: [] } }])).toBe(true);
+describe("the login commands of plugin.json", () => {
+  const commands = (manifest as unknown as { exposes: { commands: { name: string }[] } }).exposes.commands.map((command) => command.name);
+  it("declares login.check, which reads the logins again, and no command that opens a login", () => {
+    expect(commands).toContain("soksak-plugin-agents-clubhouse.login.check");
+    expect(commands).not.toContain("soksak-plugin-agents-clubhouse.member.login");
   });
 });
